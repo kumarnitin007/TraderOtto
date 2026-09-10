@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --otto-bg: 0 0 0;
+  --otto-surface: 17 18 20;
+  --otto-surface-raise: 24 25 28;
+  --otto-divider: 35 37 41;
+  --otto-text: 255 255 255;
+  --otto-text-dim: 138 141 147;
+  --otto-text-faint: 85 88 94;
+  --otto-green: 0 200 5;
+  --otto-green-soft: 0 24 1;
+  --otto-red: 255 80 0;
+  --otto-red-soft: 31 10 0;
+  --otto-amber: 234 179 8;
+  --otto-amber-soft: 33 25 1;
+  color-scheme: dark;
+}
+
+html[data-theme="warm-paper"] {
+  --otto-bg: 246 239 226;
+  --otto-surface: 235 223 203;
+  --otto-surface-raise: 224 208 181;
+  --otto-divider: 205 188 160;
+  --otto-text: 45 36 27;
+  --otto-text-dim: 105 91 73;
+  --otto-text-faint: 145 127 104;
+  --otto-green: 47 122 54;
+  --otto-green-soft: 220 224 204;
+  --otto-red: 181 69 43;
+  --otto-red-soft: 238 219 204;
+  --otto-amber: 157 105 13;
+  --otto-amber-soft: 234 222 198;
+  color-scheme: light;
+}
+
+@layer base {
+  * {
+    font-variant-numeric: tabular-nums;
+  }
+
+  html,
+  body {
+    background: rgb(var(--otto-bg));
+    color: rgb(var(--otto-text));
+    min-height: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    background: transparent;
+    color: rgb(var(--otto-text));
+    outline: none;
+    width: 100%;
+  }
+
+  input,
+  select {
+    border: none;
+    border-bottom: 1.5px solid rgb(var(--otto-divider));
+    border-radius: 0;
+    padding: 10px 2px;
+    font-size: 15.5px;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--otto-text-faint));
+  }
+
+  input:focus,
+  select:focus {
+    border-bottom-color: rgb(var(--otto-green));
+  }
+
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select option {
+    background: rgb(var(--otto-surface));
+    color: rgb(var(--otto-text));
+  }
+
+  textarea {
+    border: 1px solid rgb(var(--otto-divider));
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 15.5px;
+  }
+
+  textarea:focus {
+    border-color: rgb(var(--otto-green));
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.65;
+  }
+
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+@keyframes otto-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes otto-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.otto-pulse {
+  animation: otto-pulse 1.8s ease-in-out infinite;
+}
+
+.otto-spin {
+  animation: otto-spin 0.8s linear infinite;
+}
