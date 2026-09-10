@@ -31,7 +31,12 @@ export async function GET(
   });
 
   if (!res.ok) {
-    return Response.json({ error: "quote_failed" }, { status: 502 });
+    const errBody = await res.text();
+    console.error("Alpaca quote error", res.status, errBody);
+    return Response.json(
+      { error: "quote_failed", alpacaStatus: res.status, alpacaBody: errBody },
+      { status: 502 }
+    );
   }
 
   // Alpaca occasionally returns an empty body, which would throw on res.json().
