@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, LoaderCircle, Pencil, Plus, Trash2, X, Zap } from "lucide-react";
-import { STRATEGIES, type Strategy, type Trade, type TradeUpdate } from "@/types/trade";
+import {
+  hasLongLeg,
+  isSingleLeg,
+  STRATEGIES,
+  type Strategy,
+  type Trade,
+  type TradeUpdate,
+} from "@/types/trade";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { fmtDate, todayISO } from "@/lib/pnl";
@@ -165,6 +172,8 @@ export function TradeForm() {
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF({ ...f, [k]: e.target.value });
   const isCondor = f.strategy === "Iron Condor";
+  const isStrangle = f.strategy === "Strangle";
+  const singleLeg = isSingleLeg(f.strategy);
 
   function chooseTrade(id: string) {
     setSelectedId(id);
@@ -229,8 +238,12 @@ export function TradeForm() {
       setError("Enter the short strike (the option you sold).");
       return;
     }
-    if (f.strategy !== "Strangle" && !f.longStrike) {
+    if (hasLongLeg(f.strategy) && !f.longStrike) {
       setError("Enter the long strike (the option you bought).");
+      return;
+    }
+    if (f.strategy === "Strangle" && !f.callShort) {
+      setError("Enter the call strike you sold.");
       return;
     }
     setError("");
@@ -241,8 +254,8 @@ export function TradeForm() {
       expiry: f.expiry,
       openDate: f.openDate,
       shortStrike: parseFloat(f.shortStrike) || null,
-      longStrike: parseFloat(f.longStrike) || null,
-      callShortStrike: isCondor ? parseFloat(f.callShort) || null : null,
+      longStrike: hasLongLeg(f.strategy) ? parseFloat(f.longStrike) || null : null,
+      callShortStrike: isCondor || isStrangle ? parseFloat(f.callShort) || null : null,
       callLongStrike: isCondor ? parseFloat(f.callLong) || null : null,
       stockPriceOpen: parseFloat(f.stockPriceOpen) || 0,
       iv: parseFloat(f.iv) || 0,
@@ -471,25 +484,29 @@ export function TradeForm() {
 
       <SectionLabel>Strikes &amp; premium</SectionLabel>
       <p className="mb-3 text-[12.5px] leading-snug text-otto-text-faint">
-        Credit spread: short = strike you sold, long = strike you bought. Premium is per
-        contract (so $212 collected on 1 contract is 2.12, not 212).
+        {singleLeg
+          ? "Single-leg trade: enter only the strike you sold."
+          : "Credit spread: short = strike you sold, long = strike you bought."}{" "}
+        Premium is per contract (so $212 collected on 1 contract is 2.12, not 212).
       </p>
       <div className="grid grid-cols-2 gap-4">
-        <Field label={isCondor ? "Put short strike (sold)" : "Short strike (sold)"}>
+        <Field label={isCondor || isStrangle ? "Put short strike (sold)" : "Short strike (sold)"}>
           <input type="number" placeholder="320" value={f.shortStrike} onChange={set("shortStrike")} />
         </Field>
-        <Field label={isCondor ? "Put long strike (bought)" : "Long strike (bought)"}>
-          <input type="number" placeholder="300" value={f.longStrike} onChange={set("longStrike")} />
-        </Field>
+        {hasLongLeg(f.strategy) && (
+          <Field label={isCondor ? "Put long strike (bought)" : "Long strike (bought)"}>
+            <input type="number" placeholder="300" value={f.longStrike} onChange={set("longStrike")} />
+          </Field>
+        )}
+        {(isCondor || isStrangle) && (
+          <Field label={isStrangle ? "Call short strike (sold)" : "Call short strike"}>
+            <input type="number" placeholder="0" value={f.callShort} onChange={set("callShort")} />
+          </Field>
+        )}
         {isCondor && (
-          <>
-            <Field label="Call short strike">
-              <input type="number" placeholder="0" value={f.callShort} onChange={set("callShort")} />
-            </Field>
-            <Field label="Call long strike">
-              <input type="number" placeholder="0" value={f.callLong} onChange={set("callLong")} />
-            </Field>
-          </>
+          <Field label="Call long strike">
+            <input type="number" placeholder="0" value={f.callLong} onChange={set("callLong")} />
+          </Field>
         )}
         <Field label="Open date">
           <input type="date" value={f.openDate} onChange={set("openDate")} />

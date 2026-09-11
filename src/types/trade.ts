@@ -11,6 +11,22 @@ export const STRATEGIES = [
 
 export type Strategy = (typeof STRATEGIES)[number];
 
+/** Verticals and condors pair the sold strike with a protective strike you bought. */
+export function hasLongLeg(strategy: Strategy | string) {
+  return (
+    strategy === "Put Credit Spread" ||
+    strategy === "Call Credit Spread" ||
+    strategy === "Put Debit Spread" ||
+    strategy === "Call Debit Spread" ||
+    strategy === "Iron Condor"
+  );
+}
+
+/** Covered calls and cash-secured puts record only the strike you sold. */
+export function isSingleLeg(strategy: Strategy | string) {
+  return strategy === "Covered Call" || strategy === "Cash-Secured Put";
+}
+
 export type TradeStatus = "open" | "closed";
 
 /** Matches supabase/schema.sql columns (camelCase in the app). */

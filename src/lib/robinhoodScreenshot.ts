@@ -70,9 +70,10 @@ export function parseRobinhoodScreenshot(
     .filter((value) => value >= 5);
   const strikes = Array.from(new Set(headerAmounts)).slice(0, 2);
 
-  const quantityMatch = text.match(
-    /Quantity\s+Current price[\s\S]{0,40}?\n?\s*(-?\d+)\s+\$[\d.]+/i
-  );
+  // Robinhood labels this row "Contracts" on options and "Quantity" on shares.
+  const quantityMatch =
+    text.match(/(?:Contracts|Quantity)\s+Current price[\s\S]{0,40}?\n?\s*(-?\d+)\s+\$[\d.]+/i) ??
+    text.match(/(?:Contracts|Quantity)[\s\S]{0,30}?(-?\d+)\b/i);
   const contracts = quantityMatch ? String(Math.abs(Number(quantityMatch[1])) || 1) : undefined;
 
   const premiumMatch = text.match(
@@ -81,11 +82,20 @@ export function parseRobinhoodScreenshot(
   const premium = premiumMatch ? Number(premiumMatch[1]) : undefined;
   const isDebit = /Average\s+debit/i.test(text);
 
+  // "Date opened" on long positions, "Date sold"/"Date bought" on single legs.
+  const openLabel = /Date\s+(?:opened|sold|bought)/i;
   const datesMatch = text.match(
-    /Date opened\s+Expiration date[\s\S]{0,50}?(\d{1,2}\/\d{1,2})\s+(\d{1,2}\/\d{1,2})/i
+    /Date\s+(?:opened|sold|bought)\s+Expiration date[\s\S]{0,50}?(\d{1,2}\/\d{1,2})\s+(\d{1,2}\/\d{1,2})/i
   );
-  const openMonthDay = datesMatch?.[1];
-  const expiryMonthDay = datesMatch?.[2];
+  let openMonthDay = datesMatch?.[1];
+  let expiryMonthDay = datesMatch?.[2];
+  if (!datesMatch) {
+    // OCR sometimes emits the two columns as separate label/value pairs.
+    openMonthDay = text.match(
+      new RegExp(`${openLabel.source}[\\s\\S]{0,40}?(\\d{1,2}/\\d{1,2})`, "i")
+    )?.[1];
+    expiryMonthDay = text.match(/Expiration date[\s\S]{0,40}?(\d{1,2}\/\d{1,2})/i)?.[1];
+  }
   const currentYear = now.getFullYear();
   const openDate = openMonthDay ? isoDate(openMonthDay, currentYear) : undefined;
   let expiry = expiryMonthDay ? isoDate(expiryMonthDay, currentYear) : undefined;
@@ -114,9 +124,10 @@ export function parseRobinhoodScreenshot(
     }
   }
 
-  const currentOptionMatch = text.match(
-    /Quantity\s+Current price[\s\S]{0,40}?-?\d+\s+\$(\d+(?:\.\d+)?)/i
-  );
+  const currentOptionMatch =
+    text.match(
+      /(?:Contracts|Quantity)\s+Current price[\s\S]{0,40}?-?\d+\s+\$(\d+(?:\.\d+)?)/i
+    ) ?? text.match(/Current price[\s\S]{0,30}?\$(\d+(?:\.\d+)?)/i);
   const currentOption = currentOptionMatch?.[1];
   const noteParts = [
     "Imported from Robinhood screenshot.",
