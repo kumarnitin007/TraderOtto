@@ -1,5 +1,5 @@
-import type { Trade } from "@/types/trade";
-import { todayISO } from "@/lib/pnl";
+import { isDebitStrategy, type Trade } from "@/types/trade";
+import { premiumDirection, todayISO } from "@/lib/pnl";
 
 export type AlertTier =
   | "nearmax"
@@ -58,10 +58,16 @@ export function positionAlert(
 
   const elapsedDays = Math.max(0, calendarDays(trade.openDate, now));
   const timeUsed = elapsedDays / durationDays;
-  const capture = (trade.premiumOpen - currentMark) / Math.abs(trade.premiumOpen);
+  const openPremium = Math.abs(trade.premiumOpen);
+  const debit = isDebitStrategy(trade.strategy);
+  // Credit positions gain as the premium decays; debit positions as it grows.
+  const capture =
+    (premiumDirection(trade.strategy) * (openPremium - Math.abs(currentMark))) / openPremium;
   const capturePct = Math.round(capture * 100);
   const days = dayContext(elapsedDays, durationDays);
   const remaining = Math.max(0, durationDays - elapsedDays);
+  const basis = debit ? "premium paid" : "premium";
+  const gained = debit ? "Up" : "Captured";
 
   if (capture <= -1 || (capture < 0 && timeUsed >= 0.85)) {
     return {
@@ -71,7 +77,7 @@ export function positionAlert(
       capturePct,
       elapsedDays,
       durationDays,
-      detail: `Down ${Math.abs(capturePct)}% of premium · ${days}`,
+      detail: `Down ${Math.abs(capturePct)}% of ${basis} · ${days}`,
     };
   }
   if (capture <= -0.5) {
@@ -82,7 +88,7 @@ export function positionAlert(
       capturePct,
       elapsedDays,
       durationDays,
-      detail: `Down ${Math.abs(capturePct)}% of premium · ${days}`,
+      detail: `Down ${Math.abs(capturePct)}% of ${basis} · ${days}`,
     };
   }
   if (capture < 0) {
@@ -93,7 +99,7 @@ export function positionAlert(
       capturePct,
       elapsedDays,
       durationDays,
-      detail: `Unrealized loss of ${Math.abs(capturePct)}% of premium · ${days}`,
+      detail: `Unrealized loss of ${Math.abs(capturePct)}% of ${basis} · ${days}`,
     };
   }
   if (timeUsed >= 0.75 && capture < 0.25) {
@@ -108,7 +114,8 @@ export function positionAlert(
     };
   }
 
-  if (capture >= 0.9) {
+  // A bought option has no capped profit, so "Near max" only fits credit trades.
+  if (!debit && capture >= 0.9) {
     return {
       tone: "positive",
       tier: "nearmax",
@@ -127,7 +134,7 @@ export function positionAlert(
       capturePct,
       elapsedDays,
       durationDays,
-      detail: `Captured ${capturePct}% of premium in ${days}`,
+      detail: `${gained} ${capturePct}% of ${basis} in ${days}`,
     };
   }
   if (capture >= 0.5 && timeUsed <= 0.5) {
@@ -138,7 +145,7 @@ export function positionAlert(
       capturePct,
       elapsedDays,
       durationDays,
-      detail: `Captured ${capturePct}% of premium in ${days}`,
+      detail: `${gained} ${capturePct}% of ${basis} in ${days}`,
     };
   }
   if (capture >= 0.75 && timeUsed <= 0.75) {
@@ -149,7 +156,7 @@ export function positionAlert(
       capturePct,
       elapsedDays,
       durationDays,
-      detail: `Captured ${capturePct}% of premium in ${days}`,
+      detail: `${gained} ${capturePct}% of ${basis} in ${days}`,
     };
   }
   return null;

@@ -141,7 +141,12 @@ export function createSupabaseTradeRepository(
       if (current.status === "closed" && trade.premiumClose != null && trade.closeDate) {
         patch.close_date = trade.closeDate;
         patch.premium_close = trade.premiumClose;
-        patch.pnl = realizedPnl(trade.premiumOpen, trade.premiumClose, trade.contracts);
+        patch.pnl = realizedPnl(
+          trade.premiumOpen,
+          trade.premiumClose,
+          trade.contracts,
+          trade.strategy
+        );
         patch.details = {
           ...details,
           stockPriceClose: trade.stockPriceClose ?? existingDetails.stockPriceClose ?? null,
@@ -160,7 +165,7 @@ export function createSupabaseTradeRepository(
     async close(id: string, payload: ClosePayload): Promise<Trade> {
       const { data: current, error: readError } = await supabase
         .from("tr_trades")
-        .select("premium_open, contracts, details")
+        .select("premium_open, contracts, details, strategy")
         .eq("id", id)
         .eq("user_id", userId)
         .single();
@@ -172,7 +177,8 @@ export function createSupabaseTradeRepository(
       const pnl = realizedPnl(
         Number(current.premium_open),
         payload.premiumClose,
-        Number(current.contracts)
+        Number(current.contracts),
+        String(current.strategy)
       );
       const { data, error } = await supabase
         .from("tr_trades")

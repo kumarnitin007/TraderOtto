@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { connectionCheckMs } from "@/lib/marketSession";
+import { authHeaders } from "@/lib/authHeaders";
 import { useMarketSession } from "@/hooks/useMarketSession";
 
 export type AlpacaConnectionState = "checking" | "live" | "simulated" | "offline";
@@ -28,13 +29,18 @@ export function AlpacaConnectionProvider({ children }: { children: ReactNode }) 
   const checkConnection = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setState("checking");
     try {
-      const response = await fetch("/api/quotes?symbols=SPY", { cache: "no-store" });
+      const response = await fetch("/api/quotes?symbols=SPY", {
+        cache: "no-store",
+        headers: await authHeaders(),
+      });
       if (!response.ok) {
         setState("offline");
         return;
       }
       const data = (await response.json()) as { source?: string };
-      setState(data.source === "alpaca" ? "live" : "simulated");
+      if (data.source === "alpaca") setState("live");
+      else if (data.source === "simulated") setState("simulated");
+      else setState("offline");
     } catch {
       setState("offline");
     }

@@ -12,9 +12,16 @@ export type ScreenshotTradeFields = {
   notes?: string;
 };
 
-function isoDate(monthDay: string, year: number) {
-  const [month, day] = monthDay.split("/").map(Number);
-  if (!month || !day) return undefined;
+/** Robinhood prints M/D for near-term rows and M/D/YY (or M/D/YYYY) for later ones. */
+function parseDateParts(value: string) {
+  const [month, day, year] = value.split("/").map(Number);
+  if (!month || !day) return null;
+  const explicitYear =
+    year != null && Number.isFinite(year) ? (year < 100 ? 2000 + year : year) : null;
+  return { month, day, explicitYear };
+}
+
+function isoDate(month: number, day: number, year: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
@@ -25,8 +32,10 @@ function detectStrategy(
   breakeven?: number
 ): { strategy?: Strategy; side?: "put" | "call"; credit: boolean } {
   const lower = text.toLowerCase();
-  const credit = lower.includes("credit");
-  const debit = lower.includes("debit");
+  // "Average cost" and "Date bought" mean the position was opened for a debit.
+  const debit =
+    lower.includes("debit") || lower.includes("average cost") || lower.includes("date bought");
+  const credit = !debit && lower.includes("credit");
   let side: "put" | "call" | undefined;
   if (lower.includes(" put")) side = "put";
   if (lower.includes(" call")) side = "call";
@@ -41,10 +50,14 @@ function detectStrategy(
     return { strategy: "Call Credit Spread", side, credit: true };
   }
   if (strikeCount === 1 && side === "put") {
-    return { strategy: "Cash-Secured Put", side, credit: true };
+    return debit
+      ? { strategy: "Long Put", side, credit: false }
+      : { strategy: "Cash-Secured Put", side, credit: true };
   }
   if (strikeCount === 1 && side === "call") {
-    return { strategy: "Covered Call", side, credit: true };
+    return debit
+      ? { strategy: "Long Call", side, credit: false }
+      : { strategy: "Covered Call", side, credit: true };
   }
   return { credit };
 }
@@ -76,31 +89,40 @@ export function parseRobinhoodScreenshot(
     text.match(/(?:Contracts|Quantity)[\s\S]{0,30}?(-?\d+)\b/i);
   const contracts = quantityMatch ? String(Math.abs(Number(quantityMatch[1])) || 1) : undefined;
 
+  // Sold positions show "Average credit"; bought ones show "Average cost"/"Average debit".
   const premiumMatch = text.match(
-    /Average\s+(?:credit|debit)[\s\S]{0,60}?\$(\d+(?:\.\d+)?)/i
+    /Average\s+(?:credit|debit|cost)[\s\S]{0,60}?\$(\d+(?:\.\d+)?)/i
   );
   const premium = premiumMatch ? Number(premiumMatch[1]) : undefined;
-  const isDebit = /Average\s+debit/i.test(text);
 
   // "Date opened" on long positions, "Date sold"/"Date bought" on single legs.
   const openLabel = /Date\s+(?:opened|sold|bought)/i;
+  const DATE = String.raw`\d{1,2}/\d{1,2}(?:/\d{2,4})?`;
   const datesMatch = text.match(
-    /Date\s+(?:opened|sold|bought)\s+Expiration date[\s\S]{0,50}?(\d{1,2}\/\d{1,2})\s+(\d{1,2}\/\d{1,2})/i
+    new RegExp(`${openLabel.source}\\s+Expiration date[\\s\\S]{0,50}?(${DATE})\\s+(${DATE})`, "i")
   );
-  let openMonthDay = datesMatch?.[1];
-  let expiryMonthDay = datesMatch?.[2];
+  let openRaw = datesMatch?.[1];
+  let expiryRaw = datesMatch?.[2];
   if (!datesMatch) {
     // OCR sometimes emits the two columns as separate label/value pairs.
-    openMonthDay = text.match(
-      new RegExp(`${openLabel.source}[\\s\\S]{0,40}?(\\d{1,2}/\\d{1,2})`, "i")
+    openRaw = text.match(
+      new RegExp(`${openLabel.source}[\\s\\S]{0,40}?(${DATE})`, "i")
     )?.[1];
-    expiryMonthDay = text.match(/Expiration date[\s\S]{0,40}?(\d{1,2}\/\d{1,2})/i)?.[1];
+    expiryRaw = text.match(new RegExp(`Expiration date[\\s\\S]{0,40}?(${DATE})`, "i"))?.[1];
   }
+
   const currentYear = now.getFullYear();
-  const openDate = openMonthDay ? isoDate(openMonthDay, currentYear) : undefined;
-  let expiry = expiryMonthDay ? isoDate(expiryMonthDay, currentYear) : undefined;
-  if (openDate && expiry && expiry < openDate) {
-    expiry = isoDate(expiryMonthDay!, currentYear + 1);
+  const openParts = openRaw ? parseDateParts(openRaw) : null;
+  const expiryParts = expiryRaw ? parseDateParts(expiryRaw) : null;
+  const openDate = openParts
+    ? isoDate(openParts.month, openParts.day, openParts.explicitYear ?? currentYear)
+    : undefined;
+  let expiry = expiryParts
+    ? isoDate(expiryParts.month, expiryParts.day, expiryParts.explicitYear ?? currentYear)
+    : undefined;
+  // Only roll the year forward when the screenshot did not print one.
+  if (expiryParts?.explicitYear == null && openDate && expiry && expiry < openDate) {
+    expiry = isoDate(expiryParts!.month, expiryParts!.day, currentYear + 1);
   }
 
   const breakevenMatch = text.match(/breakeven price[\s\S]{0,50}?\$(\d+(?:\.\d+)?)/i);
@@ -142,8 +164,8 @@ export function parseRobinhoodScreenshot(
     longStrike: longStrike != null ? String(longStrike) : undefined,
     openDate,
     expiry,
-    premiumOpen:
-      premium == null ? undefined : String(isDebit ? -Math.abs(premium) : Math.abs(premium)),
+    // Premium is a magnitude; direction comes from the strategy.
+    premiumOpen: premium == null ? undefined : String(Math.abs(premium)),
     notes: noteParts.join(" "),
   };
 }

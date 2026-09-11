@@ -5,7 +5,16 @@ import { ChevronDown, Trash2 } from "lucide-react";
 import type { ClosePayload, Trade } from "@/types/trade";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
-import { fmtDate, fmtMoney, tickerAvatarColor, tradePnl, todayISO } from "@/lib/pnl";
+import {
+  fmtDate,
+  fmtMoney,
+  markPnl,
+  premiumDirection,
+  tickerAvatarColor,
+  tradePnl,
+  todayISO,
+} from "@/lib/pnl";
+import { isDebitStrategy } from "@/types/trade";
 import { positionAlert } from "@/lib/premiumPace";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
@@ -40,12 +49,11 @@ export function TradeRow({
   const pnl = tradePnl(t);
   const livePrice = live?.price ?? t.stockPriceOpen ?? t.stockPriceClose ?? 0;
   const movedUp = livePrice >= (t.stockPriceOpen || 0);
-  const openingPremium = t.premiumOpen * t.contracts * 100;
+  const debit = isDebitStrategy(t.strategy);
+  const openingPremium =
+    premiumDirection(t.strategy) * Math.abs(t.premiumOpen) * t.contracts * 100;
   const currentMark = optionMark?.mark;
-  const unrealizedPnl =
-    currentMark == null
-      ? null
-      : (t.premiumOpen - currentMark) * t.contracts * 100;
+  const unrealizedPnl = currentMark == null ? null : markPnl(t, currentMark);
   const pace = positionAlert(t, currentMark);
   const [closeDate, setCloseDate] = useState(t.closeDate || todayISO());
   const [stockPriceClose, setStockPriceClose] = useState(
@@ -144,7 +152,7 @@ export function TradeRow({
                   <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
                     <span className="desk:hidden">no live mark</span>
                     <span className="hidden desk:inline">
-                      opening {t.premiumOpen >= 0 ? "credit" : "debit"} · live mark unavailable
+                      opening {debit ? "debit" : "credit"} · live mark unavailable
                     </span>
                   </div>
                 </>
@@ -174,7 +182,7 @@ export function TradeRow({
         <div className="px-1 pb-[18px] pl-3 pt-0.5 desk:pl-[50px]">
           <div className="grid grid-cols-2 gap-x-3 gap-y-3.5 pt-2.5 desk:grid-cols-4 desk:gap-3.5">
             <GreekReadout
-              label={t.premiumOpen >= 0 ? "Premium collected" : "Premium paid"}
+              label={debit ? "Premium paid" : "Premium collected"}
               value={`${openingPremium >= 0 ? "+" : ""}${fmtMoney(openingPremium)}`}
               accent={
                 openingPremium >= 0
@@ -223,7 +231,10 @@ export function TradeRow({
               <GreekReadout label="Closed px" value={`$${Number(t.stockPriceClose).toFixed(2)}`} />
             )}
             {t.status === "closed" && t.premiumClose != null && (
-              <GreekReadout label="Debit paid" value={t.premiumClose} />
+              <GreekReadout
+                label={debit ? "Credit received" : "Debit paid"}
+                value={t.premiumClose}
+              />
             )}
           </div>
 
@@ -301,6 +312,7 @@ export function TradeRow({
                 premiumOpen={t.premiumOpen}
                 premiumClose={premiumClose}
                 contracts={t.contracts}
+                strategy={t.strategy}
               />
               <div className="flex gap-2">
                 <button

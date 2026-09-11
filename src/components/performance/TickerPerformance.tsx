@@ -6,7 +6,14 @@ import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { SummaryTile } from "@/components/performance/SummaryTile";
-import { fmtDate, fmtMoney, realizedPnl, tickerAvatarColor, tradePnl } from "@/lib/pnl";
+import {
+  fmtDate,
+  fmtMoney,
+  markPnl,
+  tickerAvatarColor,
+  tradePnl,
+  winRateFor,
+} from "@/lib/pnl";
 import {
   closedEarly,
   tickerMonthSplit,
@@ -41,9 +48,10 @@ export function TickerPerformance() {
     .reduce<number | null>((sum, trade) => {
       const mark = marks[trade.id]?.mark;
       if (typeof mark !== "number") return sum;
-      const next = realizedPnl(trade.premiumOpen, mark, trade.contracts);
-      return (sum ?? 0) + next;
+      return (sum ?? 0) + markPnl(trade, mark);
     }, null);
+  // This view always shows unrealized, so score open positions in the win rate too.
+  const winRate = useMemo(() => winRateFor(rows, marks), [rows, marks]);
 
   if (symbols.length === 0) {
     return (
@@ -85,7 +93,10 @@ export function TickerPerformance() {
         <SummaryTile
           label="Win rate"
           value={null}
-          display={stats.winRate == null ? "—" : `${stats.winRate}%`}
+          display={winRate.pct == null ? "—" : `${winRate.pct}%`}
+          caption={`${winRate.wins}/${winRate.counted} incl. open${
+            winRate.unscored ? ` · ${winRate.unscored} no mark` : ""
+          }`}
         />
         <SummaryTile
           label="Closed early"
@@ -177,7 +188,7 @@ function TickerTradeRow({ trade, mark }: { trade: Trade; mark?: number }) {
   const pnl = closed
     ? tradePnl(trade)
     : typeof mark === "number"
-      ? realizedPnl(trade.premiumOpen, mark, trade.contracts)
+      ? markPnl(trade, mark)
       : null;
   const early = closedEarly(trade);
   const avatarBg = tickerAvatarColor(trade.ticker);

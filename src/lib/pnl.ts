@@ -1,17 +1,39 @@
-import type { Trade } from "@/types/trade";
+import { isDebitStrategy, type Strategy, type Trade } from "@/types/trade";
 
-/** Realized P/L: (premium_open − premium_close) × contracts × 100 */
+/** +1 when the position was opened for a credit, −1 when opened for a debit. */
+export function premiumDirection(strategy: Strategy | string) {
+  return isDebitStrategy(strategy) ? -1 : 1;
+}
+
+/**
+ * Realized P/L. A credit position profits as the premium shrinks, a debit
+ * position as it grows, so the sign comes from the strategy. Premiums are
+ * treated as magnitudes because older debit rows were stored negative.
+ */
 export function realizedPnl(
   premiumOpen: number,
   premiumClose: number,
-  contracts: number
+  contracts: number,
+  strategy: Strategy | string
 ) {
-  return (premiumOpen - premiumClose) * contracts * 100;
+  const open = Math.abs(premiumOpen);
+  const close = Math.abs(premiumClose);
+  return premiumDirection(strategy) * (open - close) * contracts * 100;
 }
 
 export function tradePnl(trade: Trade): number | null {
   if (trade.status !== "closed" || trade.premiumClose == null) return null;
-  return realizedPnl(trade.premiumOpen, trade.premiumClose, trade.contracts);
+  return realizedPnl(
+    trade.premiumOpen,
+    trade.premiumClose,
+    trade.contracts,
+    trade.strategy
+  );
+}
+
+/** Open-position P/L against a live mark, using the same direction rule. */
+export function markPnl(trade: Trade, mark: number) {
+  return realizedPnl(trade.premiumOpen, mark, trade.contracts, trade.strategy);
 }
 
 export function monthKey(date: string): string {
@@ -175,9 +197,46 @@ export function unrealizedFromMarks(
     const mark = marks[trade.id]?.mark;
     if (typeof mark !== "number") continue;
     counted += 1;
-    sum += realizedPnl(trade.premiumOpen, mark, trade.contracts);
+    sum += markPnl(trade, mark);
   }
   return counted === 0 ? null : sum;
+}
+
+export type WinRate = { pct: number | null; wins: number; counted: number; unscored: number };
+
+/**
+ * Win rate over closed trades, plus open positions when marks are supplied.
+ * An open position with no live mark cannot be scored, so it is reported
+ * separately rather than silently counted as a win.
+ */
+export function winRateFor(
+  trades: Trade[],
+  marks?: Record<string, { mark: number }>
+): WinRate {
+  let wins = 0;
+  let counted = 0;
+  let unscored = 0;
+  for (const trade of trades) {
+    let pnl: number | null = null;
+    if (trade.status === "closed") {
+      pnl = tradePnl(trade);
+    } else if (marks) {
+      const mark = marks[trade.id]?.mark;
+      if (typeof mark === "number") pnl = markPnl(trade, mark);
+      else unscored += 1;
+    } else {
+      continue;
+    }
+    if (pnl == null) continue;
+    counted += 1;
+    if (pnl > 0) wins += 1;
+  }
+  return {
+    pct: counted ? Math.round((wins / counted) * 100) : null,
+    wins,
+    counted,
+    unscored,
+  };
 }
 
 export function summarize(trades: Trade[], now = new Date()) {

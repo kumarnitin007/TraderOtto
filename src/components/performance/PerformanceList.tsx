@@ -11,11 +11,12 @@ import {
   fmtDate,
   fmtMoney,
   groupClosedTrades,
-  realizedPnl,
+  markPnl,
   summarize,
   tickerAvatarColor,
   tradePnl,
   unrealizedFromMarks,
+  winRateFor,
 } from "@/lib/pnl";
 import type { Trade } from "@/types/trade";
 
@@ -37,7 +38,17 @@ export function PerformanceList() {
         .sort((a, b) => a.expiry.localeCompare(b.expiry) || a.ticker.localeCompare(b.ticker)),
     [trades]
   );
-  const { allTime, mtd, wtd, winRate, closedCount, wins } = summarize(closed);
+  const { allTime, mtd, wtd, closedCount, wins } = summarize(closed);
+  // "Include open" scores open positions off their live mark too.
+  const winRate = useMemo(
+    () => (includeOpen ? winRateFor(trades, marks) : winRateFor(closed)),
+    [includeOpen, trades, closed, marks]
+  );
+  const winRateCaption = includeOpen
+    ? `${winRate.wins}/${winRate.counted} incl. open${
+        winRate.unscored ? ` · ${winRate.unscored} no mark` : ""
+      }`
+    : `${winRate.wins}/${winRate.counted} closed`;
   const unrealized = unrealizedFromMarks(trades, marks);
   const combined = allTime + (unrealized ?? 0);
   const grouped = useMemo(() => groupClosedTrades(closed, period), [closed, period]);
@@ -92,7 +103,8 @@ export function PerformanceList() {
             <SummaryTile
               label="Win rate"
               value={null}
-              display={winRate == null ? "—" : `${winRate}%`}
+              display={winRate.pct == null ? "—" : `${winRate.pct}%`}
+              caption={winRateCaption}
             />
           </>
         ) : (
@@ -103,7 +115,8 @@ export function PerformanceList() {
             <SummaryTile
               label="Win rate"
               value={null}
-              display={winRate == null ? "—" : `${winRate}%`}
+              display={winRate.pct == null ? "—" : `${winRate.pct}%`}
+              caption={winRateCaption}
             />
           </>
         )}
@@ -197,10 +210,7 @@ export function PerformanceList() {
 }
 
 function OpenTradeRow({ trade, mark }: { trade: Trade; mark?: number }) {
-  const pnl =
-    typeof mark === "number"
-      ? realizedPnl(trade.premiumOpen, mark, trade.contracts)
-      : null;
+  const pnl = typeof mark === "number" ? markPnl(trade, mark) : null;
   const avatarBg = tickerAvatarColor(trade.ticker);
   const strikes =
     trade.strategy === "Iron Condor"

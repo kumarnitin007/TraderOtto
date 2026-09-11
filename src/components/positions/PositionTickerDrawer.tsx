@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { LoaderCircle, X } from "lucide-react";
 import type { OptionMark } from "@/hooks/useOptionMarks";
 import { TickerResearch } from "@/components/ticker/TickerResearch";
-import { fmtDate, fmtMoney, tradePnl } from "@/lib/pnl";
+import { fmtDate, fmtMoney, markPnl, tradePnl } from "@/lib/pnl";
 import type { TickerDetails } from "@/types/tickerDetails";
-import type { Trade } from "@/types/trade";
+import { isDebitStrategy, type Trade } from "@/types/trade";
 
 export function PositionTickerDrawer({
   trade,
@@ -39,11 +39,9 @@ export function PositionTickerDrawer({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  const openingValue = trade.premiumOpen * trade.contracts * 100;
+  const openingValue = Math.abs(trade.premiumOpen) * trade.contracts * 100;
   const unrealized =
-    optionMark?.mark == null
-      ? null
-      : (trade.premiumOpen - optionMark.mark) * trade.contracts * 100;
+    optionMark?.mark == null ? null : markPnl(trade, optionMark.mark);
   const pnl = trade.status === "closed" ? tradePnl(trade) : unrealized;
 
   return (
@@ -146,7 +144,7 @@ export function PositionTickerDrawer({
                 ? "Actual option-leg midpoints and Greeks from Alpaca."
                 : trade.status === "open"
                   ? "Alpaca option quote unavailable."
-                  : `Opening ${trade.premiumOpen >= 0 ? "credit" : "debit"} ${fmtMoney(Math.abs(openingValue))}.`}
+                  : `Opening ${isDebitStrategy(trade.strategy) ? "debit" : "credit"} ${fmtMoney(Math.abs(openingValue))}.`}
             </div>
           </div>
         </section>

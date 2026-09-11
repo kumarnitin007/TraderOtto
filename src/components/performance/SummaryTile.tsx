@@ -6,10 +6,12 @@ export function SummaryTile({
   label,
   value,
   display,
+  caption,
 }: {
   label: string;
   value: number | null;
   display?: string;
+  caption?: string;
 }) {
   const positive = value === null ? true : value >= 0;
   return (
@@ -23,6 +25,9 @@ export function SummaryTile({
         {display ??
           (value === null ? "—" : `${positive ? "+" : ""}${fmtMoney(value)}`)}
       </div>
+      {caption && (
+        <div className="mt-[3px] text-[10.5px] leading-tight text-otto-text-faint">{caption}</div>
+      )}
     </div>
   );
 }

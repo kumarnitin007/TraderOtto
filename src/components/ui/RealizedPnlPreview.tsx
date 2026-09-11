@@ -6,10 +6,12 @@ export function RealizedPnlPreview({
   premiumOpen,
   premiumClose,
   contracts,
+  strategy,
 }: {
   premiumOpen: string | number;
   premiumClose: string;
   contracts: string | number;
+  strategy: string;
 }) {
   if (premiumClose.trim() === "") return null;
   const close = Number(premiumClose);
@@ -18,7 +20,7 @@ export function RealizedPnlPreview({
   if (!Number.isFinite(close) || !Number.isFinite(open) || !Number.isFinite(count) || count <= 0) {
     return null;
   }
-  const pnl = realizedPnl(open, close, count);
+  const pnl = realizedPnl(open, close, count, strategy);
   const positive = pnl >= 0;
   return (
     <div

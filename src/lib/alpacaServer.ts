@@ -83,5 +83,9 @@ export async function fetchLatestTrades(symbols: string[]) {
     );
   }
 
+  if (!Object.keys(quotes).length) {
+    return { quotes, source: "unavailable" as const };
+  }
+
   return { quotes, source: "alpaca" as const };
 }

@@ -7,6 +7,8 @@ export const STRATEGIES = [
   "Covered Call",
   "Cash-Secured Put",
   "Strangle",
+  "Long Call",
+  "Long Put",
 ] as const;
 
 export type Strategy = (typeof STRATEGIES)[number];
@@ -22,9 +24,27 @@ export function hasLongLeg(strategy: Strategy | string) {
   );
 }
 
-/** Covered calls and cash-secured puts record only the strike you sold. */
+/** One option only; the strike lives in shortStrike regardless of direction. */
 export function isSingleLeg(strategy: Strategy | string) {
-  return strategy === "Covered Call" || strategy === "Cash-Secured Put";
+  return (
+    strategy === "Covered Call" ||
+    strategy === "Cash-Secured Put" ||
+    strategy === "Long Call" ||
+    strategy === "Long Put"
+  );
+}
+
+/**
+ * Debit positions are opened by paying premium, so they gain when the spread
+ * gets richer. Credit positions gain when it gets cheaper.
+ */
+export function isDebitStrategy(strategy: Strategy | string) {
+  return (
+    strategy === "Long Call" ||
+    strategy === "Long Put" ||
+    strategy === "Put Debit Spread" ||
+    strategy === "Call Debit Spread"
+  );
 }
 
 export type TradeStatus = "open" | "closed";

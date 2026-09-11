@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Camera, LoaderCircle, Pencil, Plus, Trash2, X, Zap } from "lucide-react";
 import {
   hasLongLeg,
+  isDebitStrategy,
   isSingleLeg,
   STRATEGIES,
   type Strategy,
@@ -174,6 +175,8 @@ export function TradeForm() {
   const isCondor = f.strategy === "Iron Condor";
   const isStrangle = f.strategy === "Strangle";
   const singleLeg = isSingleLeg(f.strategy);
+  const debit = isDebitStrategy(f.strategy);
+  const boughtSingle = singleLeg && debit;
 
   function chooseTrade(id: string) {
     setSelectedId(id);
@@ -235,7 +238,11 @@ export function TradeForm() {
       return;
     }
     if (!f.shortStrike) {
-      setError("Enter the short strike (the option you sold).");
+      setError(
+        boughtSingle
+          ? "Enter the strike (the option you bought)."
+          : "Enter the short strike (the option you sold)."
+      );
       return;
     }
     if (hasLongLeg(f.strategy) && !f.longStrike) {
@@ -484,13 +491,23 @@ export function TradeForm() {
 
       <SectionLabel>Strikes &amp; premium</SectionLabel>
       <p className="mb-3 text-[12.5px] leading-snug text-otto-text-faint">
-        {singleLeg
-          ? "Single-leg trade: enter only the strike you sold."
-          : "Credit spread: short = strike you sold, long = strike you bought."}{" "}
-        Premium is per contract (so $212 collected on 1 contract is 2.12, not 212).
+        {boughtSingle
+          ? "Single-leg trade: enter only the strike you bought."
+          : singleLeg
+            ? "Single-leg trade: enter only the strike you sold."
+            : "Credit spread: short = strike you sold, long = strike you bought."}{" "}
+        Premium is per contract as a positive number (so $212 on 1 contract is 2.12, not 212).
       </p>
       <div className="grid grid-cols-2 gap-4">
-        <Field label={isCondor || isStrangle ? "Put short strike (sold)" : "Short strike (sold)"}>
+        <Field
+          label={
+            isCondor || isStrangle
+              ? "Put short strike (sold)"
+              : boughtSingle
+                ? "Strike (bought)"
+                : "Short strike (sold)"
+          }
+        >
           <input type="number" placeholder="320" value={f.shortStrike} onChange={set("shortStrike")} />
         </Field>
         {hasLongLeg(f.strategy) && (
@@ -511,7 +528,7 @@ export function TradeForm() {
         <Field label="Open date">
           <input type="date" value={f.openDate} onChange={set("openDate")} />
         </Field>
-        <Field label="Premium ($ / contract)">
+        <Field label={debit ? "Premium paid ($ / contract)" : "Premium collected ($ / contract)"}>
           <input
             type="number"
             step="0.01"
@@ -541,7 +558,13 @@ export function TradeForm() {
                 onChange={set("stockPriceClose")}
               />
             </Field>
-            <Field label="Premium paid to close ($ / contract)">
+            <Field
+              label={
+                debit
+                  ? "Premium received to close ($ / contract)"
+                  : "Premium paid to close ($ / contract)"
+              }
+            >
               <input
                 type="number"
                 step="0.01"
@@ -556,6 +579,7 @@ export function TradeForm() {
               premiumOpen={f.premiumOpen}
               premiumClose={f.premiumClose}
               contracts={f.contracts}
+              strategy={f.strategy}
             />
           </div>
         </>

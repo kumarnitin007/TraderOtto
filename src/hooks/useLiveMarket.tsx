@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { Trade } from "@/types/trade";
 import { serializeLegs, tradeOptionLegs } from "@/lib/optionLegs";
+import { authHeaders } from "@/lib/authHeaders";
 import { useMarketSession } from "@/hooks/useMarketSession";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
@@ -31,6 +32,8 @@ type LiveMarketValue = {
   marks: Record<string, OptionMark>;
   lastQuoteAt: string | null;
   lastMarkAt: string | null;
+  snapshotAt: string | null;
+  dataSource: "live" | "cache" | "simulated" | null;
 };
 
 const LiveMarketContext = createContext<LiveMarketValue | null>(null);
@@ -61,6 +64,8 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   const [marks, setMarks] = useState<Record<string, OptionMark>>({});
   const [lastQuoteAt, setLastQuoteAt] = useState<string | null>(null);
   const [lastMarkAt, setLastMarkAt] = useState<string | null>(null);
+  const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<"live" | "cache" | "simulated" | null>(null);
   const quotesRef = useRef(quotes);
   quotesRef.current = quotes;
 
@@ -101,10 +106,13 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
     const response = await fetch(`/api/quotes?symbols=${encodeURIComponent(list.join(","))}`, {
       cache: "no-store",
       signal,
+      headers: await authHeaders(),
     });
     if (!response.ok || signal?.aborted) return;
     const data = (await response.json()) as {
       quotes?: Record<string, { price?: number; ts?: string }>;
+      source?: string;
+      fetchedAt?: string;
     };
     const updates: Record<string, LiveQuote> = {};
     for (const [symbol, quote] of Object.entries(data.quotes ?? {})) {
@@ -117,40 +125,58 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
     }
     if (!Object.keys(updates).length || signal?.aborted) return;
     setQuotes((prev) => ({ ...prev, ...updates }));
-    setLastQuoteAt(new Date().toISOString());
+    const at = data.fetchedAt ?? new Date().toISOString();
+    setLastQuoteAt(at);
+    if (data.source === "cache") {
+      setDataSource("cache");
+      setSnapshotAt(at);
+    } else if (data.source === "simulated") {
+      setDataSource("simulated");
+      setSnapshotAt(at);
+    } else {
+      setDataSource("live");
+      setSnapshotAt(at);
+    }
   }, []);
 
   const loadMarks = useCallback(async (signal?: AbortSignal) => {
     const jobs = optionJobsRef.current;
     if (!jobs.length || signal?.aborted) return;
-    const results = await Promise.all(
-      jobs.map(async ({ trade, legs }) => {
-        const query = new URLSearchParams({
+    const response = await fetch("/api/option-spreads", {
+      method: "POST",
+      cache: "no-store",
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({
+        positions: jobs.map(({ trade, legs }) => ({
+          id: trade.id,
           symbol: trade.ticker,
           expiry: trade.expiry,
           legs: serializeLegs(legs),
-        });
-        try {
-          const response = await fetch(`/api/option-spread?${query}`, {
-            cache: "no-store",
-            signal,
-          });
-          if (!response.ok) return null;
-          const data = (await response.json()) as OptionMark & { mark?: number };
-          if (typeof data.mark !== "number") return null;
-          return [trade.id, data] as const;
-        } catch {
-          return null;
-        }
-      })
-    );
-    const updates: Record<string, OptionMark> = {};
-    for (const result of results) {
-      if (result) updates[result[0]] = result[1];
-    }
+        })),
+      }),
+    });
+    if (!response.ok || signal?.aborted) return;
+    const data = (await response.json()) as {
+      marks?: Record<string, OptionMark>;
+      source?: string;
+      fetchedAt?: string;
+    };
+    const updates = data.marks ?? {};
     if (!Object.keys(updates).length || signal?.aborted) return;
     setMarks((prev) => ({ ...prev, ...updates }));
-    setLastMarkAt(new Date().toISOString());
+    const at = data.fetchedAt ?? new Date().toISOString();
+    setLastMarkAt(at);
+    if (data.source === "cache") {
+      setDataSource("cache");
+      setSnapshotAt(at);
+    } else {
+      setDataSource((current) => (current === "cache" ? current : "live"));
+      setSnapshotAt(at);
+    }
   }, []);
 
   useEffect(() => {
@@ -204,8 +230,8 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   }, [visible, tradeKey, loadMarks, schedule.pollOptions, schedule.optionIntervalMs, schedule.session]);
 
   const value = useMemo(
-    () => ({ quotes, marks, lastQuoteAt, lastMarkAt }),
-    [quotes, marks, lastQuoteAt, lastMarkAt]
+    () => ({ quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, dataSource }),
+    [quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, dataSource]
   );
 
   return <LiveMarketContext.Provider value={value}>{children}</LiveMarketContext.Provider>;

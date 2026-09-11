@@ -36,6 +36,12 @@ export function tradeOptionLegs(trade: Trade): OptionLeg[] | null {
   }
 
   const type: OptionLeg["type"] = strategy.toLowerCase().includes("call") ? "call" : "put";
+
+  // A bought single leg still records its strike in shortStrike, the anchor field.
+  if (strategy === "Long Call" || strategy === "Long Put") {
+    return add("long", type, shortStrike) ? legs : null;
+  }
+
   if (!add("short", type, shortStrike)) return null;
   // Verticals record the protective leg in longStrike; single-leg trades leave it empty.
   add("long", type, longStrike);
