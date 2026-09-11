@@ -95,18 +95,11 @@ export function PnlOverview({ compact = false }: { compact?: boolean }) {
             {formatSigned(total)}
           </div>
         </button>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <StatPill
-            label="Realized"
-            value={realized}
-            onClick={() => setMenuOpen((open) => !open)}
-          />
-          <StatPill
-            label="Unreal."
-            value={unrealized}
-            onClick={() => setMenuOpen((open) => !open)}
-          />
-        </div>
+        <StatPill
+          label="Realized"
+          value={realized}
+          onClick={() => setMenuOpen((open) => !open)}
+        />
         {menu}
       </div>
     );
@@ -126,15 +119,10 @@ export function PnlOverview({ compact = false }: { compact?: boolean }) {
           {formatSigned(total)}
         </div>
       </button>
-      <div className="mt-3.5 flex flex-col items-start gap-2">
+      <div className="mt-3.5">
         <StatPill
           label="Realized"
           value={realized}
-          onClick={() => setMenuOpen((open) => !open)}
-        />
-        <StatPill
-          label="Unrealized"
-          value={unrealized}
           onClick={() => setMenuOpen((open) => !open)}
         />
       </div>

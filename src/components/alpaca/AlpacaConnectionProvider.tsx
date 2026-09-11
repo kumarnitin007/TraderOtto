@@ -9,23 +9,26 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { connectionCheckMs } from "@/lib/marketSession";
+import { useMarketSession } from "@/hooks/useMarketSession";
 
 export type AlpacaConnectionState = "checking" | "live" | "simulated" | "offline";
 
 type AlpacaConnectionValue = {
   state: AlpacaConnectionState;
-  checkConnection: () => Promise<void>;
+  checkConnection: (opts?: { quiet?: boolean }) => Promise<void>;
 };
 
 const AlpacaConnectionContext = createContext<AlpacaConnectionValue | null>(null);
 
 export function AlpacaConnectionProvider({ children }: { children: ReactNode }) {
+  const { schedule, visible } = useMarketSession();
   const [state, setState] = useState<AlpacaConnectionState>("checking");
 
-  const checkConnection = useCallback(async () => {
-    setState("checking");
+  const checkConnection = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setState("checking");
     try {
-      const response = await fetch("/api/quote/SPY", { cache: "no-store" });
+      const response = await fetch("/api/quotes?symbols=SPY", { cache: "no-store" });
       if (!response.ok) {
         setState("offline");
         return;
@@ -37,18 +40,25 @@ export function AlpacaConnectionProvider({ children }: { children: ReactNode }) 
     }
   }, []);
 
+  const checkEvery = connectionCheckMs(schedule);
+
   useEffect(() => {
     void checkConnection();
-    const interval = window.setInterval(checkConnection, 60_000);
-    return () => window.clearInterval(interval);
   }, [checkConnection]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const id = window.setInterval(
+      () => void checkConnection({ quiet: true }),
+      checkEvery
+    );
+    return () => window.clearInterval(id);
+  }, [checkConnection, visible, checkEvery]);
 
   const value = useMemo(() => ({ state, checkConnection }), [state, checkConnection]);
 
   return (
-    <AlpacaConnectionContext.Provider value={value}>
-      {children}
-    </AlpacaConnectionContext.Provider>
+    <AlpacaConnectionContext.Provider value={value}>{children}</AlpacaConnectionContext.Provider>
   );
 }
 

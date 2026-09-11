@@ -2,19 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, LogOut, PenLine, Rows3, type LucideIcon } from "lucide-react";
+import {
+  Bell,
+  LineChart,
+  LogOut,
+  PenLine,
+  Rows3,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { AlpacaStatus } from "@/components/ui/AlpacaStatus";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { PnlOverview } from "@/components/nav/PnlOverview";
 import { useTrades } from "@/hooks/useTrades";
 import { useAuth } from "@/hooks/useAuth";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
+import { useNotifications } from "@/hooks/useNotifications";
 import { summarize } from "@/lib/pnl";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/positions", label: "Positions", icon: Rows3 },
   { href: "/log", label: "Log trade", icon: PenLine },
   { href: "/performance", label: "Performance", icon: LineChart },
+  { href: "/notifications", label: "Alerts", icon: Bell },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -22,6 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { trades, error: tradeError, readonly } = useTrades();
   const { error: groupError } = useWatchGroups();
   const { user, signOut } = useAuth();
+  const { unreadCount, error: notificationError } = useNotifications();
   const { winRate } = summarize(trades);
 
   return (
@@ -48,7 +60,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   strokeWidth={2.2}
                   className={active ? "text-otto-green" : "text-otto-text-faint"}
                 />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/notifications" && unreadCount > 0 && (
+                  <span className="rounded-full bg-otto-red-soft px-1.5 py-0.5 text-[10px] text-otto-red">
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -94,16 +111,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PnlOverview compact />
           </header>
           <div className="px-[18px] pt-3.5">
-            {(readonly || tradeError || groupError) && (
+            {(readonly || tradeError || groupError || notificationError) && (
               <div
                 className={`mb-4 rounded-xl border px-3 py-2 text-xs ${
-                  tradeError || groupError
+                  tradeError || groupError || notificationError
                     ? "border-otto-red/30 bg-otto-red-soft text-otto-red"
                     : "border-otto-amber/30 bg-otto-amber-soft text-otto-amber"
                 }`}
               >
                 {tradeError ||
                   groupError ||
+                  notificationError ||
                   "Bypass mode is view-only. Sign in to load and save database records."}
               </div>
             )}
@@ -120,7 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-1 flex-col items-center gap-[3px] px-0 pb-1 pt-1.5 ${
+              className={`relative flex flex-1 flex-col items-center gap-[3px] px-0 pb-1 pt-1.5 ${
                 active ? "text-otto-text" : "text-otto-text-faint"
               }`}
             >
@@ -130,6 +148,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={active ? "text-otto-green" : "text-otto-text-faint"}
               />
               <span className="text-[10.5px] font-semibold">{item.label}</span>
+              {item.href === "/notifications" && unreadCount > 0 && (
+                <span className="absolute left-1/2 top-0 ml-2 rounded-full bg-otto-red px-1 text-[9px] font-bold text-black">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}

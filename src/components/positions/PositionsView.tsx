@@ -29,7 +29,7 @@ export function PositionsView() {
     if (!groups.some((group) => group.id === selectedView)) {
       setSelectedView("positions");
     }
-  }, [groups, groupsLoading, selectedView]);
+  }, [groups, groupsLoading, selectedView, setSelectedView]);
 
   const selectedGroup = groups.find((group) => group.id === selectedView);
 

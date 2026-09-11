@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bell, ChevronRight, LoaderCircle, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronRight, LoaderCircle, X } from "lucide-react";
 import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
@@ -25,46 +25,12 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
   const tickers = useMemo(() => group.trackers.map((tracker) => tracker.ticker), [group]);
   const quotes = useTickerQuotes(tickers);
   const [selected, setSelected] = useState<WatchTracker | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<
-    NotificationPermission | "unsupported"
-  >("unsupported");
-  const alertStates = useRef(new Map<string, string>());
 
   useEffect(() => {
     setSelected((current) =>
       current ? group.trackers.find((tracker) => tracker.id === current.id) ?? null : null
     );
   }, [group.trackers]);
-
-  useEffect(() => {
-    setNotificationPermission(
-      typeof Notification === "undefined" ? "unsupported" : Notification.permission
-    );
-  }, []);
-
-  useEffect(() => {
-    if (notificationPermission !== "granted") return;
-    for (const tracker of group.trackers) {
-      const price = quotes[tracker.ticker]?.price;
-      const state = breach(tracker, price);
-      const key = `trader-otto:alert:${group.id}:${tracker.id}`;
-      const last = alertStates.current.get(key);
-      if (state && last !== state) {
-        new Notification(`${tracker.ticker} price alert`, {
-          body: `${tracker.ticker} is ${state} your range at ${fmtMoney(price ?? 0)}.`,
-        });
-        alertStates.current.set(key, state);
-      } else if (!state && last) {
-        alertStates.current.delete(key);
-      }
-    }
-  }, [group.id, group.trackers, notificationPermission, quotes]);
-
-  async function enableNotifications() {
-    if (typeof Notification === "undefined") return;
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-  }
 
   return (
     <div>
@@ -75,16 +41,6 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
             {group.trackers.length} ticker{group.trackers.length === 1 ? "" : "s"} · tap for details
           </div>
         </div>
-        {notificationPermission === "default" && (
-          <button
-            type="button"
-            onClick={() => void enableNotifications()}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-otto-divider px-3 py-1.5 text-[11px] font-semibold text-otto-text-dim"
-          >
-            <Bell size={13} />
-            Enable alerts
-          </button>
-        )}
       </div>
 
       {group.trackers.length === 0 && (
