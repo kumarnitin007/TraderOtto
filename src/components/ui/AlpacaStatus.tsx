@@ -65,15 +65,20 @@ function formatEt(iso: string | null) {
   );
 }
 
-function sessionLabel(schedule: MarketSchedule) {
-  const minutes = easternParts(new Date(schedule.clockAt)).minutes;
-  if (schedule.session === "regular") return "regular hours";
-  if (schedule.session === "warmup") return "the 15-minute open warmup";
-  if (schedule.session === "cooldown") return "the 15-minute close cooldown";
-  if (schedule.session === "extended") {
-    return minutes < 9 * 60 + 30 ? "pre-market" : "after hours";
+function statusBlurb(appearance: Appearance, schedule: MarketSchedule, nextOpen: string | null) {
+  const nextActive = nextOpen
+    ? `Will change to Active in regular open hours at ${nextOpen}.`
+    : "Will change to Active at the next regular open.";
+  if (appearance === "checking") return "Checking the market feed…";
+  if (appearance === "live") return "Regular hours. Otto is Active.";
+  if (appearance === "delayed") {
+    const minutes = easternParts(new Date(schedule.clockAt)).minutes;
+    const phase = minutes < 9 * 60 + 30 ? "Pre-market" : "After hours";
+    return `${phase}. ${nextActive}`;
   }
-  return "the market is closed";
+  if (appearance === "asOfClose") return `The market is closed. ${nextActive}`;
+  if (appearance === "cached") return `Showing the snapshot stored in Otto. ${nextActive}`;
+  return "No live feed. Fetch latest data to retry.";
 }
 
 function appearanceDot(appearance: Appearance) {
@@ -89,10 +94,11 @@ function appearanceDot(appearance: Appearance) {
 export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
   const { state, checkConnection } = useAlpacaConnection();
   const { schedule } = useMarketSession();
-  const { snapshotAt, dataSource, lastQuoteAt, lastMarkAt, refreshing, refreshNow } =
+  const { snapshotAt, savedAt, dataSource, lastQuoteAt, lastMarkAt, refreshing, refreshNow } =
     useLiveMarket();
   const [open, setOpen] = useState(false);
   const asOf = snapshotAt ?? lastMarkAt ?? lastQuoteAt;
+  const lastSavedLabel = savedAt ? formatAsOf(savedAt, compact) : null;
   const stale = dataSource === "cache" || (state === "offline" && Boolean(asOf));
 
   const appearance: Appearance =
@@ -122,8 +128,8 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
       ? "Checking Otto"
       : appearance === "offline"
         ? "Otto offline"
-        : appearance === "cached" && asOf
-          ? `As of ${formatAsOf(asOf, compact)}`
+        : appearance === "cached" && lastSavedLabel
+          ? `As of ${lastSavedLabel}`
           : appearance === "asOfClose"
             ? asOf
               ? `As of ${formatAsOf(asOf, compact)}`
@@ -185,16 +191,10 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div id="otto-status-title" className="text-[15px] font-extrabold">
-                  Otto status
+                  Otto Status — {currentName}
                 </div>
                 <p className="mt-1 text-[12.5px] leading-snug text-otto-text-dim">
-                  {appearance === "checking"
-                    ? "Checking the market feed…"
-                    : `Currently ${currentName} — ${sessionLabel(schedule)}.`}
-                  {asOf ? ` Last data ${formatAsOf(asOf, false)}.` : ""}
-                  {nextOpen && (appearance === "delayed" || appearance === "asOfClose")
-                    ? ` Regular open ${nextOpen}.`
-                    : ""}
+                  {statusBlurb(appearance, schedule, nextOpen)}
                 </p>
               </div>
               <button
@@ -220,6 +220,11 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
                     <div className="flex items-center gap-2">
                       <span className={`inline-block h-1.5 w-1.5 rounded-full ${appearanceDot(row.id)}`} />
                       <span className="text-[13px] font-bold">{row.name}</span>
+                      {row.id === "cached" && savedAt && (
+                        <span className="text-[11px] font-semibold text-otto-text-faint">
+                          {formatAsOf(savedAt, false)}
+                        </span>
+                      )}
                       {current && (
                         <span className="rounded-full bg-otto-green-soft px-1.5 py-0.5 text-[10px] font-bold text-otto-green">
                           Now
@@ -227,7 +232,11 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
                       )}
                     </div>
                     <p className="mt-1 pl-3.5 text-[11.5px] leading-snug text-otto-text-faint">
-                      {row.when}
+                      {row.id === "cached"
+                        ? savedAt
+                          ? "Snapshot stored in Otto. Fetch latest overwrites it when the new data is newer."
+                          : "Nothing stored yet. Fetch latest data to save a snapshot."
+                        : row.when}
                     </p>
                   </li>
                 );
@@ -244,7 +253,7 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
               {refreshing ? "Fetching latest…" : "Fetch latest data"}
             </button>
             <p className="mt-1.5 text-center text-[11px] text-otto-text-faint">
-              Pulls current stock quotes and option marks even when Otto is delayed or closed.
+              Pulls current quotes and marks, and saves them to Otto if they are newer than the last snapshot.
             </p>
           </div>
         </div>

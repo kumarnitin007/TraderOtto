@@ -33,10 +33,17 @@ type LiveMarketValue = {
   lastQuoteAt: string | null;
   lastMarkAt: string | null;
   snapshotAt: string | null;
+  savedAt: string | null;
   dataSource: "live" | "cache" | null;
   refreshing: boolean;
   refreshNow: () => Promise<void>;
 };
+
+function laterIso(current: string | null, next?: string | null) {
+  if (!next) return current;
+  if (!current) return next;
+  return Date.parse(next) >= Date.parse(current) ? next : current;
+}
 
 const LiveMarketContext = createContext<LiveMarketValue | null>(null);
 
@@ -67,6 +74,7 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   const [lastQuoteAt, setLastQuoteAt] = useState<string | null>(null);
   const [lastMarkAt, setLastMarkAt] = useState<string | null>(null);
   const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<"live" | "cache" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const quotesRef = useRef(quotes);
@@ -103,19 +111,24 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   const optionJobsRef = useRef(optionJobs);
   optionJobsRef.current = optionJobs;
 
-  const loadQuotes = useCallback(async (signal?: AbortSignal) => {
+  const loadQuotes = useCallback(async (signal?: AbortSignal, persist = false) => {
     const list = symbolsRef.current;
     if (!list.length || signal?.aborted) return;
-    const response = await fetch(`/api/quotes?symbols=${encodeURIComponent(list.join(","))}`, {
-      cache: "no-store",
-      signal,
-      headers: await authHeaders(),
-    });
+    const persistQuery = persist ? "&persist=1" : "";
+    const response = await fetch(
+      `/api/quotes?symbols=${encodeURIComponent(list.join(","))}${persistQuery}`,
+      {
+        cache: "no-store",
+        signal,
+        headers: await authHeaders(),
+      }
+    );
     if (!response.ok || signal?.aborted) return;
     const data = (await response.json()) as {
       quotes?: Record<string, { price?: number; ts?: string }>;
       source?: string;
       fetchedAt?: string;
+      savedAt?: string | null;
     };
     const updates: Record<string, LiveQuote> = {};
     for (const [symbol, quote] of Object.entries(data.quotes ?? {})) {
@@ -130,6 +143,7 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
     setQuotes((prev) => ({ ...prev, ...updates }));
     const at = data.fetchedAt ?? new Date().toISOString();
     setLastQuoteAt(at);
+    setSavedAt((current) => laterIso(current, data.savedAt));
     if (data.source === "cache") {
       setDataSource("cache");
       setSnapshotAt(at);
@@ -139,7 +153,7 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const loadMarks = useCallback(async (signal?: AbortSignal) => {
+  const loadMarks = useCallback(async (signal?: AbortSignal, persist = false) => {
     const jobs = optionJobsRef.current;
     if (!jobs.length || signal?.aborted) return;
     const response = await fetch("/api/option-spreads", {
@@ -151,6 +165,7 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
         ...(await authHeaders()),
       },
       body: JSON.stringify({
+        persist,
         positions: jobs.map(({ trade, legs }) => ({
           id: trade.id,
           symbol: trade.ticker,
@@ -164,12 +179,14 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
       marks?: Record<string, OptionMark>;
       source?: string;
       fetchedAt?: string;
+      savedAt?: string | null;
     };
     const updates = data.marks ?? {};
     if (!Object.keys(updates).length || signal?.aborted) return;
     setMarks((prev) => ({ ...prev, ...updates }));
     const at = data.fetchedAt ?? new Date().toISOString();
     setLastMarkAt(at);
+    setSavedAt((current) => laterIso(current, data.savedAt));
     if (data.source === "cache") {
       setDataSource("cache");
       setSnapshotAt(at);
@@ -182,7 +199,9 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   const refreshNow = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadQuotes(), loadMarks()]);
+      // Sequential so quotes land in the snapshot before marks merge on top.
+      await loadQuotes(undefined, true);
+      await loadMarks(undefined, true);
     } catch {
       /* keep last quotes and marks */
     } finally {
@@ -247,11 +266,12 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
       lastQuoteAt,
       lastMarkAt,
       snapshotAt,
+      savedAt,
       dataSource,
       refreshing,
       refreshNow,
     }),
-    [quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, dataSource, refreshing, refreshNow]
+    [quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, savedAt, dataSource, refreshing, refreshNow]
   );
 
   return <LiveMarketContext.Provider value={value}>{children}</LiveMarketContext.Provider>;

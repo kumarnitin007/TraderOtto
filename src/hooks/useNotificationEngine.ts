@@ -9,6 +9,7 @@ import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { getSupabaseClient } from "@/lib/supabase";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/pnl";
 import { positionAlert } from "@/lib/premiumPace";
+import { dispatchedDayKey, firedToday, signalDay } from "@/lib/notificationDedupe";
 import type {
   NotificationChannel,
   NotificationEventKind,
@@ -58,7 +59,9 @@ export function NotificationEngine() {
   useEffect(() => {
     if (loading || initializedRef.current) return;
     for (const signal of signals) {
-      if (signal.status === "open") dispatchedRef.current.add(signal.dedupeKey);
+      if (signalDay(signal.firedAt) === todayISO()) {
+        dispatchedRef.current.add(dispatchedDayKey(signal.dedupeKey));
+      }
     }
     initializedRef.current = true;
   }, [loading, signals]);
@@ -89,7 +92,7 @@ export function NotificationEngine() {
           title: `${trade.ticker} is ${alert.label.toLowerCase()}`,
           message: alert.detail,
           severity: alert.tier === "critical" ? "critical" : "warning",
-          dedupeKey: `position_risk:${trade.id}:${alert.tier}`,
+          dedupeKey: `position_risk:${trade.id}`,
         });
       }
 
@@ -158,7 +161,6 @@ export function NotificationEngine() {
     const active = new Set(drafts.map((draft) => draft.dedupeKey));
     for (const oldKey of activeRef.current) {
       if (!active.has(oldKey)) {
-        dispatchedRef.current.delete(oldKey);
         void clearCondition(oldKey);
       }
     }
@@ -174,14 +176,16 @@ export function NotificationEngine() {
       const event = preferences.events[draft.kind];
       const hasDestination =
         event.inApp || event.browser || event.email || event.discord || event.telegram;
+      const dayKey = dispatchedDayKey(draft.dedupeKey);
       if (
         !event.enabled ||
         !hasDestination ||
-        dispatchedRef.current.has(draft.dedupeKey)
+        dispatchedRef.current.has(dayKey) ||
+        firedToday(signals, draft.dedupeKey)
       ) {
         continue;
       }
-      dispatchedRef.current.add(draft.dedupeKey);
+      dispatchedRef.current.add(dayKey);
       void fire(draft);
       if (
         event.browser &&
@@ -207,6 +211,7 @@ export function NotificationEngine() {
     marks,
     preferences,
     quotes,
+    signals,
     trades,
   ]);
 

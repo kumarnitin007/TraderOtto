@@ -17,6 +17,7 @@ import {
   createSupabaseNotificationRepository,
   type NotificationRepository,
 } from "@/lib/data/supabaseNotificationRepository";
+import { firedToday } from "@/lib/notificationDedupe";
 import type {
   NotificationPreferences,
   NotificationSignal,
@@ -98,11 +99,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const fire = useCallback(async (draft: SignalDraft) => {
     const repo = repoRef.current;
     if (!repo) return;
-    if (
-      signalsRef.current.some(
-        (signal) => signal.status === "open" && signal.dedupeKey === draft.dedupeKey
-      )
-    ) {
+    if (firedToday(signalsRef.current, draft.dedupeKey)) {
       return;
     }
     try {

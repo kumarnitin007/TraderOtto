@@ -26,9 +26,9 @@ async function profileClient(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let body: { positions?: PositionBody[] };
+  let body: { positions?: PositionBody[]; persist?: boolean };
   try {
-    body = (await request.json()) as { positions?: PositionBody[] };
+    body = (await request.json()) as { positions?: PositionBody[]; persist?: boolean };
   } catch {
     return Response.json({ error: "invalid_json" }, { status: 400 });
   }
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
 
   if (Object.keys(liveMarks).length) {
     const fetchedAt = new Date().toISOString();
+    let savedAt: string | null = null;
     if (profile) {
       const snapshot = await readMarketSnapshot(profile.supabase, profile.userId);
       for (const position of positions) {
@@ -82,12 +83,19 @@ export async function POST(request: Request) {
       }
       const marks: Record<string, CachedMark> = {};
       for (const [id, mark] of Object.entries(liveMarks)) marks[id] = mark;
-      await maybeWriteMarketSnapshot(profile.supabase, profile.userId, { marks });
+      const saved = await maybeWriteMarketSnapshot(
+        profile.supabase,
+        profile.userId,
+        { marks },
+        { force: Boolean(body.persist) }
+      );
+      savedAt = saved?.fetchedAt ?? snapshot?.fetchedAt ?? null;
     }
     return Response.json({
       marks: liveMarks,
       source: "alpaca-options",
       fetchedAt,
+      savedAt,
     });
   }
 
@@ -102,6 +110,7 @@ export async function POST(request: Request) {
         marks: cached,
         source: "cache",
         fetchedAt: snapshot!.fetchedAt,
+        savedAt: snapshot!.fetchedAt,
       });
     }
   }

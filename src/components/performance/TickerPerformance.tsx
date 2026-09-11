@@ -14,6 +14,7 @@ import {
   tradePnl,
   winRateFor,
 } from "@/lib/pnl";
+import { fmtPct, tradeRoi } from "@/lib/roi";
 import {
   closedEarly,
   tickerMonthSplit,
@@ -190,6 +191,7 @@ function TickerTradeRow({ trade, mark }: { trade: Trade; mark?: number }) {
     : typeof mark === "number"
       ? markPnl(trade, mark)
       : null;
+  const roi = closed ? tradeRoi(trade) : null;
   const early = closedEarly(trade);
   const avatarBg = tickerAvatarColor(trade.ticker);
   const strikes =
@@ -231,16 +233,31 @@ function TickerTradeRow({ trade, mark }: { trade: Trade; mark?: number }) {
           {strikes} · {closed ? `closed ${fmtDate(trade.closeDate ?? trade.openDate)}` : `exp ${fmtDate(trade.expiry)}`}
         </div>
       </div>
-      <div
-        className={`shrink-0 text-right text-[14.5px] font-bold ${
-          pnl == null
-            ? "text-otto-text-faint"
-            : pnl >= 0
-              ? "text-otto-green"
-              : "text-otto-red"
-        }`}
-      >
-        {pnl == null ? "—" : `${pnl >= 0 ? "+" : ""}${fmtMoney(pnl)}`}
+      <div className="shrink-0 text-right">
+        <div
+          className={`text-[14.5px] font-bold ${
+            pnl == null
+              ? "text-otto-text-faint"
+              : pnl >= 0
+                ? "text-otto-green"
+                : "text-otto-red"
+          }`}
+        >
+          {pnl == null ? "—" : `${pnl >= 0 ? "+" : ""}${fmtMoney(pnl)}`}
+        </div>
+        {closed && (
+          <div
+            className={`mt-0.5 text-[11px] font-semibold ${
+              roi == null
+                ? "text-otto-text-faint"
+                : roi.roi >= 0
+                  ? "text-otto-green"
+                  : "text-otto-red"
+            }`}
+          >
+            {roi == null ? "ROI —" : `${fmtPct(roi.roi)} · ${fmtPct(roi.annualized)}/yr`}
+          </div>
+        )}
       </div>
     </div>
   );

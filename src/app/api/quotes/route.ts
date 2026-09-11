@@ -32,14 +32,22 @@ export async function GET(request: Request) {
     const { quotes, source } = await fetchLatestTrades(symbols);
     if (source === "alpaca" && Object.keys(quotes).length) {
       const fetchedAt = new Date().toISOString();
+      const persist = url.searchParams.get("persist") === "1";
+      let savedAt: string | null = null;
       if (profile) {
         const snapshot = await readMarketSnapshot(profile.supabase, profile.userId);
         for (const symbol of symbols) {
           if (!quotes[symbol] && snapshot?.quotes[symbol]) quotes[symbol] = snapshot.quotes[symbol];
         }
-        await maybeWriteMarketSnapshot(profile.supabase, profile.userId, { quotes });
+        const saved = await maybeWriteMarketSnapshot(
+          profile.supabase,
+          profile.userId,
+          { quotes },
+          { force: persist }
+        );
+        savedAt = saved?.fetchedAt ?? snapshot?.fetchedAt ?? null;
       }
-      return Response.json({ quotes, source, fetchedAt, ts: fetchedAt });
+      return Response.json({ quotes, source, fetchedAt, savedAt, ts: fetchedAt });
     }
   } catch (error) {
     console.error("batch quote error", error);
@@ -56,6 +64,7 @@ export async function GET(request: Request) {
         quotes: cached,
         source: "cache",
         fetchedAt: snapshot!.fetchedAt,
+        savedAt: snapshot!.fetchedAt,
         ts: snapshot!.fetchedAt,
       });
     }

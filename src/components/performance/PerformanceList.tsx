@@ -19,6 +19,7 @@ import {
   winRateFor,
 } from "@/lib/pnl";
 import type { Trade } from "@/types/trade";
+import { fmtPct, tradeRoi } from "@/lib/roi";
 
 export function PerformanceList() {
   const { trades } = useTrades();
@@ -253,6 +254,7 @@ function OpenTradeRow({ trade, mark }: { trade: Trade; mark?: number }) {
 
 function ClosedTradeRow({ trade }: { trade: Trade }) {
   const pnl = tradePnl(trade);
+  const roi = tradeRoi(trade);
   const avatarBg = tickerAvatarColor(trade.ticker);
   const strikes =
     trade.strategy === "Iron Condor"
@@ -276,15 +278,31 @@ function ClosedTradeRow({ trade }: { trade: Trade }) {
         </div>
         <div className="mt-0.5 text-xs text-otto-text-faint">
           {strikes} · closed {trade.closeDate ? fmtDate(trade.closeDate) : ""}
+          {roi ? ` · ${roi.days}d capital` : ""}
         </div>
       </div>
-      <div
-        className={`shrink-0 text-right text-[14.5px] font-bold ${
-          pnl != null && pnl >= 0 ? "text-otto-green" : "text-otto-red"
-        }`}
-      >
-        {pnl != null && pnl >= 0 ? "+" : ""}
-        {fmtMoney(pnl ?? 0)}
+      <div className="shrink-0 text-right">
+        <div
+          className={`text-[14.5px] font-bold ${
+            pnl != null && pnl >= 0 ? "text-otto-green" : "text-otto-red"
+          }`}
+        >
+          {pnl != null && pnl >= 0 ? "+" : ""}
+          {fmtMoney(pnl ?? 0)}
+        </div>
+        <div
+          className={`mt-0.5 text-[11px] font-semibold ${
+            roi == null
+              ? "text-otto-text-faint"
+              : roi.roi >= 0
+                ? "text-otto-green"
+                : "text-otto-red"
+          }`}
+        >
+          {roi == null
+            ? "ROI —"
+            : `${fmtPct(roi.roi)} · ${fmtPct(roi.annualized)}/yr`}
+        </div>
       </div>
     </div>
   );

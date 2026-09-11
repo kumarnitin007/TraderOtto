@@ -55,15 +55,19 @@ export async function readMarketSnapshot(supabase: SupabaseClient, userId: strin
 export async function maybeWriteMarketSnapshot(
   supabase: SupabaseClient,
   userId: string,
-  patch: { quotes?: Record<string, CachedQuote>; marks?: Record<string, CachedMark> }
+  patch: { quotes?: Record<string, CachedQuote>; marks?: Record<string, CachedMark> },
+  opts?: { force?: boolean }
 ) {
   try {
     const settings = await profileSettings(supabase, userId);
     const existing = asSnapshot(settings.marketSnapshot);
-    const age = existing ? Date.now() - Date.parse(existing.fetchedAt) : Number.POSITIVE_INFINITY;
-    if (Number.isFinite(age) && age < MARKET_SNAPSHOT_MIN_MS) return existing;
+    const now = Date.now();
+    const existingAt = existing ? Date.parse(existing.fetchedAt) : Number.NaN;
+    const age = Number.isFinite(existingAt) ? now - existingAt : Number.POSITIVE_INFINITY;
+    if (!opts?.force && Number.isFinite(age) && age < MARKET_SNAPSHOT_MIN_MS) return existing;
+    if (opts?.force && Number.isFinite(existingAt) && now <= existingAt) return existing;
     const snapshot: MarketSnapshot = {
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: new Date(now).toISOString(),
       quotes: { ...(existing?.quotes ?? {}), ...(patch.quotes ?? {}) },
       marks: { ...(existing?.marks ?? {}), ...(patch.marks ?? {}) },
     };
