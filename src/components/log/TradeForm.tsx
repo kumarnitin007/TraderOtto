@@ -9,6 +9,7 @@ import { fmtDate, todayISO } from "@/lib/pnl";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
 import { useAlpacaConnection } from "@/components/alpaca/AlpacaConnectionProvider";
 import { parseRobinhoodScreenshot } from "@/lib/robinhoodScreenshot";
+import { WatchGroupsPanel } from "@/components/groups/WatchGroupsPanel";
 
 type FormState = {
   ticker: string;
@@ -138,7 +139,7 @@ export function TradeForm() {
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(true);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"new" | "edit">("new");
+  const [mode, setMode] = useState<"new" | "edit" | "groups">("new");
   const [editFilter, setEditFilter] = useState<"open" | "closed">("open");
   const [selectedId, setSelectedId] = useState("");
   const [f, setF] = useState<FormState>(blankForm);
@@ -160,11 +161,11 @@ export function TradeForm() {
     setConfirmDelete(false);
   }
 
-  function switchMode(next: "new" | "edit") {
+  function switchMode(next: "new" | "edit" | "groups") {
     setMode(next);
     setError("");
     setConfirmDelete(false);
-    if (next === "new") {
+    if (next === "new" || next === "groups") {
       setSelectedId("");
       setF(blankForm());
       return;
@@ -239,7 +240,7 @@ export function TradeForm() {
       color: "text-otto-text-faint",
     },
     live: {
-      text: "Connected to Alpaca live market data. Stock-price buttons and open-position quotes use live prices.",
+      text: "Alpaca connected. Real-time prices are active.",
       color: "text-otto-green",
     },
     simulated: {
@@ -247,7 +248,7 @@ export function TradeForm() {
       color: "text-otto-amber",
     },
     offline: {
-      text: "Alpaca market data could not be reached. Live-price requests may fail until the connection recovers.",
+      text: "Alpaca is offline. Real-time prices and option data are unavailable.",
       color: "text-otto-red",
     },
   }[alpacaState];
@@ -298,7 +299,7 @@ export function TradeForm() {
   return (
     <div className="max-w-[640px]">
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-otto-divider">
-        <div className="flex gap-5">
+        <div className="flex gap-4">
           <button
             type="button"
             onClick={() => switchMode("new")}
@@ -308,7 +309,7 @@ export function TradeForm() {
                 : "border-transparent text-otto-text-faint"
             }`}
           >
-            New trade
+            New
           </button>
           <button
             type="button"
@@ -319,10 +320,21 @@ export function TradeForm() {
                 : "border-transparent text-otto-text-faint"
             }`}
           >
-            Edit existing
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode("groups")}
+            className={`mb-[-1px] border-b-2 pb-2.5 text-sm font-semibold ${
+              mode === "groups"
+                ? "border-otto-green text-otto-text"
+                : "border-transparent text-otto-text-faint"
+            }`}
+          >
+            Groups
           </button>
         </div>
-        <div className="pb-2">
+        <div className={`pb-2 ${mode === "groups" ? "hidden" : ""}`}>
           <ScreenshotInput
             compact
             progress={ocrProgress}
@@ -335,6 +347,10 @@ export function TradeForm() {
         <div className="mb-4 text-[12.5px] font-medium text-otto-green">{ocrResult}</div>
       )}
 
+      {mode === "groups" ? (
+        <WatchGroupsPanel />
+      ) : (
+        <>
       {mode === "edit" && (
         <div className="mb-5 rounded-xl bg-otto-surface px-3.5 py-3">
           <div className="mb-3 flex gap-2">
@@ -538,6 +554,8 @@ export function TradeForm() {
         )}
       </div>
       <div className="h-4" />
+        </>
+      )}
     </div>
   );
 }

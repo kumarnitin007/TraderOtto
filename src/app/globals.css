@@ -128,10 +128,23 @@ html[data-theme="warm-paper"] {
   }
 }
 
+@keyframes otto-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 .otto-pulse {
   animation: otto-pulse 1.8s ease-in-out infinite;
 }
 
 .otto-spin {
   animation: otto-spin 0.8s linear infinite;
+}
+
+.otto-drawer {
+  animation: otto-drawer-in 180ms ease-out;
 }

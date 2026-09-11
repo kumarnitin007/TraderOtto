@@ -4,6 +4,7 @@ import { TradesProvider } from "@/hooks/useTrades";
 import { AppShell } from "@/components/nav/AppShell";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AlpacaConnectionProvider } from "@/components/alpaca/AlpacaConnectionProvider";
+import { WatchGroupsProvider } from "@/hooks/useWatchGroups";
 import "./globals.css";
 
 const inter = Inter({
@@ -31,9 +32,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider>
           <AlpacaConnectionProvider>
-            <TradesProvider>
-              <AppShell>{children}</AppShell>
-            </TradesProvider>
+            <WatchGroupsProvider>
+              <TradesProvider>
+                <AppShell>{children}</AppShell>
+              </TradesProvider>
+            </WatchGroupsProvider>
           </AlpacaConnectionProvider>
         </ThemeProvider>
       </body>

@@ -18,22 +18,35 @@ async function fetchQuote(symbol: string): Promise<number | null> {
   }
 }
 
-export function useLiveQuotes(trades: Trade[]) {
-  const openTickers = useMemo(
-    () => Array.from(new Set(trades.filter((t) => t.status === "open").map((t) => t.ticker))),
-    [trades]
+export function useTickerQuotes(tickers: string[], initialPrices: Record<string, number> = {}) {
+  const tickerKey = Array.from(new Set(tickers.map((ticker) => ticker.toUpperCase())))
+    .sort()
+    .join(",");
+  const symbols = useMemo(() => (tickerKey ? tickerKey.split(",") : []), [tickerKey]);
+  const initialKey = symbols
+    .map((symbol) => `${symbol}:${initialPrices[symbol] ?? 0}`)
+    .join("|");
+  const fallbackPrices = useMemo(
+    () =>
+      Object.fromEntries(
+        initialKey
+          .split("|")
+          .filter(Boolean)
+          .map((entry) => {
+            const [symbol, price] = entry.split(":");
+            return [symbol, Number(price)];
+          })
+      ),
+    [initialKey]
   );
-
   const [live, setLive] = useState<Record<string, LiveQuote>>({});
-  const tickerKey = openTickers.join(",");
 
   useEffect(() => {
     setLive((prev) => {
       const next = { ...prev };
-      openTickers.forEach((tk) => {
+      symbols.forEach((tk) => {
         if (!next[tk]) {
-          const t = trades.find((x) => x.ticker === tk);
-          next[tk] = { price: t?.stockPriceOpen ?? 0, dir: 0 };
+          next[tk] = { price: fallbackPrices[tk] ?? 0, dir: 0 };
         }
       });
       return next;
@@ -44,7 +57,7 @@ export function useLiveQuotes(trades: Trade[]) {
     async function poll() {
       const updates: Record<string, LiveQuote> = {};
       await Promise.all(
-        openTickers.map(async (tk) => {
+        symbols.map(async (tk) => {
           const price = await fetchQuote(tk);
           if (price == null) return;
           updates[tk] = { price, dir: 0 };
@@ -70,8 +83,20 @@ export function useLiveQuotes(trades: Trade[]) {
       cancelled = true;
       clearInterval(id);
     };
-    // tickerKey is the stable identity of the open-symbol set
-  }, [tickerKey, openTickers, trades]);
+  }, [tickerKey, symbols, fallbackPrices]);
 
   return live;
+}
+
+export function useLiveQuotes(trades: Trade[]) {
+  const openTrades = useMemo(() => trades.filter((trade) => trade.status === "open"), [trades]);
+  const tickers = useMemo(() => openTrades.map((trade) => trade.ticker), [openTrades]);
+  const initialPrices = useMemo(
+    () =>
+      Object.fromEntries(
+        openTrades.map((trade) => [trade.ticker, trade.stockPriceOpen ?? 0])
+      ),
+    [openTrades]
+  );
+  return useTickerQuotes(tickers, initialPrices);
 }
