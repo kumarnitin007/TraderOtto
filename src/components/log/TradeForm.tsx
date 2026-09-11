@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, LoaderCircle, Pencil, Plus, Trash2, X, Zap } from "lucide-react";
 import { STRATEGIES, type NewTrade, type Strategy, type Trade } from "@/types/trade";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { fmtDate, todayISO } from "@/lib/pnl";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
@@ -139,8 +140,8 @@ export function TradeForm() {
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(true);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"new" | "edit" | "groups">("new");
-  const [editFilter, setEditFilter] = useState<"open" | "closed">("open");
+  const [mode, setMode] = useScreenOption("logMode");
+  const [editFilter, setEditFilter] = useScreenOption("logEditFilter");
   const [selectedId, setSelectedId] = useState("");
   const [f, setF] = useState<FormState>(blankForm);
   const [ocrProgress, setOcrProgress] = useState<number | null>(null);

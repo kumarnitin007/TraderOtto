@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { Tabs } from "@/components/ui/Tabs";
 import { fmtDate, fmtMoney, groupClosedTrades, summarize, tickerAvatarColor, tradePnl } from "@/lib/pnl";
@@ -32,7 +33,7 @@ function SummaryTile({
 
 export function PerformanceList() {
   const { trades } = useTrades();
-  const [period, setPeriod] = useState<"weekly" | "monthly">("monthly");
+  const [period, setPeriod] = useScreenOption("performancePeriod");
   const closed = useMemo(
     () => trades.filter((trade) => trade.status === "closed"),
     [trades]

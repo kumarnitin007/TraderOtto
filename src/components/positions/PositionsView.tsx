@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import { ChevronDown } from "lucide-react";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
@@ -12,18 +13,16 @@ import { PositionTickerDrawer } from "@/components/positions/PositionTickerDrawe
 import type { ClosePayload } from "@/types/trade";
 import { WatchGroupView } from "@/components/groups/WatchGroupView";
 
-type Filter = "open" | "closed" | "all";
-
 export function PositionsView() {
   const { trades, closeTrade, deleteTrade, loading } = useTrades();
   const { groups, loading: groupsLoading } = useWatchGroups();
   const live = useLiveQuotes(trades);
   const optionMarks = useOptionMarks(trades);
-  const [filter, setFilter] = useState<Filter>("open");
+  const [filter, setFilter] = useScreenOption("positionsFilter");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
-  const [selectedView, setSelectedView] = useState("positions");
+  const [selectedView, setSelectedView] = useScreenOption("positionsView");
 
   useEffect(() => {
     if (groupsLoading || selectedView === "positions") return;

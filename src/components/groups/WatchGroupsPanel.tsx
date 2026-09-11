@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FolderPlus, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderPlus, Plus, Trash2, X } from "lucide-react";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
 
 export function WatchGroupsPanel() {
@@ -19,6 +20,7 @@ export function WatchGroupsPanel() {
   const [name, setName] = useState("");
   const [tickerByGroup, setTickerByGroup] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useScreenOption("collapsedGroups");
 
   const [actionError, setActionError] = useState("");
 
@@ -81,15 +83,34 @@ export function WatchGroupsPanel() {
       )}
 
       <div className="mt-4 space-y-4">
-        {groups.map((group) => (
+        {groups.map((group) => {
+          const isCollapsed = Boolean(collapsed[group.id]);
+          return (
           <section key={group.id} className="rounded-xl border border-otto-divider p-3.5">
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setCollapsed((current) => ({
+                    ...current,
+                    [group.id]: !current[group.id],
+                  }))
+                }
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-otto-text-dim"
+                aria-expanded={!isCollapsed}
+                aria-label={isCollapsed ? `Expand ${group.name}` : `Collapse ${group.name}`}
+              >
+                {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              </button>
               <input
                 value={group.name}
                 onChange={(event) => renameGroup(group.id, event.target.value)}
                 className="font-bold"
                 aria-label="Group name"
               />
+              <span className="shrink-0 text-[11px] text-otto-text-faint">
+                {group.trackers.length} ticker{group.trackers.length === 1 ? "" : "s"}
+              </span>
               <button
                 type="button"
                 onClick={() =>
@@ -108,6 +129,8 @@ export function WatchGroupsPanel() {
               </button>
             </div>
 
+            {isCollapsed ? null : (
+            <>
             <div className="mt-3 flex items-end gap-2">
               <div className="min-w-0 flex-1">
                 <label className="mb-1 block text-[11px] text-otto-text-faint">Add ticker</label>
@@ -196,8 +219,11 @@ export function WatchGroupsPanel() {
                 ))}
               </div>
             )}
+            </>
+            )}
           </section>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
