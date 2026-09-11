@@ -302,10 +302,6 @@ export function TradeForm() {
       text: "Alpaca connected. Real-time prices are active.",
       color: "text-otto-green",
     },
-    simulated: {
-      text: "Alpaca live market data is not connected. Stock prices shown in the app are simulated.",
-      color: "text-otto-amber",
-    },
     offline: {
       text: "Alpaca is offline. Real-time prices and option data are unavailable.",
       color: "text-otto-red",

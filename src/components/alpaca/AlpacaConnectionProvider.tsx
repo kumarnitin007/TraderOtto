@@ -13,7 +13,7 @@ import { connectionCheckMs } from "@/lib/marketSession";
 import { authHeaders } from "@/lib/authHeaders";
 import { useMarketSession } from "@/hooks/useMarketSession";
 
-export type AlpacaConnectionState = "checking" | "live" | "simulated" | "offline";
+export type AlpacaConnectionState = "checking" | "live" | "offline";
 
 type AlpacaConnectionValue = {
   state: AlpacaConnectionState;
@@ -39,7 +39,6 @@ export function AlpacaConnectionProvider({ children }: { children: ReactNode }) 
       }
       const data = (await response.json()) as { source?: string };
       if (data.source === "alpaca") setState("live");
-      else if (data.source === "simulated") setState("simulated");
       else setState("offline");
     } catch {
       setState("offline");

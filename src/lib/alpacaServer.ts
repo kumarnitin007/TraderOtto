@@ -1,5 +1,3 @@
-import { simulatedQuote } from "@/lib/quotes";
-
 export function alpacaCredentials() {
   const key = process.env.ALPACA_API_KEY_ID ?? "";
   const secret = process.env.ALPACA_API_SECRET_KEY ?? "";
@@ -32,13 +30,8 @@ export async function fetchLatestTrades(symbols: string[]) {
   const quotes: Record<string, LatestTrade> = {};
   const creds = alpacaCredentials();
 
-  if (!unique.length) {
-    return { quotes, source: creds.configured ? ("alpaca" as const) : ("simulated" as const) };
-  }
-
-  if (!creds.configured) {
-    for (const symbol of unique) quotes[symbol] = simulatedQuote(symbol);
-    return { quotes, source: "simulated" as const };
+  if (!unique.length || !creds.configured) {
+    return { quotes, source: "unavailable" as const };
   }
 
   const headers = alpacaHeaders(creds.key, creds.secret);

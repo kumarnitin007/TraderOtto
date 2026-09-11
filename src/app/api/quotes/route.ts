@@ -41,10 +41,6 @@ export async function GET(request: Request) {
       }
       return Response.json({ quotes, source, fetchedAt, ts: fetchedAt });
     }
-    if (source === "simulated") {
-      const fetchedAt = new Date().toISOString();
-      return Response.json({ quotes, source, fetchedAt, ts: fetchedAt });
-    }
   } catch (error) {
     console.error("batch quote error", error);
   }

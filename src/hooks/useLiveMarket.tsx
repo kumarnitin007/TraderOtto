@@ -33,7 +33,9 @@ type LiveMarketValue = {
   lastQuoteAt: string | null;
   lastMarkAt: string | null;
   snapshotAt: string | null;
-  dataSource: "live" | "cache" | "simulated" | null;
+  dataSource: "live" | "cache" | null;
+  refreshing: boolean;
+  refreshNow: () => Promise<void>;
 };
 
 const LiveMarketContext = createContext<LiveMarketValue | null>(null);
@@ -65,7 +67,8 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   const [lastQuoteAt, setLastQuoteAt] = useState<string | null>(null);
   const [lastMarkAt, setLastMarkAt] = useState<string | null>(null);
   const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<"live" | "cache" | "simulated" | null>(null);
+  const [dataSource, setDataSource] = useState<"live" | "cache" | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const quotesRef = useRef(quotes);
   quotesRef.current = quotes;
 
@@ -130,9 +133,6 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
     if (data.source === "cache") {
       setDataSource("cache");
       setSnapshotAt(at);
-    } else if (data.source === "simulated") {
-      setDataSource("simulated");
-      setSnapshotAt(at);
     } else {
       setDataSource("live");
       setSnapshotAt(at);
@@ -178,6 +178,17 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
       setSnapshotAt(at);
     }
   }, []);
+
+  const refreshNow = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadQuotes(), loadMarks()]);
+    } catch {
+      /* keep last quotes and marks */
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadQuotes, loadMarks]);
 
   useEffect(() => {
     if (!visible) return;
@@ -230,8 +241,17 @@ export function LiveMarketProvider({ children }: { children: ReactNode }) {
   }, [visible, tradeKey, loadMarks, schedule.pollOptions, schedule.optionIntervalMs, schedule.session]);
 
   const value = useMemo(
-    () => ({ quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, dataSource }),
-    [quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, dataSource]
+    () => ({
+      quotes,
+      marks,
+      lastQuoteAt,
+      lastMarkAt,
+      snapshotAt,
+      dataSource,
+      refreshing,
+      refreshNow,
+    }),
+    [quotes, marks, lastQuoteAt, lastMarkAt, snapshotAt, dataSource, refreshing, refreshNow]
   );
 
   return <LiveMarketContext.Provider value={value}>{children}</LiveMarketContext.Provider>;
