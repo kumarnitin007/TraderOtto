@@ -44,7 +44,17 @@ export function PositionsView() {
     () =>
       trades
         .filter((t) => (filter === "all" ? true : t.status === filter))
-        .sort((a, b) => (a.openDate < b.openDate ? 1 : -1)),
+        .sort((a, b) => {
+          const aOpen = a.status === "open";
+          const bOpen = b.status === "open";
+          if (aOpen && bOpen) {
+            return a.expiry.localeCompare(b.expiry) || a.ticker.localeCompare(b.ticker);
+          }
+          if (filter === "all" && aOpen !== bOpen) return aOpen ? -1 : 1;
+          const aDate = a.closeDate ?? a.openDate;
+          const bDate = b.closeDate ?? b.openDate;
+          return aDate < bDate ? 1 : -1;
+        }),
     [trades, filter]
   );
 

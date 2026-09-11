@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, LoaderCircle, Pencil, Plus, Trash2, X, Zap } from "lucide-react";
-import { STRATEGIES, type NewTrade, type Strategy, type Trade } from "@/types/trade";
+import { STRATEGIES, type Strategy, type Trade, type TradeUpdate } from "@/types/trade";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { fmtDate, todayISO } from "@/lib/pnl";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
+import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { useAlpacaConnection } from "@/components/alpaca/AlpacaConnectionProvider";
 import { parseRobinhoodScreenshot } from "@/lib/robinhoodScreenshot";
 import { WatchGroupsPanel } from "@/components/groups/WatchGroupsPanel";
@@ -28,6 +29,9 @@ type FormState = {
   sigma: string;
   theta: string;
   premiumOpen: string;
+  closeDate: string;
+  stockPriceClose: string;
+  premiumClose: string;
   notes: string;
 };
 
@@ -48,6 +52,9 @@ function blankForm(): FormState {
     sigma: "",
     theta: "",
     premiumOpen: "",
+    closeDate: "",
+    stockPriceClose: "",
+    premiumClose: "",
     notes: "",
   };
 }
@@ -69,6 +76,9 @@ function tradeToForm(trade: Trade): FormState {
     sigma: String(trade.sigma || ""),
     theta: String(trade.theta || ""),
     premiumOpen: String(trade.premiumOpen),
+    closeDate: trade.closeDate ?? "",
+    stockPriceClose: trade.stockPriceClose == null ? "" : String(trade.stockPriceClose),
+    premiumClose: trade.premiumClose == null ? "" : String(trade.premiumClose),
     notes: trade.notes,
   };
 }
@@ -149,6 +159,8 @@ export function TradeForm() {
   const [ocrSource, setOcrSource] = useState<"top" | "bottom">("top");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const editableTrades = trades.filter((trade) => trade.status === editFilter);
+  const selectedTrade = trades.find((trade) => trade.id === selectedId);
+  const editingClosed = mode === "edit" && selectedTrade?.status === "closed";
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF({ ...f, [k]: e.target.value });
@@ -222,7 +234,7 @@ export function TradeForm() {
       return;
     }
     setError("");
-    const trade: NewTrade = {
+    const trade: TradeUpdate = {
       ticker: f.ticker.toUpperCase(),
       strategy: f.strategy,
       contracts: parseInt(f.contracts, 10) || 1,
@@ -240,6 +252,15 @@ export function TradeForm() {
       premiumOpen: parseFloat(f.premiumOpen) || 0,
       notes: f.notes,
     };
+    if (editingClosed) {
+      if (!f.closeDate) {
+        setError("Close date is required for a closed trade.");
+        return;
+      }
+      trade.closeDate = f.closeDate;
+      trade.stockPriceClose = parseFloat(f.stockPriceClose) || 0;
+      trade.premiumClose = parseFloat(f.premiumClose) || 0;
+    }
     try {
       if (mode === "edit" && selectedId) {
         await updateTrade(selectedId, trade);
@@ -476,12 +497,52 @@ export function TradeForm() {
         <Field label="Premium ($ / contract)">
           <input
             type="number"
-            placeholder="0.00"
+            step="0.01"
+            placeholder="0.62"
             value={f.premiumOpen}
             onChange={set("premiumOpen")}
           />
         </Field>
       </div>
+
+      {editingClosed && (
+        <>
+          <SectionLabel>Close</SectionLabel>
+          <p className="mb-3 text-[12.5px] leading-snug text-otto-text-faint">
+            Closing cost is per contract. $62 paid on 1 contract is 0.62, not 62.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Close date">
+              <input type="date" value={f.closeDate} onChange={set("closeDate")} />
+            </Field>
+            <Field label="Stock price at close">
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={f.stockPriceClose}
+                onChange={set("stockPriceClose")}
+              />
+            </Field>
+            <Field label="Premium paid to close ($ / contract)">
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.62"
+                value={f.premiumClose}
+                onChange={set("premiumClose")}
+              />
+            </Field>
+          </div>
+          <div className="mt-3">
+            <RealizedPnlPreview
+              premiumOpen={f.premiumOpen}
+              premiumClose={f.premiumClose}
+              contracts={f.contracts}
+            />
+          </div>
+        </>
+      )}
 
       <SectionLabel>Market snapshot</SectionLabel>
       <p className="mb-3 text-[12.5px] leading-snug text-otto-text-faint">

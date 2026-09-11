@@ -190,3 +190,49 @@ export async function getFinnhubTickerDetails(symbol: string) {
 function number(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+
+export type CachedEarnings = {
+  date: string;
+  timing: string;
+  epsForecast: string | null;
+  fiscalQuarter: string | null;
+};
+
+export async function getFinnhubNextEarnings(symbol: string) {
+  const token = process.env.FINNHUB_API_KEY;
+  if (!token) return { configured: false, earnings: null as CachedEarnings | null };
+  const today = isoDate(new Date());
+  const earningsEnd = new Date();
+  earningsEnd.setDate(earningsEnd.getDate() + 93);
+  const payload = await request<{ earningsCalendar?: FinnhubEarning[] }>(
+    "/calendar/earnings",
+    { symbol, from: today, to: isoDate(earningsEnd) },
+    token
+  );
+  const earning = payload?.earningsCalendar?.[0];
+  if (!earning?.date) return { configured: true, earnings: null };
+  return {
+    configured: true,
+    earnings: {
+      date: earning.date,
+      timing:
+        earning.hour === "bmo"
+          ? "Before market"
+          : earning.hour === "amc"
+            ? "After hours"
+            : "Time not announced",
+      epsForecast:
+        typeof earning.epsEstimate === "number" ? earning.epsEstimate.toString() : null,
+      fiscalQuarter:
+        earning.quarter && earning.year ? `Q${earning.quarter} ${earning.year}` : null,
+    } satisfies CachedEarnings,
+  };
+}
+
+export async function getFinnhubIndustry(symbol: string) {
+  const token = process.env.FINNHUB_API_KEY;
+  if (!token) return null;
+  const profile = await request<FinnhubProfile>("/stock/profile2", { symbol }, token);
+  const industry = profile?.finnhubIndustry?.trim();
+  return industry || null;
+}

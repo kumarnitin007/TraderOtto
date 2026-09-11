@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClosePayload, NewTrade, Trade } from "@/types/trade";
+import type { ClosePayload, NewTrade, Trade, TradeUpdate } from "@/types/trade";
+import { realizedPnl } from "@/lib/pnl";
 
 type TradeRow = {
   id: string;
@@ -115,18 +116,40 @@ export function createSupabaseTradeRepository(
       return requireRow(data, error);
     },
 
-    async update(id: string, trade: NewTrade): Promise<Trade> {
+    async update(id: string, trade: TradeUpdate): Promise<Trade> {
+      const { data: current, error: readError } = await supabase
+        .from("tr_trades")
+        .select("status, details, contracts, premium_open")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .single();
+      if (readError || !current) {
+        throw new Error(readError?.message ?? "Trade not found.");
+      }
+      const existingDetails =
+        (current.details as Record<string, unknown> | null) ?? {};
+      const details = detailsFromTrade(trade, existingDetails);
+      const patch: Record<string, unknown> = {
+        ticker: trade.ticker.toUpperCase(),
+        strategy: trade.strategy,
+        contracts: trade.contracts,
+        expiry: trade.expiry,
+        open_date: trade.openDate,
+        premium_open: trade.premiumOpen,
+        details,
+      };
+      if (current.status === "closed" && trade.premiumClose != null && trade.closeDate) {
+        patch.close_date = trade.closeDate;
+        patch.premium_close = trade.premiumClose;
+        patch.pnl = realizedPnl(trade.premiumOpen, trade.premiumClose, trade.contracts);
+        patch.details = {
+          ...details,
+          stockPriceClose: trade.stockPriceClose ?? existingDetails.stockPriceClose ?? null,
+        };
+      }
       const { data, error } = await supabase
         .from("tr_trades")
-        .update({
-          ticker: trade.ticker.toUpperCase(),
-          strategy: trade.strategy,
-          contracts: trade.contracts,
-          expiry: trade.expiry,
-          open_date: trade.openDate,
-          premium_open: trade.premiumOpen,
-          details: detailsFromTrade(trade),
-        })
+        .update(patch)
         .eq("id", id)
         .eq("user_id", userId)
         .select()
@@ -146,10 +169,11 @@ export function createSupabaseTradeRepository(
       }
       const existingDetails =
         (current.details as Record<string, unknown> | null) ?? {};
-      const pnl =
-        (Number(current.premium_open) - payload.premiumClose) *
-        Number(current.contracts) *
-        100;
+      const pnl = realizedPnl(
+        Number(current.premium_open),
+        payload.premiumClose,
+        Number(current.contracts)
+      );
       const { data, error } = await supabase
         .from("tr_trades")
         .update({

@@ -104,6 +104,8 @@ create table if not exists tr_groups (
   visibility text not null default 'private',
   source_group_id uuid references tr_groups(id) on delete set null,
   tickers jsonb not null default '[]'::jsonb,
+  -- ticker objects: { id, ticker, lowerTrigger, upperTrigger, notes,
+  --   earningsDate, earningsTiming, earningsCheckedAt }
   meta jsonb not null default '{}'::jsonb,
   deleted_at timestamptz,
   created_at timestamptz not null default now(),

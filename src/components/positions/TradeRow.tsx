@@ -5,10 +5,12 @@ import { ChevronDown, Trash2 } from "lucide-react";
 import type { ClosePayload, Trade } from "@/types/trade";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
-import { fmtDate, fmtMoney, tickerAvatarColor, tradePnl } from "@/lib/pnl";
+import { fmtDate, fmtMoney, tickerAvatarColor, tradePnl, todayISO } from "@/lib/pnl";
+import { positionAlert } from "@/lib/premiumPace";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
-import { todayISO } from "@/lib/pnl";
+import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
+import { PaceBadge } from "@/components/positions/PaceBadge";
 
 export function TradeRow({
   t,
@@ -44,6 +46,7 @@ export function TradeRow({
     currentMark == null
       ? null
       : (t.premiumOpen - currentMark) * t.contracts * 100;
+  const pace = positionAlert(t, currentMark);
   const [closeDate, setCloseDate] = useState(t.closeDate || todayISO());
   const [stockPriceClose, setStockPriceClose] = useState(
     t.stockPriceClose != null ? String(t.stockPriceClose) : ""
@@ -96,6 +99,7 @@ export function TradeRow({
             >
               {t.ticker}
             </span>
+            {pace && <PaceBadge signal={pace} />}
             <span className="truncate text-xs text-otto-text-faint">{t.strategy}</span>
           </div>
           <div className="mt-0.5 truncate text-xs text-otto-text-faint">
@@ -285,13 +289,19 @@ export function TradeRow({
                 <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
                   Premium paid to close ($ / contract)
                 </label>
-                <input
-                  type="number"
-                  value={premiumClose}
-                  onChange={(e) => setPremiumClose(e.target.value)}
-                  placeholder="0.00"
-                />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={premiumClose}
+                    onChange={(e) => setPremiumClose(e.target.value)}
+                    placeholder="0.62"
+                  />
               </div>
+              <RealizedPnlPreview
+                premiumOpen={t.premiumOpen}
+                premiumClose={premiumClose}
+                contracts={t.contracts}
+              />
               <div className="flex gap-2">
                 <button
                   type="button"

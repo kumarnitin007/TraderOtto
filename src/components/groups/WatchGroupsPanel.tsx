@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, FolderPlus, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, FolderPlus, Plus, Trash2, X } from "lucide-react";
+import { useEnsureGroupEarnings } from "@/hooks/useEnsureGroupEarnings";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
 
@@ -11,12 +12,14 @@ export function WatchGroupsPanel() {
     addGroup,
     renameGroup,
     deleteGroup,
+    moveGroup,
     addTracker,
     updateTracker,
     removeTracker,
     readonly,
     error,
   } = useWatchGroups();
+  useEnsureGroupEarnings(groups);
   const [name, setName] = useState("");
   const [tickerByGroup, setTickerByGroup] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -44,8 +47,7 @@ export function WatchGroupsPanel() {
   return (
     <div>
       <p className="mb-4 text-[12.5px] leading-relaxed text-otto-text-faint">
-        Create tracker groups for tickers you may trade. Groups appear in the selector at the top
-        of Positions.
+        Create tracker groups for tickers you may trade. Use the arrows to set list order — Positions uses the same order.
       </p>
       {(error || actionError) && (
         <div className="mb-3 rounded-lg bg-otto-red-soft px-3 py-2 text-xs text-otto-red">
@@ -83,11 +85,31 @@ export function WatchGroupsPanel() {
       )}
 
       <div className="mt-4 space-y-4">
-        {groups.map((group) => {
+        {groups.map((group, index) => {
           const isCollapsed = Boolean(collapsed[group.id]);
           return (
           <section key={group.id} className="rounded-xl border border-otto-divider p-3.5">
             <div className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  onClick={() => moveGroup(group.id, -1)}
+                  disabled={index === 0 || readonly}
+                  className="flex h-5 w-7 items-center justify-center text-otto-text-dim disabled:opacity-25"
+                  aria-label={`Move ${group.name} up`}
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveGroup(group.id, 1)}
+                  disabled={index === groups.length - 1 || readonly}
+                  className="flex h-5 w-7 items-center justify-center text-otto-text-dim disabled:opacity-25"
+                  aria-label={`Move ${group.name} down`}
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() =>
@@ -173,7 +195,14 @@ export function WatchGroupsPanel() {
                 {group.trackers.map((tracker) => (
                   <div key={tracker.id} className="rounded-lg bg-otto-surface px-3 py-2.5">
                     <div className="flex items-center justify-between">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span className="font-bold">{tracker.ticker}</span>
+                      {tracker.sector && (
+                        <span className="truncate text-[11px] font-medium text-otto-text-dim">
+                          {tracker.sector}
+                        </span>
+                      )}
+                    </div>
                       <button
                         type="button"
                         onClick={() => removeTracker(group.id, tracker.id)}

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LineChart, LogOut, PenLine, Rows3, type LucideIcon } from "lucide-react";
-import { Pill } from "@/components/ui/Pill";
 import { AlpacaStatus } from "@/components/ui/AlpacaStatus";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { PnlOverview } from "@/components/nav/PnlOverview";
 import { useTrades } from "@/hooks/useTrades";
 import { useAuth } from "@/hooks/useAuth";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
-import { fmtMoney, summarize } from "@/lib/pnl";
+import { summarize } from "@/lib/pnl";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/positions", label: "Positions", icon: Rows3 },
@@ -22,7 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { trades, error: tradeError, readonly } = useTrades();
   const { error: groupError } = useWatchGroups();
   const { user, signOut } = useAuth();
-  const { allTime, mtd, wtd, winRate } = summarize(trades);
+  const { winRate } = summarize(trades);
 
   return (
     <div className="min-h-screen bg-otto-bg text-otto-text">
@@ -53,17 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
           <div className="mt-[34px] border-t border-otto-divider pt-5">
-            <div className="mb-1.5 block text-xs font-medium text-otto-text-dim">All-time P/L</div>
-            <div
-              className={`text-[26px] font-extrabold ${allTime >= 0 ? "text-otto-green" : "text-otto-red"}`}
-            >
-              {allTime >= 0 ? "+" : ""}
-              {fmtMoney(allTime)}
-            </div>
-            <div className="mt-3.5 flex flex-col items-start gap-2">
-              <Pill label="Month" value={mtd} />
-              <Pill label="Week" value={wtd} />
-            </div>
+            <PnlOverview />
             <div className="mt-4">
               <div className="mb-1.5 block text-xs font-medium text-otto-text-dim">Win rate</div>
               <div className="text-lg font-bold">{winRate == null ? "—" : `${winRate}%`}</div>
@@ -101,21 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             </div>
-            <div className="mt-2.5 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="mb-0.5 block text-[11px] font-medium text-otto-text-dim">
-                  All-time P/L
-                </div>
-                <div className="truncate text-[26px] font-extrabold leading-tight tracking-[-0.5px] text-otto-text">
-                  {allTime >= 0 ? "+" : ""}
-                  {fmtMoney(allTime)}
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-col items-end gap-1.5">
-                <Pill label="Mo" value={mtd} />
-                <Pill label="Wk" value={wtd} />
-              </div>
-            </div>
+            <PnlOverview compact />
           </header>
           <div className="px-[18px] pt-3.5">
             {(readonly || tradeError || groupError) && (

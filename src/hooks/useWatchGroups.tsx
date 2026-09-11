@@ -12,8 +12,8 @@ import {
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getSupabaseClient } from "@/lib/supabase";
-import { createSupabaseWatchGroupRepository } from "@/lib/data/supabaseWatchGroupRepository";
-import type { WatchGroup, WatchTracker } from "@/types/watchGroup";
+import { createSupabaseWatchGroupRepository, sortWatchGroups } from "@/lib/data/supabaseWatchGroupRepository";
+import type { WatchGroup, WatchTrackerPatch } from "@/types/watchGroup";
 
 type WatchGroupsContextValue = {
   groups: WatchGroup[];
@@ -27,8 +27,9 @@ type WatchGroupsContextValue = {
   updateTracker: (
     groupId: string,
     trackerId: string,
-    patch: Partial<Pick<WatchTracker, "lowerTrigger" | "upperTrigger" | "notes">>
+    patch: WatchTrackerPatch
   ) => void;
+  moveGroup: (groupId: string, direction: -1 | 1) => void;
   removeTracker: (groupId: string, trackerId: string) => void;
 };
 
@@ -109,8 +110,10 @@ export function WatchGroupsProvider({ children }: { children: ReactNode }) {
   const addGroup = useCallback(
     async (name: string) => {
       if (!repository) throw new Error("Sign in to create groups.");
-      const group = await repository.add(name);
-      groupsRef.current = [...groupsRef.current, group];
+      const nextOrder =
+        groupsRef.current.reduce((max, group) => Math.max(max, group.sortOrder), -1) + 1;
+      const group = await repository.add(name, nextOrder);
+      groupsRef.current = sortWatchGroups([...groupsRef.current, group]);
       setGroups(groupsRef.current);
       return group;
     },
@@ -131,6 +134,28 @@ export function WatchGroupsProvider({ children }: { children: ReactNode }) {
       );
       setGroups(groupsRef.current);
       queueUpdate(updated);
+    },
+    [queueUpdate]
+  );
+
+  const moveGroup = useCallback(
+    (groupId: string, direction: -1 | 1) => {
+      const ordered = sortWatchGroups(groupsRef.current);
+      const index = ordered.findIndex((group) => group.id === groupId);
+      const swapWith = index + direction;
+      if (index < 0 || swapWith < 0 || swapWith >= ordered.length) return;
+      const reordered = [...ordered];
+      const [moved] = reordered.splice(index, 1);
+      reordered.splice(swapWith, 0, moved);
+      const previous = new Map(ordered.map((group) => [group.id, group.sortOrder]));
+      const stamped = reordered.map((group, sortOrder) =>
+        group.sortOrder === sortOrder ? group : { ...group, sortOrder }
+      );
+      groupsRef.current = stamped;
+      setGroups(stamped);
+      for (const group of stamped) {
+        if (previous.get(group.id) !== group.sortOrder) queueUpdate(group);
+      }
     },
     [queueUpdate]
   );
@@ -171,6 +196,11 @@ export function WatchGroupsProvider({ children }: { children: ReactNode }) {
             lowerTrigger: null,
             upperTrigger: null,
             notes: "",
+            earningsDate: null,
+            earningsTiming: null,
+            earningsCheckedAt: null,
+            sector: null,
+            sectorCheckedAt: null,
           },
         ],
         updatedAt: new Date().toISOString(),
@@ -188,7 +218,7 @@ export function WatchGroupsProvider({ children }: { children: ReactNode }) {
     (
       groupId: string,
       trackerId: string,
-      patch: Partial<Pick<WatchTracker, "lowerTrigger" | "upperTrigger" | "notes">>
+      patch: WatchTrackerPatch
     ) => {
       const group = groupsRef.current.find((entry) => entry.id === groupId);
       if (!group) return;
@@ -235,6 +265,7 @@ export function WatchGroupsProvider({ children }: { children: ReactNode }) {
       addGroup,
       renameGroup,
       deleteGroup,
+      moveGroup,
       addTracker,
       updateTracker,
       removeTracker,
@@ -247,6 +278,7 @@ export function WatchGroupsProvider({ children }: { children: ReactNode }) {
       addGroup,
       renameGroup,
       deleteGroup,
+      moveGroup,
       addTracker,
       updateTracker,
       removeTracker,

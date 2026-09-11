@@ -6,7 +6,8 @@ import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { TickerResearch } from "@/components/ticker/TickerResearch";
-import { fmtDate, fmtMoney, tickerAvatarColor } from "@/lib/pnl";
+import { fmtDate, fmtMoney, tickerAvatarColor, todayISO } from "@/lib/pnl";
+import { useEnsureGroupEarnings } from "@/hooks/useEnsureGroupEarnings";
 import type { TickerDetails } from "@/types/tickerDetails";
 import type { WatchGroup, WatchTracker } from "@/types/watchGroup";
 
@@ -20,6 +21,7 @@ function breach(tracker: WatchTracker, price?: number) {
 export function WatchGroupView({ group }: { group: WatchGroup }) {
   const { trades } = useTrades();
   const { updateTracker } = useWatchGroups();
+  useEnsureGroupEarnings([group]);
   const tickers = useMemo(() => group.trackers.map((tracker) => tracker.ticker), [group]);
   const quotes = useTickerQuotes(tickers);
   const [selected, setSelected] = useState<WatchTracker | null>(null);
@@ -97,6 +99,10 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
         const openTrades = trades.filter(
           (trade) => trade.status === "open" && trade.ticker === tracker.ticker
         ).length;
+        const earnDate =
+          tracker.earningsDate && tracker.earningsDate >= todayISO()
+            ? tracker.earningsDate
+            : null;
         return (
           <button
             key={tracker.id}
@@ -111,8 +117,13 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
               {tracker.ticker.slice(0, 2)}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <span className="font-bold">{tracker.ticker}</span>
+                {tracker.sector && (
+                  <span className="truncate rounded-full bg-otto-surface px-1.5 py-0.5 text-[10px] font-semibold text-otto-text-dim">
+                    {tracker.sector}
+                  </span>
+                )}
                 {alert && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-otto-red-soft px-2 py-0.5 text-[10px] font-semibold text-otto-red">
                     <AlertTriangle size={10} />
@@ -135,14 +146,20 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
               </div>
               <div
                 className={`mt-0.5 text-[11px] ${
-                  quote?.dir === 1
-                    ? "text-otto-green"
-                    : quote?.dir === -1
-                      ? "text-otto-red"
-                      : "text-otto-text-faint"
+                  earnDate
+                    ? "text-otto-text-dim"
+                    : quote?.dir === 1
+                      ? "text-otto-green"
+                      : quote?.dir === -1
+                        ? "text-otto-red"
+                        : "text-otto-text-faint"
                 }`}
               >
-                {quote?.price ? "live" : "unavailable"}
+                {earnDate
+                  ? `earn ${fmtDate(earnDate)}`
+                  : quote?.price
+                    ? "live"
+                    : "unavailable"}
               </div>
             </div>
             <ChevronRight size={16} className="shrink-0 text-otto-text-faint" />

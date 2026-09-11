@@ -1,9 +1,17 @@
 import type { Trade } from "@/types/trade";
 
 /** Realized P/L: (premium_open − premium_close) × contracts × 100 */
+export function realizedPnl(
+  premiumOpen: number,
+  premiumClose: number,
+  contracts: number
+) {
+  return (premiumOpen - premiumClose) * contracts * 100;
+}
+
 export function tradePnl(trade: Trade): number | null {
   if (trade.status !== "closed" || trade.premiumClose == null) return null;
-  return (trade.premiumOpen - trade.premiumClose) * trade.contracts * 100;
+  return realizedPnl(trade.premiumOpen, trade.premiumClose, trade.contracts);
 }
 
 export function monthKey(date: string): string {
@@ -119,6 +127,57 @@ export function groupClosedTrades(
       }
     });
   return Array.from(map.values()).sort((a, b) => (a.sortDate < b.sortDate ? 1 : -1));
+}
+
+export type PnlRange = "month" | "ytd" | "year" | "5y" | "all";
+
+export const PNL_RANGE_OPTIONS: {
+  id: PnlRange;
+  label: string;
+  heading: string;
+}[] = [
+  { id: "month", label: "This month", heading: "This month P/L" },
+  { id: "ytd", label: "YTD", heading: "YTD P/L" },
+  { id: "year", label: "Last 12 months", heading: "12-month P/L" },
+  { id: "5y", label: "5 years", heading: "5-year P/L" },
+  { id: "all", label: "All time", heading: "All-time P/L" },
+];
+
+export function rangeStart(range: PnlRange, now = new Date()): Date | null {
+  if (range === "all") return null;
+  if (range === "month") return startOfMonth(now);
+  if (range === "ytd") return new Date(now.getFullYear(), 0, 1);
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setFullYear(start.getFullYear() - (range === "5y" ? 5 : 1));
+  return start;
+}
+
+export function realizedInRange(trades: Trade[], range: PnlRange, now = new Date()) {
+  const start = rangeStart(range, now);
+  return trades
+    .filter((trade) => trade.status === "closed" && trade.closeDate)
+    .filter(
+      (trade) => !start || new Date(trade.closeDate + "T00:00:00") >= start
+    )
+    .reduce((sum, trade) => sum + (tradePnl(trade) ?? 0), 0);
+}
+
+export function unrealizedFromMarks(
+  trades: Trade[],
+  marks: Record<string, { mark: number }>
+) {
+  const open = trades.filter((trade) => trade.status === "open");
+  if (open.length === 0) return 0;
+  let sum = 0;
+  let counted = 0;
+  for (const trade of open) {
+    const mark = marks[trade.id]?.mark;
+    if (typeof mark !== "number") continue;
+    counted += 1;
+    sum += realizedPnl(trade.premiumOpen, mark, trade.contracts);
+  }
+  return counted === 0 ? null : sum;
 }
 
 export function summarize(trades: Trade[], now = new Date()) {

@@ -12,7 +12,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { getSupabaseClient } from "@/lib/supabase";
 import { createSupabaseTradeRepository } from "@/lib/data/supabaseTradeRepository";
-import type { ClosePayload, NewTrade, Trade } from "@/types/trade";
+import type { ClosePayload, NewTrade, Trade, TradeUpdate } from "@/types/trade";
 
 type TradesContextValue = {
   trades: Trade[];
@@ -20,7 +20,7 @@ type TradesContextValue = {
   error: string;
   readonly: boolean;
   addTrade: (trade: NewTrade) => Promise<Trade>;
-  updateTrade: (id: string, trade: NewTrade) => Promise<Trade>;
+  updateTrade: (id: string, trade: TradeUpdate) => Promise<Trade>;
   closeTrade: (id: string, payload: ClosePayload) => Promise<Trade>;
   deleteTrade: (id: string) => Promise<void>;
 };
@@ -84,7 +84,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
     return updated;
   }, [repository]);
 
-  const updateTrade = useCallback(async (id: string, trade: NewTrade) => {
+  const updateTrade = useCallback(async (id: string, trade: TradeUpdate) => {
     if (!repository) throw new Error("Sign in to update trades.");
     const updated = await repository.update(id, trade);
     setTrades((prev) => prev.map((t) => (t.id === id ? updated : t)));

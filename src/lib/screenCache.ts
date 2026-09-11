@@ -1,5 +1,7 @@
 /** Browser cache for UI screen options only — not trades or groups. */
 
+import type { PnlRange } from "@/lib/pnl";
+
 export const SCREEN_CACHE_KEY = "trader-otto:screen-options";
 
 export type ScreenOptions = {
@@ -9,6 +11,10 @@ export type ScreenOptions = {
   logEditFilter: "open" | "closed";
   performancePeriod: "weekly" | "monthly";
   collapsedGroups: Record<string, boolean>;
+  pnlRange: PnlRange;
+  performanceUnrealized: boolean;
+  performanceView: "overview" | "ticker";
+  performanceTicker: string;
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -18,6 +24,10 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   logEditFilter: "open",
   performancePeriod: "monthly",
   collapsedGroups: {},
+  pnlRange: "all",
+  performanceUnrealized: false,
+  performanceView: "overview",
+  performanceTicker: "",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -26,6 +36,20 @@ function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
 
 function isLogMode(value: unknown): value is ScreenOptions["logMode"] {
   return value === "new" || value === "edit" || value === "groups";
+}
+
+function isPerformanceView(value: unknown): value is ScreenOptions["performanceView"] {
+  return value === "overview" || value === "ticker";
+}
+
+function isPnlRange(value: unknown): value is PnlRange {
+  return (
+    value === "month" ||
+    value === "ytd" ||
+    value === "year" ||
+    value === "5y" ||
+    value === "all"
+  );
 }
 
 export function readScreenOptions(): ScreenOptions {
@@ -49,6 +73,15 @@ export function readScreenOptions(): ScreenOptions {
         parsed.collapsedGroups && typeof parsed.collapsedGroups === "object"
           ? parsed.collapsedGroups
           : {},
+      pnlRange: isPnlRange(parsed.pnlRange) ? parsed.pnlRange : SCREEN_OPTION_DEFAULTS.pnlRange,
+      performanceUnrealized: parsed.performanceUnrealized === true,
+      performanceView: isPerformanceView(parsed.performanceView)
+        ? parsed.performanceView
+        : SCREEN_OPTION_DEFAULTS.performanceView,
+      performanceTicker:
+        typeof parsed.performanceTicker === "string"
+          ? parsed.performanceTicker
+          : "",
     };
   } catch {
     return SCREEN_OPTION_DEFAULTS;
