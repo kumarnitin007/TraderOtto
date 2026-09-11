@@ -73,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <button
             type="button"
-            onClick={signOut}
+            onClick={() => void signOut()}
             className="mt-2 flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-2 text-xs font-semibold text-otto-text-dim"
           >
             <LogOut size={13} />
@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <ThemeToggle compact />
                 <button
                   type="button"
-                  onClick={signOut}
+                  onClick={() => void signOut()}
                   className="flex h-7 w-7 items-center justify-center rounded-full border border-otto-divider text-otto-text-dim"
                   aria-label="Log out"
                 >

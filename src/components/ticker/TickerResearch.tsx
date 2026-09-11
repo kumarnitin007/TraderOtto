@@ -1,11 +1,15 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import { fmtDate } from "@/lib/pnl";
 import type { TickerDetails } from "@/types/tickerDetails";
 
 export function TickerResearch({ details }: { details: TickerDetails | null }) {
   if (!details) return null;
+
+  const news = details.news;
+  const actions = details.corporateActions;
 
   return (
     <>
@@ -46,9 +50,11 @@ export function TickerResearch({ details }: { details: TickerDetails | null }) {
       )}
 
       {details.fundamentals && (
-        <section className="mt-6">
-          <Title>Fundamentals</Title>
-          <div className="mt-2 grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-otto-divider">
+        <CollapsibleSection
+          title="Fundamentals"
+          preview={`${compactMoney(details.fundamentals.marketCap, true)} mkt · P/E ${decimal(details.fundamentals.pe, 1)}`}
+        >
+          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-otto-divider">
             <Stat label="Market cap" value={compactMoney(details.fundamentals.marketCap, true)} />
             <Stat label="P/E" value={decimal(details.fundamentals.pe, 1)} />
             <Stat label="Beta" value={decimal(details.fundamentals.beta, 2)} />
@@ -58,13 +64,19 @@ export function TickerResearch({ details }: { details: TickerDetails | null }) {
             <Stat label="Revenue YoY" value={percent(details.fundamentals.revenueGrowth)} />
             <Stat label="EPS YoY" value={percent(details.fundamentals.epsGrowth)} />
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
       {details.analyst && (
-        <section className="mt-6">
-          <Title>Analyst view</Title>
-          <div className="mt-2 rounded-2xl bg-otto-surface p-3.5">
+        <CollapsibleSection
+          title="Analyst view"
+          preview={
+            details.analyst.targetMean != null
+              ? `Mean ${money(details.analyst.targetMean)} · ${details.analyst.buy + details.analyst.strongBuy} buys`
+              : `${details.analyst.buy + details.analyst.strongBuy} buys · ${details.analyst.hold} holds`
+          }
+        >
+          <div className="rounded-2xl bg-otto-surface p-3.5">
             <div className="grid grid-cols-5 gap-1 text-center">
               <Rating label="Strong buy" value={details.analyst.strongBuy} tone="green" />
               <Rating label="Buy" value={details.analyst.buy} tone="green" />
@@ -81,14 +93,20 @@ export function TickerResearch({ details }: { details: TickerDetails | null }) {
               </div>
             )}
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
-      <section className="mt-6">
-        <Title>Corporate actions</Title>
-        <div className="mt-2 rounded-2xl bg-otto-surface p-3.5">
-          {details.corporateActions.length ? (
-            details.corporateActions.map((action, index) => (
+      <CollapsibleSection
+        title="Corporate actions"
+        preview={
+          actions[0]
+            ? `${actions[0].label}${actions.length > 1 ? ` · +${actions.length - 1}` : ""}`
+            : "None upcoming"
+        }
+      >
+        <div className="rounded-2xl bg-otto-surface p-3.5">
+          {actions.length ? (
+            actions.map((action, index) => (
               <div
                 key={`${action.type}-${action.date}-${index}`}
                 className="border-b border-otto-divider py-2 first:pt-0 last:border-0 last:pb-0"
@@ -107,59 +125,135 @@ export function TickerResearch({ details }: { details: TickerDetails | null }) {
             </div>
           )}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="mt-6">
-        <div className="flex items-center justify-between gap-2">
-          <Title>Recent news</Title>
-          <div className="text-[10px] text-otto-text-faint">Alpaca + Finnhub</div>
+      <NewsSection news={news} />
+
+      {!details.providers.finnhubConfigured && (
+        <div className="mt-4 rounded-xl border border-otto-divider px-3 py-2 text-[11px] text-otto-text-faint">
+          Add a Finnhub API key to enable company fundamentals and analyst data.
         </div>
-        <div className="mt-2 overflow-hidden rounded-2xl bg-otto-surface px-3.5">
-          {details.news.length ? (
-            details.news.map((article) => (
-              <a
-                key={article.id}
-                href={article.url ?? undefined}
-                target="_blank"
-                rel="noreferrer"
-                className="block border-b border-otto-divider py-3 last:border-0"
-              >
-                <div className="flex gap-2 text-sm font-semibold leading-snug">
-                  <span className="flex-1">{article.headline}</span>
-                  {article.url && (
-                    <ExternalLink
-                      size={13}
-                      className="mt-0.5 shrink-0 text-otto-text-faint"
-                    />
-                  )}
-                </div>
-                {article.summary && (
-                  <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-otto-text-dim">
-                    {article.summary}
-                  </div>
+      )}
+    </>
+  );
+}
+
+function NewsSection({ news }: { news: TickerDetails["news"] }) {
+  const [open, setOpen] = useState(false);
+  const visible = open ? news : news.slice(0, 1);
+
+  return (
+    <section className="mt-6">
+      <div className="flex items-center justify-between gap-2">
+        <Title>Recent news</Title>
+        <div className="text-[10px] text-otto-text-faint">Alpaca + Finnhub</div>
+      </div>
+      <div className="mt-2 overflow-hidden rounded-2xl bg-otto-surface px-3.5">
+        {news.length ? (
+          visible.map((article) => (
+            <a
+              key={article.id}
+              href={article.url ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="block border-b border-otto-divider py-3 last:border-0"
+            >
+              <div className="flex gap-2 text-sm font-semibold leading-snug">
+                <span className="flex-1">{article.headline}</span>
+                {article.url && (
+                  <ExternalLink
+                    size={13}
+                    className="mt-0.5 shrink-0 text-otto-text-faint"
+                  />
                 )}
-                <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-otto-text-faint">
-                  <span className="rounded-full bg-otto-surface-raise px-1.5 py-0.5 capitalize">
-                    {article.provider}
-                  </span>
-                  <span>{article.source}</span>
-                  {article.createdAt && <span>· {formatDateTime(article.createdAt)}</span>}
+              </div>
+              {article.summary && (
+                <div
+                  className={`mt-1 text-xs leading-relaxed text-otto-text-dim ${
+                    open ? "" : "line-clamp-2"
+                  }`}
+                >
+                  {article.summary}
                 </div>
-              </a>
-            ))
-          ) : (
-            <div className="py-3.5 text-sm text-otto-text-faint">
-              No recent company news found.
-            </div>
-          )}
-        </div>
-        {!details.providers.finnhubConfigured && (
-          <div className="mt-2 rounded-xl border border-otto-divider px-3 py-2 text-[11px] text-otto-text-faint">
-            Add a Finnhub API key to enable company fundamentals and analyst data.
+              )}
+              <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-otto-text-faint">
+                <span className="rounded-full bg-otto-surface-raise px-1.5 py-0.5 capitalize">
+                  {article.provider}
+                </span>
+                <span>{article.source}</span>
+                {article.createdAt && <span>· {formatDateTime(article.createdAt)}</span>}
+              </div>
+            </a>
+          ))
+        ) : (
+          <div className="py-3.5 text-sm text-otto-text-faint">
+            No recent company news found.
           </div>
         )}
-      </section>
-    </>
+      </div>
+      {news.length > 1 && (
+        <Toggle
+          open={open}
+          onClick={() => setOpen((value) => !value)}
+          moreLabel={`Show ${news.length - 1} more`}
+        />
+      )}
+    </section>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  preview,
+  children,
+}: {
+  title: string;
+  preview: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="mt-6">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 bg-transparent text-left"
+      >
+        <div className="min-w-0">
+          <Title>{title}</Title>
+          {!open && (
+            <div className="mt-1 truncate text-xs text-otto-text-dim">{preview}</div>
+          )}
+        </div>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-otto-text-faint transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open ? <div className="mt-2">{children}</div> : null}
+    </section>
+  );
+}
+
+function Toggle({
+  open,
+  onClick,
+  moreLabel,
+}: {
+  open: boolean;
+  onClick: () => void;
+  moreLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-2 flex w-full items-center justify-center gap-1 bg-transparent text-[12px] font-semibold text-otto-text-dim"
+    >
+      {open ? "Show less" : moreLabel}
+      <ChevronDown size={14} className={open ? "rotate-180" : ""} />
+    </button>
   );
 }
 

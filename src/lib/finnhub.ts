@@ -74,7 +74,7 @@ export async function getFinnhubTickerDetails(symbol: string) {
   const newsFrom = isoDate(from);
   const today = isoDate(new Date());
   const earningsEnd = new Date();
-  earningsEnd.setDate(earningsEnd.getDate() + 35);
+  earningsEnd.setDate(earningsEnd.getDate() + 93);
 
   const [profile, metricsPayload, earningsPayload, news, recommendations, target] =
     await Promise.all([

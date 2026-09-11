@@ -175,7 +175,7 @@ export function PositionTickerDrawer({
                 </div>
               </>
             ) : (
-              <div className="text-otto-text-faint">No earnings in the next 3 weeks.</div>
+              <div className="text-otto-text-faint">No earnings in the next 3 months.</div>
             )}
           </div>
         </section>

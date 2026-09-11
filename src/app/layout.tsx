@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { TradesProvider } from "@/hooks/useTrades";
-import { AppShell } from "@/components/nav/AppShell";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
-import { AlpacaConnectionProvider } from "@/components/alpaca/AlpacaConnectionProvider";
-import { WatchGroupsProvider } from "@/hooks/useWatchGroups";
 import { AuthProvider } from "@/hooks/useAuth";
-import { AuthGate } from "@/components/auth/AuthGate";
+import { AppFrame } from "@/components/auth/AppFrame";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,15 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider>
           <AuthProvider>
-            <AuthGate>
-              <AlpacaConnectionProvider>
-                <WatchGroupsProvider>
-                  <TradesProvider>
-                    <AppShell>{children}</AppShell>
-                  </TradesProvider>
-                </WatchGroupsProvider>
-              </AlpacaConnectionProvider>
-            </AuthGate>
+            <AppFrame>{children}</AppFrame>
           </AuthProvider>
         </ThemeProvider>
       </body>

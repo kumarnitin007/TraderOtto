@@ -290,43 +290,6 @@ function TickerDrawer({
           )}
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-2">
-          <Metric label="Open" value={details?.open} />
-          <Metric label="Previous close" value={details?.previousClose} />
-          <Metric label="Day high" value={details?.high} />
-          <Metric label="Day low" value={details?.low} />
-        </div>
-
-        <section className="mt-7">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">
-            Upcoming earnings
-          </div>
-          <div className="mt-2 rounded-xl bg-otto-surface p-3.5">
-            {details?.earnings ? (
-              <>
-                <div className="font-bold">{fmtDate(details.earnings.date)}</div>
-                <div className="mt-1 text-xs text-otto-text-dim">
-                  {details.earnings.timing}
-                  {details.earnings.epsForecast
-                    ? ` · EPS estimate ${details.earnings.epsForecast}`
-                    : ""}
-                </div>
-                {details.earnings.fiscalQuarter && (
-                  <div className="mt-1 text-xs text-otto-text-faint">
-                    Fiscal quarter {details.earnings.fiscalQuarter}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-sm text-otto-text-faint">
-                No earnings found in the next 3 weeks.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <TickerResearch details={details} />
-
         <section className="mt-7">
           <div className="text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">
             Price alerts
@@ -389,6 +352,43 @@ function TickerDrawer({
         >
           Save tracker
         </button>
+
+        <div className="mt-6 grid grid-cols-2 gap-2">
+          <Metric label="Open" value={details?.open} />
+          <Metric label="Previous close" value={details?.previousClose} />
+          <Metric label="Day high" value={details?.high} />
+          <Metric label="Day low" value={details?.low} />
+        </div>
+
+        <section className="mt-7">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">
+            Upcoming earnings
+          </div>
+          <div className="mt-2 rounded-xl bg-otto-surface p-3.5">
+            {details?.earnings ? (
+              <>
+                <div className="font-bold">{fmtDate(details.earnings.date)}</div>
+                <div className="mt-1 text-xs text-otto-text-dim">
+                  {details.earnings.timing}
+                  {details.earnings.epsForecast
+                    ? ` · EPS estimate ${details.earnings.epsForecast}`
+                    : ""}
+                </div>
+                {details.earnings.fiscalQuarter && (
+                  <div className="mt-1 text-xs text-otto-text-faint">
+                    Fiscal quarter {details.earnings.fiscalQuarter}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-sm text-otto-text-faint">
+                No earnings found in the next 3 months.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <TickerResearch details={details} />
       </aside>
     </div>
   );

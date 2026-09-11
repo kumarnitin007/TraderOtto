@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
-import { useAuth, type AuthMethod } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 type Step = "email" | "otp" | "signup" | "reset";
 
@@ -36,23 +36,29 @@ function Divider({ children }: { children: string }) {
 }
 
 export function LoginScreen() {
-  const { signIn } = useAuth();
+  const {
+    configured,
+    usingServiceRole,
+    error,
+    signInWithPassword,
+    signUpWithPassword,
+    sendOtp,
+    verifyOtp,
+    signInWithOAuth,
+    resetPassword,
+    skipLogin,
+  } = useAuth();
+  const canAuth = configured && !usingServiceRole;
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [digits, setDigits] = useState(Array(6).fill(""));
   const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
 
   const validEmail = /\S+@\S+\.\S+/.test(email);
   const codeComplete = digits.every((d) => d !== "");
-
-  function enter(method: AuthMethod, fallbackEmail?: string) {
-    signIn({
-      email: (fallbackEmail ?? email).trim() || "demo@traderotto.local",
-      method,
-    });
-  }
 
   function handleDigit(index: number, value: string) {
     if (!/^[0-9]?$/.test(value)) return;
@@ -97,20 +103,33 @@ export function LoginScreen() {
           </div>
         )}
 
+        {usingServiceRole && (
+          <div className="mb-4 rounded-xl border border-otto-amber/30 bg-otto-amber-soft px-3 py-2.5 text-xs text-otto-amber">
+            Supabase is reachable, but this is the service-role key. Paste the anon public key to enable login.
+          </div>
+        )}
+        {!configured && (
+          <div className="mb-4 rounded-xl border border-otto-red/30 bg-otto-red-soft px-3 py-2.5 text-xs text-otto-red">
+            Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then restart the app.
+          </div>
+        )}
+
         {step === "email" && (
           <>
             <button
               type="button"
-              onClick={() => enter("apple", "apple@traderotto.local")}
-              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black"
+              disabled={busy || !canAuth}
+              onClick={() => void signInWithOAuth("apple")}
+              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
             >
               <AppleIcon />
               Continue with Apple
             </button>
             <button
               type="button"
-              onClick={() => enter("google", "google@traderotto.local")}
-              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black"
+              disabled={busy || !canAuth}
+              onClick={() => void signInWithOAuth("google")}
+              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
             >
               <GoogleIcon />
               Continue with Google
@@ -131,16 +150,24 @@ export function LoginScreen() {
 
             <button
               type="button"
-              disabled={!validEmail}
-              onClick={() => {
+              disabled={!validEmail || busy || !canAuth}
+              onClick={async () => {
                 setNotice("");
-                setStep("otp");
+                setBusy(true);
+                const sent = await sendOtp(email.trim());
+                setBusy(false);
+                if (sent) {
+                  setDigits(Array(6).fill(""));
+                  setStep("otp");
+                }
               }}
               className={`w-full rounded-full py-3.5 text-[15px] font-bold ${
-                validEmail ? "bg-otto-green text-black" : "bg-otto-surface text-otto-text-faint"
+                validEmail && canAuth
+                  ? "bg-otto-green text-black"
+                  : "bg-otto-surface text-otto-text-faint"
               }`}
             >
-              Continue
+              {busy ? "Sending…" : "Continue"}
             </button>
             <p className="mt-3.5 text-center text-xs leading-relaxed text-otto-text-faint">
               We’ll email you a one-time code — no password to remember.
@@ -160,22 +187,30 @@ export function LoginScreen() {
             />
             <button
               type="button"
-              onClick={() => setStep("reset")}
+              onClick={() => {
+                setStep("reset");
+                setNotice("");
+              }}
               className="mb-4 self-end bg-transparent p-0 text-right text-xs font-medium text-otto-green"
             >
               Forgot password?
             </button>
             <button
               type="button"
-              disabled={!validEmail || password.length < 6}
-              onClick={() => enter("password")}
+              disabled={!validEmail || password.length < 6 || busy || !canAuth}
+              onClick={async () => {
+                setNotice("");
+                setBusy(true);
+                await signInWithPassword(email.trim(), password);
+                setBusy(false);
+              }}
               className={`mb-2.5 w-full rounded-full py-3.5 text-[15px] font-bold ${
-                validEmail && password.length >= 6
+                validEmail && password.length >= 6 && canAuth
                   ? "bg-otto-green text-black"
                   : "bg-otto-surface text-otto-text-faint"
               }`}
             >
-              Sign in
+              {busy ? "Signing in…" : "Sign in"}
             </button>
             <button
               type="button"
@@ -189,10 +224,10 @@ export function LoginScreen() {
             </button>
             <button
               type="button"
-              onClick={() => enter("demo", "demo@traderotto.local")}
+              onClick={skipLogin}
               className="w-full rounded-full border border-otto-divider bg-otto-surface py-[13px] text-[14.5px] font-semibold text-otto-text-dim"
             >
-              Try demo account (no setup)
+              Skip login for now
             </button>
           </>
         )}
@@ -230,17 +265,27 @@ export function LoginScreen() {
             </div>
             <button
               type="button"
-              disabled={!codeComplete}
-              onClick={() => enter("otp")}
+              disabled={!codeComplete || busy}
+              onClick={async () => {
+                setBusy(true);
+                await verifyOtp(email.trim(), digits.join(""));
+                setBusy(false);
+              }}
               className={`mb-4 w-full rounded-full py-3.5 text-[15px] font-bold ${
                 codeComplete ? "bg-otto-green text-black" : "bg-otto-surface text-otto-text-faint"
               }`}
             >
-              Verify & continue
+              {busy ? "Verifying…" : "Verify & continue"}
             </button>
             <button
               type="button"
-              onClick={() => setNotice("Code resent. Use any 6 digits for now.")}
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                const sent = await sendOtp(email.trim());
+                setBusy(false);
+                if (sent) setNotice("Code resent. Check your inbox.");
+              }}
               className="w-full bg-transparent text-center text-[13.5px] text-otto-text-dim"
             >
               Didn’t get it? <span className="font-semibold text-otto-green">Resend code</span>
@@ -254,7 +299,7 @@ export function LoginScreen() {
               Create an account
             </h1>
             <p className="mb-7 text-sm leading-snug text-otto-text-dim">
-              Use email and a password. Supabase will replace this later.
+              Use email and a password. We’ll send a confirmation if your project requires it.
             </p>
             <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
               Email address
@@ -278,22 +323,28 @@ export function LoginScreen() {
             />
             <button
               type="button"
-              disabled={!validEmail || password.length < 6}
-              onClick={() => enter("signup")}
+              disabled={!validEmail || password.length < 6 || busy || !canAuth}
+              onClick={async () => {
+                setNotice("");
+                setBusy(true);
+                const pending = await signUpWithPassword(email.trim(), password);
+                setBusy(false);
+                if (pending) setNotice(pending);
+              }}
               className={`mb-2.5 w-full rounded-full py-3.5 text-[15px] font-bold ${
-                validEmail && password.length >= 6
+                validEmail && password.length >= 6 && canAuth
                   ? "bg-otto-green text-black"
                   : "bg-otto-surface text-otto-text-faint"
               }`}
             >
-              Create account
+              {busy ? "Creating…" : "Create account"}
             </button>
             <button
               type="button"
-              onClick={() => enter("demo", "demo@traderotto.local")}
+              onClick={skipLogin}
               className="w-full rounded-full border border-otto-divider bg-otto-surface py-[13px] text-[14.5px] font-semibold text-otto-text-dim"
             >
-              Try demo account (no setup)
+              Skip login for now
             </button>
           </>
         )}
@@ -304,7 +355,7 @@ export function LoginScreen() {
               Reset password
             </h1>
             <p className="mb-7 text-sm leading-snug text-otto-text-dim">
-              We’ll email a reset link once Supabase is connected.
+              We’ll email a reset link if that address exists.
             </p>
             <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
               Email address
@@ -318,19 +369,29 @@ export function LoginScreen() {
             />
             <button
               type="button"
-              disabled={!validEmail}
-              onClick={() => setNotice("Reset email is not wired yet. Use demo or OTP for now.")}
+              disabled={!validEmail || busy || !canAuth}
+              onClick={async () => {
+                setNotice("");
+                setBusy(true);
+                const sent = await resetPassword(email.trim());
+                setBusy(false);
+                if (sent) setNotice("Reset email sent. Check your inbox.");
+              }}
               className={`w-full rounded-full py-3.5 text-[15px] font-bold ${
-                validEmail ? "bg-otto-green text-black" : "bg-otto-surface text-otto-text-faint"
+                validEmail && canAuth
+                  ? "bg-otto-green text-black"
+                  : "bg-otto-surface text-otto-text-faint"
               }`}
             >
-              Send reset email
+              {busy ? "Sending…" : "Send reset email"}
             </button>
           </>
         )}
 
-        {notice && (
-          <div className="mt-4 text-center text-xs font-medium text-otto-amber">{notice}</div>
+        {(notice || error) && (
+          <div className={`mt-4 text-center text-xs font-medium ${error ? "text-otto-red" : "text-otto-amber"}`}>
+            {error || notice}
+          </div>
         )}
 
         <div className="flex-1" />
