@@ -46,7 +46,6 @@ export function LoginScreen() {
     verifyOtp,
     signInWithOAuth,
     resetPassword,
-    skipLogin,
   } = useAuth();
   const [liveOk, setLiveOk] = useState(false);
   const [googleOn, setGoogleOn] = useState(false);
@@ -102,27 +101,16 @@ export function LoginScreen() {
         )}
 
         {step === "email" && (
-          <div className="mb-9 mt-5">
-            <div className="mb-7 flex items-center gap-2">
-              <div className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-otto-green text-[15px] font-extrabold text-black">
-                O
-              </div>
-              <span className="text-base font-bold">Trader Otto</span>
+          <div className="mb-8 mt-5 flex items-start gap-2.5">
+            <div className="mt-0.5 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-otto-green text-[15px] font-extrabold text-black">
+              O
             </div>
-            <h1 className="mb-2 text-[25px] font-extrabold tracking-[-0.3px]">
-              Log in or sign up
+            <h1 className="text-[15px] font-semibold leading-snug tracking-[-0.2px] text-otto-text">
+              Trader Otto
             </h1>
-            <p className="text-sm leading-snug text-otto-text-dim">
-              Track every spread, one trade at a time.
-            </p>
           </div>
         )}
 
-        {canAuth && (
-          <div className="mb-4 rounded-xl border border-otto-green/30 bg-otto-green-soft px-3 py-2.5 text-xs text-otto-green">
-            Supabase connected. Email login is on. Skip stays available.
-          </div>
-        )}
         {usingServiceRole && (
           <div className="mb-4 rounded-xl border border-otto-amber/30 bg-otto-amber-soft px-3 py-2.5 text-xs text-otto-amber">
             Supabase is reachable, but this is the service-role key. Paste the anon public key to enable login.
@@ -136,27 +124,6 @@ export function LoginScreen() {
 
         {step === "email" && (
           <>
-            <button
-              type="button"
-              disabled={busy || !canAuth || !appleOn}
-              onClick={() => void signInWithOAuth("apple")}
-              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
-            >
-              <AppleIcon />
-              Continue with Apple
-            </button>
-            <button
-              type="button"
-              disabled={busy || !canAuth || !googleOn}
-              onClick={() => void signInWithOAuth("google")}
-              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
-            >
-              <GoogleIcon />
-              Continue with Google
-            </button>
-
-            <Divider>or continue with email</Divider>
-
             <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
               Email address
             </label>
@@ -167,33 +134,6 @@ export function LoginScreen() {
               placeholder="you@example.com"
               className="mb-4"
             />
-
-            <button
-              type="button"
-              disabled={!validEmail || busy || !canAuth}
-              onClick={async () => {
-                setNotice("");
-                setBusy(true);
-                const sent = await sendOtp(email.trim());
-                setBusy(false);
-                if (sent) {
-                  setDigits(Array(6).fill(""));
-                  setStep("otp");
-                }
-              }}
-              className={`w-full rounded-full py-3.5 text-[15px] font-bold ${
-                validEmail && canAuth
-                  ? "bg-otto-green text-black"
-                  : "bg-otto-surface text-otto-text-faint"
-              }`}
-            >
-              {busy ? "Sending…" : "Continue"}
-            </button>
-            <p className="mt-3.5 text-center text-xs leading-relaxed text-otto-text-faint">
-              We’ll email you a one-time code — no password to remember.
-            </p>
-
-            <Divider>or</Divider>
 
             <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
               Password
@@ -238,16 +178,47 @@ export function LoginScreen() {
                 setStep("signup");
                 setNotice("");
               }}
-              className="mb-2.5 w-full rounded-full border-2 border-otto-green py-[13px] text-[14.5px] font-semibold text-otto-text"
+              className="mb-2 w-full rounded-full border-2 border-otto-green py-[13px] text-[14.5px] font-semibold text-otto-text"
             >
               Create a new account
             </button>
             <button
               type="button"
-              onClick={skipLogin}
-              className="w-full rounded-full border border-otto-divider bg-otto-surface py-[13px] text-[14.5px] font-semibold text-otto-text-dim"
+              disabled={!validEmail || busy || !canAuth}
+              onClick={async () => {
+                setNotice("");
+                setBusy(true);
+                const sent = await sendOtp(email.trim());
+                setBusy(false);
+                if (sent) {
+                  setDigits(Array(6).fill(""));
+                  setStep("otp");
+                }
+              }}
+              className="mb-1 w-full bg-transparent py-2 text-center text-[13.5px] text-otto-text-dim disabled:opacity-50"
             >
-              Skip login for now
+              Email me a one-time code instead
+            </button>
+
+            <Divider>or</Divider>
+
+            <button
+              type="button"
+              disabled={busy || !canAuth || !appleOn}
+              onClick={() => void signInWithOAuth("apple")}
+              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
+            >
+              <AppleIcon />
+              Continue with Apple
+            </button>
+            <button
+              type="button"
+              disabled={busy || !canAuth || !googleOn}
+              onClick={() => void signInWithOAuth("google")}
+              className="flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
+            >
+              <GoogleIcon />
+              Continue with Google
             </button>
           </>
         )}
@@ -359,13 +330,6 @@ export function LoginScreen() {
             >
               {busy ? "Creating…" : "Create account"}
             </button>
-            <button
-              type="button"
-              onClick={skipLogin}
-              className="w-full rounded-full border border-otto-divider bg-otto-surface py-[13px] text-[14.5px] font-semibold text-otto-text-dim"
-            >
-              Skip login for now
-            </button>
           </>
         )}
 
@@ -404,13 +368,6 @@ export function LoginScreen() {
               }`}
             >
               {busy ? "Sending…" : "Send reset email"}
-            </button>
-            <button
-              type="button"
-              onClick={skipLogin}
-              className="mt-2.5 w-full rounded-full border border-otto-divider bg-otto-surface py-[13px] text-[14.5px] font-semibold text-otto-text-dim"
-            >
-              Skip login for now
             </button>
           </>
         )}
