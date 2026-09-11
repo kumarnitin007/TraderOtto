@@ -73,9 +73,10 @@ html[data-theme="warm-paper"] {
     color: rgb(var(--otto-text-faint));
   }
 
-  input:focus,
-  select:focus {
-    border-bottom-color: rgb(var(--otto-green));
+  input.rounded-\[10px\] {
+    border: 1.5px solid rgb(var(--otto-divider));
+    border-radius: 10px;
+    padding: 12px 0;
   }
 
   select {
@@ -97,6 +98,11 @@ html[data-theme="warm-paper"] {
 
   textarea:focus {
     border-color: rgb(var(--otto-green));
+  }
+
+  input:focus,
+  select:focus {
+    border-bottom-color: rgb(var(--otto-green));
   }
 
   input[type="date"]::-webkit-calendar-picker-indicator {

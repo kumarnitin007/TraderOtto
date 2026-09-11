@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, PenLine, Rows3, type LucideIcon } from "lucide-react";
+import { LineChart, LogOut, PenLine, Rows3, type LucideIcon } from "lucide-react";
 import { Pill } from "@/components/ui/Pill";
 import { AlpacaStatus } from "@/components/ui/AlpacaStatus";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTrades } from "@/hooks/useTrades";
+import { useAuth } from "@/hooks/useAuth";
 import { fmtMoney, summarize } from "@/lib/pnl";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
@@ -18,6 +19,7 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { trades } = useTrades();
+  const { user, signOut } = useAuth();
   const { allTime, mtd, wtd, winRate } = summarize(trades);
 
   return (
@@ -56,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {allTime >= 0 ? "+" : ""}
               {fmtMoney(allTime)}
             </div>
-            <div className="mt-3.5 flex gap-2">
+            <div className="mt-3.5 flex flex-col items-start gap-2">
               <Pill label="Month" value={mtd} />
               <Pill label="Week" value={wtd} />
             </div>
@@ -69,6 +71,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mt-2">
             <ThemeToggle />
           </div>
+          <button
+            type="button"
+            onClick={signOut}
+            className="mt-2 flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-2 text-xs font-semibold text-otto-text-dim"
+          >
+            <LogOut size={13} />
+            Log out
+            {user?.method === "demo" ? " · demo" : ""}
+          </button>
         </aside>
 
         <main className="min-w-0 flex-1 pb-24 desk:px-2 desk:pt-7">
@@ -78,6 +89,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex shrink-0 items-center gap-1.5">
                 <AlpacaStatus compact />
                 <ThemeToggle compact />
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-otto-divider text-otto-text-dim"
+                  aria-label="Log out"
+                >
+                  <LogOut size={13} />
+                </button>
               </div>
             </div>
             <div className="mt-2.5 flex items-end justify-between gap-3">

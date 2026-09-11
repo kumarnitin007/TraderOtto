@@ -8,6 +8,7 @@ import { useLiveQuotes } from "@/hooks/useLiveQuotes";
 import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { Tabs } from "@/components/ui/Tabs";
 import { TradeRow } from "@/components/positions/TradeRow";
+import { PositionTickerDrawer } from "@/components/positions/PositionTickerDrawer";
 import type { ClosePayload } from "@/types/trade";
 import { WatchGroupView } from "@/components/groups/WatchGroupView";
 
@@ -22,6 +23,7 @@ export function PositionsView() {
   const [filter, setFilter] = useState<Filter>("open");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [selectedView, setSelectedView] = useState("positions");
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export function PositionsView() {
     setSelectedView(value);
     setExpanded(null);
     setClosingId(null);
+    setSelectedTradeId(null);
     localStorage.setItem(VIEW_KEY, value);
   }
 
@@ -62,6 +65,7 @@ export function PositionsView() {
 
   async function onDelete(id: string) {
     await deleteTrade(id);
+    if (selectedTradeId === id) setSelectedTradeId(null);
     setClosingId(null);
     setExpanded(null);
   }
@@ -122,11 +126,20 @@ export function PositionsView() {
             onCancelClose={() => setClosingId(null)}
             onConfirmClose={(payload) => onConfirmClose(t.id, payload)}
             onDelete={() => void onDelete(t.id)}
+            onTickerClick={() => setSelectedTradeId(t.id)}
             live={live[t.ticker]}
             optionMark={optionMarks[t.id]}
           />
         ))}
       </div>
+      {selectedTradeId &&
+        trades.find((trade) => trade.id === selectedTradeId) && (
+          <PositionTickerDrawer
+            trade={trades.find((trade) => trade.id === selectedTradeId)!}
+            optionMark={optionMarks[selectedTradeId]}
+            onClose={() => setSelectedTradeId(null)}
+          />
+        )}
         </>
       )}
     </div>

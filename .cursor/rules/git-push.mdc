@@ -1,0 +1,10 @@
+---
+description: Never push to GitHub unless the user explicitly asks
+alwaysApply: true
+---
+
+# Git push
+
+Do not run `git push`, `gh pr create`, or any command that publishes to a remote unless the user explicitly asks to push, publish, or create a pull request in that message.
+
+Commits are still only when the user asks. Pushing is a separate, stricter action.

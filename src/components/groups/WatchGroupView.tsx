@@ -5,27 +5,10 @@ import { AlertTriangle, Bell, ChevronRight, LoaderCircle, X } from "lucide-react
 import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
+import { TickerResearch } from "@/components/ticker/TickerResearch";
 import { fmtDate, fmtMoney, tickerAvatarColor } from "@/lib/pnl";
+import type { TickerDetails } from "@/types/tickerDetails";
 import type { WatchGroup, WatchTracker } from "@/types/watchGroup";
-
-type TickerDetails = {
-  symbol: string;
-  price: number | null;
-  previousClose: number | null;
-  change: number | null;
-  changePct: number | null;
-  open: number | null;
-  high: number | null;
-  low: number | null;
-  volume: number | null;
-  earnings: {
-    date: string;
-    timing: string;
-    epsForecast: string | null;
-    fiscalQuarter: string | null;
-  } | null;
-  marketSource: "alpaca" | "unavailable";
-};
 
 function breach(tracker: WatchTracker, price?: number) {
   if (!price) return null;
@@ -241,8 +224,8 @@ function TickerDrawer({
         onClick={onClose}
         className="absolute inset-0 bg-black/65"
       />
-      <aside className="otto-drawer absolute bottom-0 right-0 top-0 w-[min(92vw,430px)] overflow-y-auto border-l border-otto-divider bg-otto-bg px-5 pb-10 pt-[max(20px,env(safe-area-inset-top))] shadow-2xl">
-        <div className="flex items-start justify-between">
+      <aside className="otto-drawer absolute bottom-0 right-0 top-0 w-full max-w-[460px] overflow-y-auto border-l border-otto-divider bg-otto-bg px-4 pb-[max(32px,env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] shadow-2xl desk:px-5">
+        <div className="sticky top-0 z-10 flex items-start justify-between bg-otto-bg pb-3">
           <div>
             <div className="text-xs font-semibold text-otto-text-faint">{group.name}</div>
             <h2 className="mt-1 text-2xl font-extrabold">{tracker.ticker}</h2>
@@ -257,7 +240,7 @@ function TickerDrawer({
           </button>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-2 rounded-2xl bg-otto-surface p-4">
           <div className="text-[32px] font-extrabold">
             {price ? `$${price.toFixed(2)}` : "—"}
           </div>
@@ -274,6 +257,29 @@ function TickerDrawer({
           {loading && (
             <div className="mt-2 flex items-center gap-2 text-xs text-otto-text-faint">
               <LoaderCircle size={13} className="otto-spin" /> Loading market details…
+            </div>
+          )}
+          {!loading && details?.marketSource === "unavailable" && (
+            <div className="mt-2 text-xs text-otto-red">
+              Alpaca offline — real-time data unavailable.
+            </div>
+          )}
+          {details?.market && (
+            <div className="mt-2 text-xs text-otto-text-dim">
+              Market {details.market.isOpen ? "open" : "closed"} ·{" "}
+              {details.market.isOpen ? "closes" : "opens"}{" "}
+              {new Intl.DateTimeFormat("en-US", {
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              }).format(
+                new Date(
+                  details.market.isOpen
+                    ? details.market.nextClose
+                    : details.market.nextOpen
+                )
+              )}
             </div>
           )}
           {alert && (
@@ -318,6 +324,8 @@ function TickerDrawer({
             )}
           </div>
         </section>
+
+        <TickerResearch details={details} />
 
         <section className="mt-7">
           <div className="text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">

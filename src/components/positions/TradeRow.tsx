@@ -19,6 +19,7 @@ export function TradeRow({
   onCancelClose,
   onConfirmClose,
   onDelete,
+  onTickerClick,
   live,
   optionMark,
 }: {
@@ -30,6 +31,7 @@ export function TradeRow({
   onCancelClose: () => void;
   onConfirmClose: (payload: ClosePayload) => void;
   onDelete: () => void;
+  onTickerClick: () => void;
   live?: LiveQuote;
   optionMark?: OptionMark;
 }) {
@@ -68,18 +70,32 @@ export function TradeRow({
     <div className="border-b border-otto-divider">
       <button
         type="button"
-        onClick={onToggle}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("[data-ticker-link]")) {
+            onTickerClick();
+            return;
+          }
+          onToggle();
+        }}
         className="flex w-full items-center gap-2.5 bg-transparent px-1 py-[13px] text-left desk:gap-3"
       >
         <div
+          data-ticker-link
           className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[12.5px] font-bold"
           style={{ background: avatarBg }}
+          title={`Open ${t.ticker} market details`}
         >
           {t.ticker.slice(0, 2)}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-baseline gap-[7px]">
-            <span className="shrink-0 text-[15px] font-bold">{t.ticker}</span>
+            <span
+              data-ticker-link
+              className="shrink-0 text-[15px] font-bold underline decoration-transparent underline-offset-4 hover:decoration-current"
+              title={`Open ${t.ticker} market details`}
+            >
+              {t.ticker}
+            </span>
             <span className="truncate text-xs text-otto-text-faint">{t.strategy}</span>
           </div>
           <div className="mt-0.5 truncate text-xs text-otto-text-faint">
