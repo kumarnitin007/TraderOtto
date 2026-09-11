@@ -13,7 +13,6 @@ import type { ClosePayload } from "@/types/trade";
 import { WatchGroupView } from "@/components/groups/WatchGroupView";
 
 type Filter = "open" | "closed" | "all";
-const VIEW_KEY = "trader-otto:positions-view";
 
 export function PositionsView() {
   const { trades, closeTrade, deleteTrade, loading } = useTrades();
@@ -27,15 +26,9 @@ export function PositionsView() {
   const [selectedView, setSelectedView] = useState("positions");
 
   useEffect(() => {
-    const stored = localStorage.getItem(VIEW_KEY);
-    if (stored) setSelectedView(stored);
-  }, []);
-
-  useEffect(() => {
     if (groupsLoading || selectedView === "positions") return;
     if (!groups.some((group) => group.id === selectedView)) {
       setSelectedView("positions");
-      localStorage.setItem(VIEW_KEY, "positions");
     }
   }, [groups, groupsLoading, selectedView]);
 
@@ -46,7 +39,6 @@ export function PositionsView() {
     setExpanded(null);
     setClosingId(null);
     setSelectedTradeId(null);
-    localStorage.setItem(VIEW_KEY, value);
   }
 
   const visible = useMemo(

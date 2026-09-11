@@ -49,6 +49,18 @@ const BYPASS_USER: AuthUser = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function hasBypassCookie() {
+  return document.cookie
+    .split(";")
+    .some((part) => part.trim() === `${BYPASS_KEY}=1`);
+}
+
+function setBypassCookie(enabled: boolean) {
+  document.cookie = enabled
+    ? `${BYPASS_KEY}=1; Path=/; Max-Age=2592000; SameSite=Lax`
+    : `${BYPASS_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
 function mapUser(user: User): AuthUser {
   const provider = user.app_metadata?.provider;
   const method: AuthMethod =
@@ -83,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const usingServiceRole = isServiceRoleKey();
 
   useEffect(() => {
-    const bypass = window.localStorage.getItem(BYPASS_KEY) === "1";
+    const bypass = hasBypassCookie();
     const supabase = getSupabaseClient();
     if (!supabase) {
       setUser(bypass ? BYPASS_USER : null);
@@ -103,11 +115,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        window.localStorage.removeItem(BYPASS_KEY);
+        setBypassCookie(false);
         setUser(mapUser(session.user));
         return;
       }
-      const stillBypass = window.localStorage.getItem(BYPASS_KEY) === "1";
+      const stillBypass = hasBypassCookie();
       setUser(stillBypass ? BYPASS_USER : null);
     });
 
@@ -233,14 +245,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const skipLogin = useCallback(() => {
     setError("");
-    window.localStorage.setItem(BYPASS_KEY, "1");
+    setBypassCookie(true);
     setUser(BYPASS_USER);
   }, []);
 
   const signOut = useCallback(async () => {
     const supabase = getSupabaseClient();
     setError("");
-    window.localStorage.removeItem(BYPASS_KEY);
+    setBypassCookie(false);
     if (supabase) await supabase.auth.signOut();
     setUser(null);
   }, []);

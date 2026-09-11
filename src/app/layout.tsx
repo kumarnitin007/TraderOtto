@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var t=localStorage.getItem('trader-otto:theme');document.documentElement.dataset.theme=t==='warm-paper'?'warm-paper':'dark'}catch(e){}",
+              "try{var m=document.cookie.match(/(?:^|; )trader-otto-theme=([^;]*)/);document.documentElement.dataset.theme=m&&m[1]==='warm-paper'?'warm-paper':'dark'}catch(e){}",
           }}
         />
       </head>

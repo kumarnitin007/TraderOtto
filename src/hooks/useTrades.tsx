@@ -9,12 +9,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { localTradeRepository } from "@/lib/data/localTradeRepository";
+import { useAuth } from "@/hooks/useAuth";
+import { getSupabaseClient } from "@/lib/supabase";
+import { createSupabaseTradeRepository } from "@/lib/data/supabaseTradeRepository";
 import type { ClosePayload, NewTrade, Trade } from "@/types/trade";
 
 type TradesContextValue = {
   trades: Trade[];
   loading: boolean;
+  error: string;
+  readonly: boolean;
   addTrade: (trade: NewTrade) => Promise<Trade>;
   updateTrade: (id: string, trade: NewTrade) => Promise<Trade>;
   closeTrade: (id: string, payload: ClosePayload) => Promise<Trade>;
@@ -24,48 +28,96 @@ type TradesContextValue = {
 const TradesContext = createContext<TradesContextValue | null>(null);
 
 export function TradesProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const readonly = !user || user.id === "local-bypass";
+  const repository = useMemo(() => {
+    const supabase = getSupabaseClient();
+    return supabase && user && !readonly
+      ? createSupabaseTradeRepository(supabase, user.id)
+      : null;
+  }, [readonly, user]);
 
   useEffect(() => {
     let cancelled = false;
-    localTradeRepository.list().then((list) => {
-      if (!cancelled) {
-        setTrades(list);
-        setLoading(false);
-      }
-    });
+    setLoading(true);
+    setError("");
+    if (!repository) {
+      setTrades([]);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    repository
+      .list()
+      .then((list) => {
+        if (!cancelled) setTrades(list);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setTrades([]);
+          setError(cause instanceof Error ? cause.message : "Could not load trades.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [repository]);
 
   const addTrade = useCallback(async (trade: NewTrade) => {
-    const created = await localTradeRepository.add(trade);
+    if (!repository) throw new Error("Sign in to save trades.");
+    const created = await repository.add(trade);
     setTrades((prev) => [created, ...prev]);
     return created;
-  }, []);
+  }, [repository]);
 
   const closeTrade = useCallback(async (id: string, payload: ClosePayload) => {
-    const updated = await localTradeRepository.close(id, payload);
+    if (!repository) throw new Error("Sign in to update trades.");
+    const updated = await repository.close(id, payload);
     setTrades((prev) => prev.map((t) => (t.id === id ? updated : t)));
     return updated;
-  }, []);
+  }, [repository]);
 
   const updateTrade = useCallback(async (id: string, trade: NewTrade) => {
-    const updated = await localTradeRepository.update(id, trade);
+    if (!repository) throw new Error("Sign in to update trades.");
+    const updated = await repository.update(id, trade);
     setTrades((prev) => prev.map((t) => (t.id === id ? updated : t)));
     return updated;
-  }, []);
+  }, [repository]);
 
   const deleteTrade = useCallback(async (id: string) => {
-    await localTradeRepository.remove(id);
+    if (!repository) throw new Error("Sign in to delete trades.");
+    await repository.remove(id);
     setTrades((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  }, [repository]);
 
   const value = useMemo(
-    () => ({ trades, loading, addTrade, updateTrade, closeTrade, deleteTrade }),
-    [trades, loading, addTrade, updateTrade, closeTrade, deleteTrade]
+    () => ({
+      trades,
+      loading,
+      error,
+      readonly,
+      addTrade,
+      updateTrade,
+      closeTrade,
+      deleteTrade,
+    }),
+    [
+      trades,
+      loading,
+      error,
+      readonly,
+      addTrade,
+      updateTrade,
+      closeTrade,
+      deleteTrade,
+    ]
   );
 
   return <TradesContext.Provider value={value}>{children}</TradesContext.Provider>;

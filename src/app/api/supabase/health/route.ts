@@ -23,21 +23,33 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(`${url}/auth/v1/health`, {
-      cache: "no-store",
-      headers: key
-        ? {
-            apikey: key,
-            Authorization: `Bearer ${key}`,
-          }
-        : undefined,
-    });
-    const body = await response.text();
+    const headers = key
+      ? {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        }
+      : undefined;
+    const [healthResponse, settingsResponse] = await Promise.all([
+      fetch(`${url}/auth/v1/health`, { cache: "no-store", headers }),
+      fetch(`${url}/auth/v1/settings`, { cache: "no-store", headers }),
+    ]);
+    const body = await healthResponse.text();
+    const settings = settingsResponse.ok
+      ? ((await settingsResponse.json()) as {
+          disable_signup?: boolean;
+          external?: Record<string, boolean>;
+        })
+      : null;
+    const role = keyRole(key);
     return NextResponse.json({
-      ok: response.ok,
-      status: response.status,
+      ok: healthResponse.ok && role === "anon",
+      status: healthResponse.status,
       keyPresent: Boolean(key),
-      keyRole: keyRole(key),
+      keyRole: role,
+      signupEnabled: settings ? settings.disable_signup !== true : null,
+      google: Boolean(settings?.external?.google),
+      apple: Boolean(settings?.external?.apple),
+      email: settings?.external?.email !== false,
       health: body.slice(0, 200),
     });
   } catch {

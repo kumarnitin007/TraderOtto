@@ -13,15 +13,30 @@ export function WatchGroupsPanel() {
     addTracker,
     updateTracker,
     removeTracker,
+    readonly,
+    error,
   } = useWatchGroups();
   const [name, setName] = useState("");
   const [tickerByGroup, setTickerByGroup] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  function createGroup() {
+  const [actionError, setActionError] = useState("");
+
+  async function createGroup() {
     if (!name.trim()) return;
-    addGroup(name);
-    setName("");
+    if (readonly) {
+      setActionError("Sign in to create database-backed groups.");
+      return;
+    }
+    try {
+      await addGroup(name);
+      setName("");
+      setActionError("");
+    } catch (cause) {
+      setActionError(
+        cause instanceof Error ? cause.message : "Could not create group."
+      );
+    }
   }
 
   return (
@@ -30,6 +45,11 @@ export function WatchGroupsPanel() {
         Create tracker groups for tickers you may trade. Groups appear in the selector at the top
         of Positions.
       </p>
+      {(error || actionError) && (
+        <div className="mb-3 rounded-lg bg-otto-red-soft px-3 py-2 text-xs text-otto-red">
+          {error || actionError}
+        </div>
+      )}
 
       <div className="flex items-end gap-2 rounded-xl bg-otto-surface px-3.5 py-3">
         <div className="min-w-0 flex-1">
@@ -37,14 +57,16 @@ export function WatchGroupsPanel() {
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && createGroup()}
+            onKeyDown={(event) =>
+              event.key === "Enter" && void createGroup()
+            }
             placeholder="Tech earnings"
           />
         </div>
         <button
           type="button"
-          onClick={createGroup}
-          disabled={!name.trim()}
+          onClick={() => void createGroup()}
+          disabled={!name.trim() || readonly}
           className="mb-1 flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-otto-green px-4 text-xs font-bold text-black disabled:opacity-40"
         >
           <FolderPlus size={15} />

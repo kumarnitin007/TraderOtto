@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -48,7 +48,10 @@ export function LoginScreen() {
     resetPassword,
     skipLogin,
   } = useAuth();
-  const canAuth = configured && !usingServiceRole;
+  const [liveOk, setLiveOk] = useState(false);
+  const [googleOn, setGoogleOn] = useState(false);
+  const [appleOn, setAppleOn] = useState(false);
+  const canAuth = (configured && !usingServiceRole) || liveOk;
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,6 +62,18 @@ export function LoginScreen() {
 
   const validEmail = /\S+@\S+\.\S+/.test(email);
   const codeComplete = digits.every((d) => d !== "");
+
+  useEffect(() => {
+    fetch("/api/supabase/health", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { ok?: boolean; google?: boolean; apple?: boolean } | null) => {
+        if (!data) return;
+        setLiveOk(Boolean(data.ok));
+        if (typeof data.google === "boolean") setGoogleOn(data.google);
+        if (typeof data.apple === "boolean") setAppleOn(data.apple);
+      })
+      .catch(() => setLiveOk(false));
+  }, []);
 
   function handleDigit(index: number, value: string) {
     if (!/^[0-9]?$/.test(value)) return;
@@ -103,6 +118,11 @@ export function LoginScreen() {
           </div>
         )}
 
+        {canAuth && (
+          <div className="mb-4 rounded-xl border border-otto-green/30 bg-otto-green-soft px-3 py-2.5 text-xs text-otto-green">
+            Supabase connected. Email login is on. Skip stays available.
+          </div>
+        )}
         {usingServiceRole && (
           <div className="mb-4 rounded-xl border border-otto-amber/30 bg-otto-amber-soft px-3 py-2.5 text-xs text-otto-amber">
             Supabase is reachable, but this is the service-role key. Paste the anon public key to enable login.
@@ -118,7 +138,7 @@ export function LoginScreen() {
           <>
             <button
               type="button"
-              disabled={busy || !canAuth}
+              disabled={busy || !canAuth || !appleOn}
               onClick={() => void signInWithOAuth("apple")}
               className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
             >
@@ -127,7 +147,7 @@ export function LoginScreen() {
             </button>
             <button
               type="button"
-              disabled={busy || !canAuth}
+              disabled={busy || !canAuth || !googleOn}
               onClick={() => void signInWithOAuth("google")}
               className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full bg-white py-[13px] text-[14.5px] font-semibold text-black disabled:opacity-50"
             >
@@ -384,6 +404,13 @@ export function LoginScreen() {
               }`}
             >
               {busy ? "Sending…" : "Send reset email"}
+            </button>
+            <button
+              type="button"
+              onClick={skipLogin}
+              className="mt-2.5 w-full rounded-full border border-otto-divider bg-otto-surface py-[13px] text-[14.5px] font-semibold text-otto-text-dim"
+            >
+              Skip login for now
             </button>
           </>
         )}

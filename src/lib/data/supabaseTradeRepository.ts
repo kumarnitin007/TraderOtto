@@ -1,0 +1,181 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ClosePayload, NewTrade, Trade } from "@/types/trade";
+
+type TradeRow = {
+  id: string;
+  user_id: string;
+  ticker: string;
+  strategy: string;
+  status: "open" | "closed";
+  contracts: number;
+  expiry: string;
+  open_date: string;
+  close_date: string | null;
+  premium_open: number;
+  premium_close: number | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function detailsFromTrade(trade: NewTrade, existing?: Record<string, unknown>) {
+  return {
+    ...existing,
+    shortStrike: trade.shortStrike,
+    longStrike: trade.longStrike,
+    callShortStrike: trade.callShortStrike,
+    callLongStrike: trade.callLongStrike,
+    stockPriceOpen: trade.stockPriceOpen,
+    iv: trade.iv,
+    delta: trade.delta,
+    sigma: trade.sigma,
+    theta: trade.theta,
+    notes: trade.notes,
+  };
+}
+
+function number(detail: Record<string, unknown>, key: string) {
+  const value = detail[key];
+  return typeof value === "number" ? value : 0;
+}
+
+function nullableNumber(detail: Record<string, unknown>, key: string) {
+  const value = detail[key];
+  return typeof value === "number" ? value : null;
+}
+
+function mapRow(row: TradeRow): Trade {
+  const detail = row.details ?? {};
+  return {
+    id: row.id,
+    userId: row.user_id,
+    ticker: row.ticker,
+    strategy: row.strategy,
+    contracts: row.contracts,
+    expiry: row.expiry,
+    openDate: row.open_date,
+    shortStrike: nullableNumber(detail, "shortStrike"),
+    longStrike: nullableNumber(detail, "longStrike"),
+    callShortStrike: nullableNumber(detail, "callShortStrike"),
+    callLongStrike: nullableNumber(detail, "callLongStrike"),
+    stockPriceOpen: number(detail, "stockPriceOpen"),
+    iv: number(detail, "iv"),
+    delta: number(detail, "delta"),
+    sigma: number(detail, "sigma"),
+    theta: number(detail, "theta"),
+    premiumOpen: Number(row.premium_open),
+    status: row.status,
+    closeDate: row.close_date,
+    stockPriceClose: nullableNumber(detail, "stockPriceClose"),
+    premiumClose:
+      row.premium_close == null ? null : Number(row.premium_close),
+    notes: typeof detail.notes === "string" ? detail.notes : "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function requireRow(data: unknown, error: { message: string } | null) {
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Supabase returned no trade.");
+  return mapRow(data as TradeRow);
+}
+
+export function createSupabaseTradeRepository(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return {
+    async list(): Promise<Trade[]> {
+      const { data, error } = await supabase
+        .from("tr_trades")
+        .select("*")
+        .is("deleted_at", null)
+        .order("open_date", { ascending: false });
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as TradeRow[]).map(mapRow);
+    },
+
+    async add(trade: NewTrade): Promise<Trade> {
+      const { data, error } = await supabase
+        .from("tr_trades")
+        .insert({
+          user_id: userId,
+          ticker: trade.ticker.toUpperCase(),
+          strategy: trade.strategy,
+          status: "open",
+          contracts: trade.contracts,
+          expiry: trade.expiry,
+          open_date: trade.openDate,
+          premium_open: trade.premiumOpen,
+          details: detailsFromTrade(trade),
+        })
+        .select()
+        .single();
+      return requireRow(data, error);
+    },
+
+    async update(id: string, trade: NewTrade): Promise<Trade> {
+      const { data, error } = await supabase
+        .from("tr_trades")
+        .update({
+          ticker: trade.ticker.toUpperCase(),
+          strategy: trade.strategy,
+          contracts: trade.contracts,
+          expiry: trade.expiry,
+          open_date: trade.openDate,
+          premium_open: trade.premiumOpen,
+          details: detailsFromTrade(trade),
+        })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select()
+        .single();
+      return requireRow(data, error);
+    },
+
+    async close(id: string, payload: ClosePayload): Promise<Trade> {
+      const { data: current, error: readError } = await supabase
+        .from("tr_trades")
+        .select("premium_open, contracts, details")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .single();
+      if (readError || !current) {
+        throw new Error(readError?.message ?? "Trade not found.");
+      }
+      const existingDetails =
+        (current.details as Record<string, unknown> | null) ?? {};
+      const pnl =
+        (Number(current.premium_open) - payload.premiumClose) *
+        Number(current.contracts) *
+        100;
+      const { data, error } = await supabase
+        .from("tr_trades")
+        .update({
+          status: "closed",
+          close_date: payload.closeDate,
+          premium_close: payload.premiumClose,
+          pnl,
+          details: {
+            ...existingDetails,
+            stockPriceClose: payload.stockPriceClose,
+          },
+        })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select()
+        .single();
+      return requireRow(data, error);
+    },
+
+    async remove(id: string): Promise<void> {
+      const { error } = await supabase
+        .from("tr_trades")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+  };
+}

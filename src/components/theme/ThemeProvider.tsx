@@ -11,7 +11,7 @@ import {
 
 export type Theme = "dark" | "warm-paper";
 
-const STORAGE_KEY = "trader-otto:theme";
+const COOKIE_KEY = "trader-otto-theme";
 
 type ThemeContextValue = {
   theme: Theme;
@@ -24,7 +24,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${COOKIE_KEY}=`))
+      ?.split("=")[1];
     const next: Theme = saved === "warm-paper" ? "warm-paper" : "dark";
     setTheme(next);
     document.documentElement.dataset.theme = next;
@@ -36,7 +40,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       toggleTheme: () => {
         setTheme((current) => {
           const next = current === "dark" ? "warm-paper" : "dark";
-          window.localStorage.setItem(STORAGE_KEY, next);
+          document.cookie = `${COOKIE_KEY}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
           document.documentElement.dataset.theme = next;
           return next;
         });

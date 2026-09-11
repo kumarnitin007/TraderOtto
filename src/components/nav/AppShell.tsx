@@ -8,6 +8,7 @@ import { AlpacaStatus } from "@/components/ui/AlpacaStatus";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTrades } from "@/hooks/useTrades";
 import { useAuth } from "@/hooks/useAuth";
+import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { fmtMoney, summarize } from "@/lib/pnl";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
@@ -18,7 +19,8 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { trades } = useTrades();
+  const { trades, error: tradeError, readonly } = useTrades();
+  const { error: groupError } = useWatchGroups();
   const { user, signOut } = useAuth();
   const { allTime, mtd, wtd, winRate } = summarize(trades);
 
@@ -115,7 +117,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
-          <div className="px-[18px] pt-3.5">{children}</div>
+          <div className="px-[18px] pt-3.5">
+            {(readonly || tradeError || groupError) && (
+              <div
+                className={`mb-4 rounded-xl border px-3 py-2 text-xs ${
+                  tradeError || groupError
+                    ? "border-otto-red/30 bg-otto-red-soft text-otto-red"
+                    : "border-otto-amber/30 bg-otto-amber-soft text-otto-amber"
+                }`}
+              >
+                {tradeError ||
+                  groupError ||
+                  "Bypass mode is view-only. Sign in to load and save database records."}
+              </div>
+            )}
+            {children}
+          </div>
         </main>
       </div>
 

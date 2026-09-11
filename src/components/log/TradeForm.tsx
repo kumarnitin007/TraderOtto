@@ -134,7 +134,7 @@ function ScreenshotInput({
 }
 
 export function TradeForm() {
-  const { trades, addTrade, updateTrade, deleteTrade } = useTrades();
+  const { trades, addTrade, updateTrade, deleteTrade, readonly } = useTrades();
   const { state: alpacaState } = useAlpacaConnection();
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(true);
@@ -185,7 +185,16 @@ export function TradeForm() {
 
   async function removeSelected() {
     if (!selectedId) return;
-    await deleteTrade(selectedId);
+    if (readonly) {
+      setError("Sign in to delete database records.");
+      return;
+    }
+    try {
+      await deleteTrade(selectedId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not delete trade.");
+      return;
+    }
     setConfirmDelete(false);
     const next = trades.find(
       (trade) => trade.id !== selectedId && trade.status === editFilter
@@ -195,6 +204,10 @@ export function TradeForm() {
   }
 
   async function submit() {
+    if (readonly) {
+      setError("Sign in to save trades to the database.");
+      return;
+    }
     if (!f.ticker || !f.expiry || !f.premiumOpen) {
       setError("Ticker, expiry, and premium are required.");
       return;
@@ -226,12 +239,16 @@ export function TradeForm() {
       premiumOpen: parseFloat(f.premiumOpen) || 0,
       notes: f.notes,
     };
-    if (mode === "edit" && selectedId) {
-      await updateTrade(selectedId, trade);
-    } else {
-      await addTrade(trade);
+    try {
+      if (mode === "edit" && selectedId) {
+        await updateTrade(selectedId, trade);
+      } else {
+        await addTrade(trade);
+      }
+      router.push("/positions");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save trade.");
     }
-    router.push("/positions");
   }
 
   const banner = {

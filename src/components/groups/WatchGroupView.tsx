@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bell, ChevronRight, LoaderCircle, X } from "lucide-react";
 import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
@@ -26,6 +26,7 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | "unsupported"
   >("unsupported");
+  const alertStates = useRef(new Map<string, string>());
 
   useEffect(() => {
     setSelected((current) =>
@@ -45,14 +46,14 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
       const price = quotes[tracker.ticker]?.price;
       const state = breach(tracker, price);
       const key = `trader-otto:alert:${group.id}:${tracker.id}`;
-      const last = localStorage.getItem(key);
+      const last = alertStates.current.get(key);
       if (state && last !== state) {
         new Notification(`${tracker.ticker} price alert`, {
           body: `${tracker.ticker} is ${state} your range at ${fmtMoney(price ?? 0)}.`,
         });
-        localStorage.setItem(key, state);
+        alertStates.current.set(key, state);
       } else if (!state && last) {
-        localStorage.removeItem(key);
+        alertStates.current.delete(key);
       }
     }
   }, [group.id, group.trackers, notificationPermission, quotes]);
