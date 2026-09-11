@@ -72,23 +72,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main className="min-w-0 flex-1 pb-24 desk:px-2 desk:pt-7">
-          <header className="sticky top-0 z-[5] bg-otto-bg px-[18px] pb-1.5 pt-5 desk:hidden">
-            <div className="flex items-center justify-between">
-              <div className="text-[17px] font-bold tracking-[-0.2px]">Trader Otto</div>
-              <div className="flex items-center gap-1.5">
+          <header className="sticky top-0 z-[5] bg-otto-bg px-[18px] pb-2.5 pt-4 desk:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <div className="truncate text-[17px] font-bold tracking-[-0.2px]">Trader Otto</div>
+              <div className="flex shrink-0 items-center gap-1.5">
                 <AlpacaStatus compact />
                 <ThemeToggle compact />
               </div>
             </div>
-            <div className="mt-3.5">
-              <div className="mb-1 block text-xs font-medium text-otto-text-dim">All-time P/L</div>
-              <div className="text-[34px] font-extrabold tracking-[-0.5px] text-otto-text">
-                {allTime >= 0 ? "+" : ""}
-                {fmtMoney(allTime)}
+            <div className="mt-2.5 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="mb-0.5 block text-[11px] font-medium text-otto-text-dim">
+                  All-time P/L
+                </div>
+                <div className="truncate text-[26px] font-extrabold leading-tight tracking-[-0.5px] text-otto-text">
+                  {allTime >= 0 ? "+" : ""}
+                  {fmtMoney(allTime)}
+                </div>
               </div>
-              <div className="mt-2.5 flex gap-2">
-                <Pill label="This month" value={mtd} />
-                <Pill label="This week" value={wtd} />
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <Pill label="Mo" value={mtd} />
+                <Pill label="Wk" value={wtd} />
               </div>
             </div>
           </header>

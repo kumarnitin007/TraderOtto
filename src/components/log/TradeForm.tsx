@@ -439,7 +439,7 @@ export function TradeForm() {
         <Field label="Open date">
           <input type="date" value={f.openDate} onChange={set("openDate")} />
         </Field>
-        <Field label="Premium collected ($ / contract)">
+        <Field label="Premium ($ / contract)">
           <input
             type="number"
             placeholder="0.00"

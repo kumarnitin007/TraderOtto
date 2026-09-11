@@ -69,7 +69,7 @@ export function TradeRow({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 bg-transparent px-1 py-[13px] text-left"
+        className="flex w-full items-center gap-2.5 bg-transparent px-1 py-[13px] text-left desk:gap-3"
       >
         <div
           className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[12.5px] font-bold"
@@ -78,11 +78,11 @@ export function TradeRow({
           {t.ticker.slice(0, 2)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-[7px]">
-            <span className="text-[15px] font-bold">{t.ticker}</span>
-            <span className="text-xs text-otto-text-faint">{t.strategy}</span>
+          <div className="flex min-w-0 items-baseline gap-[7px]">
+            <span className="shrink-0 text-[15px] font-bold">{t.ticker}</span>
+            <span className="truncate text-xs text-otto-text-faint">{t.strategy}</span>
           </div>
-          <div className="mt-0.5 text-xs text-otto-text-faint">
+          <div className="mt-0.5 truncate text-xs text-otto-text-faint">
             {strikesLabel} · exp {fmtDate(t.expiry)} · {t.contracts}x
           </div>
         </div>
@@ -104,8 +104,11 @@ export function TradeRow({
                     {unrealizedPnl >= 0 ? "+" : ""}
                     {fmtMoney(unrealizedPnl)}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] text-otto-text-faint">
-                    ${currentMark!.toFixed(2)} current · ${Math.abs(t.premiumOpen).toFixed(2)} open
+                  <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
+                    <span className="desk:hidden">${currentMark!.toFixed(2)} now</span>
+                    <span className="hidden desk:inline">
+                      ${currentMark!.toFixed(2)} current · ${Math.abs(t.premiumOpen).toFixed(2)} open
+                    </span>
                   </div>
                 </>
               ) : (
@@ -118,8 +121,11 @@ export function TradeRow({
                     {openingPremium >= 0 ? "+" : ""}
                     {fmtMoney(openingPremium)}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] text-otto-text-faint">
-                    opening {t.premiumOpen >= 0 ? "credit" : "debit"} · live mark unavailable
+                  <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
+                    <span className="desk:hidden">no live mark</span>
+                    <span className="hidden desk:inline">
+                      opening {t.premiumOpen >= 0 ? "credit" : "debit"} · live mark unavailable
+                    </span>
                   </div>
                 </>
               )}
@@ -132,7 +138,7 @@ export function TradeRow({
                 {pnl != null && pnl >= 0 ? "+" : ""}
                 {fmtMoney(pnl ?? 0)}
               </div>
-              <div className="mt-0.5 text-[11.5px] text-otto-text-faint">
+              <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
                 closed {t.closeDate ? fmtDate(t.closeDate) : ""}
               </div>
             </>
@@ -145,8 +151,8 @@ export function TradeRow({
       </button>
 
       {open && (
-        <div className="px-1 pb-[18px] pl-[50px] pt-0.5">
-          <div className="grid grid-cols-4 gap-3.5 pt-2.5">
+        <div className="px-1 pb-[18px] pl-3 pt-0.5 desk:pl-[50px]">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3.5 pt-2.5 desk:grid-cols-4 desk:gap-3.5">
             <GreekReadout
               label={t.premiumOpen >= 0 ? "Premium collected" : "Premium paid"}
               value={`${openingPremium >= 0 ? "+" : ""}${fmtMoney(openingPremium)}`}
