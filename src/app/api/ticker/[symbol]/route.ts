@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import type { CorporateAction, TickerNews } from "@/types/tickerDetails";
-import { getFinnhubTickerDetails } from "@/lib/finnhub";
+import { getFinnhubIndustry, getFinnhubTickerDetails } from "@/lib/finnhub";
+import { lookupNextEarnings } from "@/lib/nextEarnings";
 
 type Bar = { o?: number; h?: number; l?: number; c?: number; v?: number };
 
@@ -127,6 +128,24 @@ export async function GET(
   const symbol = rawSymbol.toUpperCase();
   if (!/^[A-Z.-]{1,10}$/.test(symbol)) {
     return Response.json({ error: "invalid_symbol" }, { status: 400 });
+  }
+
+  const lite = _request.nextUrl.searchParams.get("lite") ?? "";
+  if (lite === "earnings" || lite === "industry" || lite === "1") {
+    const wantEarnings = lite === "earnings" || lite === "1";
+    const wantIndustry = lite === "industry" || lite === "1";
+    const [earnings, sector] = await Promise.all([
+      wantEarnings ? lookupNextEarnings(symbol) : Promise.resolve(null),
+      wantIndustry ? getFinnhubIndustry(symbol) : Promise.resolve(null),
+    ]);
+    return Response.json({
+      symbol,
+      date: earnings?.date ?? null,
+      timing: earnings?.timing ?? null,
+      epsForecast: earnings?.epsForecast ?? null,
+      fiscalQuarter: earnings?.fiscalQuarter ?? null,
+      sector: sector ?? null,
+    });
   }
 
   const key = process.env.ALPACA_API_KEY_ID;

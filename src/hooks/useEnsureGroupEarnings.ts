@@ -40,7 +40,7 @@ export function useEnsureGroupEarnings(groups: WatchGroup[]) {
               inflight.add(key);
               try {
                 const response = await fetch(
-                  `/api/earnings/${encodeURIComponent(tracker.ticker)}`,
+                  `/api/ticker/${encodeURIComponent(tracker.ticker)}?lite=earnings`,
                   { cache: "no-store" }
                 );
                 if (!cancelled && response.ok) {
@@ -70,7 +70,7 @@ export function useEnsureGroupEarnings(groups: WatchGroup[]) {
               inflight.add(key);
               try {
                 const response = await fetch(
-                  `/api/industry/${encodeURIComponent(tracker.ticker)}`,
+                  `/api/ticker/${encodeURIComponent(tracker.ticker)}?lite=industry`,
                   { cache: "no-store" }
                 );
                 if (!cancelled && response.ok) {

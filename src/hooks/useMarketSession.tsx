@@ -36,7 +36,7 @@ export function MarketSessionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     let next = resolveSchedule(new Date(), null);
     try {
-      const response = await fetch("/api/market/clock", { cache: "no-store" });
+      const response = await fetch("/api/quotes?clock=1", { cache: "no-store" });
       if (response.ok) next = (await response.json()) as MarketSchedule;
     } catch {
       /* local weekend/hours fallback already in `next` */

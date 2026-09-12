@@ -17,6 +17,31 @@ export function alpacaHeaders(key: string, secret: string) {
   };
 }
 
+export async function fetchAlpacaClock() {
+  const creds = alpacaCredentials();
+  if (!creds.configured) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const response = await fetch(`${creds.tradingUrl}/v2/clock`, {
+      headers: alpacaHeaders(creds.key, creds.secret),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as {
+      timestamp?: string;
+      is_open?: boolean;
+      next_open?: string;
+      next_close?: string;
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type LatestTrade = { price: number; ts?: string };
 
 function parseTrade(value: unknown): LatestTrade | null {

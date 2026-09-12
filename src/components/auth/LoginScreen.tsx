@@ -63,7 +63,7 @@ export function LoginScreen() {
   const codeComplete = digits.every((d) => d !== "");
 
   useEffect(() => {
-    fetch("/api/supabase/health", { cache: "no-store" })
+    fetch("/api/quotes?auth=1", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { ok?: boolean; google?: boolean; apple?: boolean } | null) => {
         if (!data) return;

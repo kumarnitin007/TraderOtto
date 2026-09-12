@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronRight, LoaderCircle, X } from "lucide-react";
 import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
@@ -9,7 +9,11 @@ import { TickerResearch } from "@/components/ticker/TickerResearch";
 import { fmtDate, fmtMoney, tickerAvatarColor, todayISO } from "@/lib/pnl";
 import { useEnsureGroupEarnings } from "@/hooks/useEnsureGroupEarnings";
 import type { TickerDetails } from "@/types/tickerDetails";
-import type { WatchGroup, WatchTracker } from "@/types/watchGroup";
+import type {
+  WatchGroup,
+  WatchTracker,
+  WatchTrackerPatch,
+} from "@/types/watchGroup";
 
 function breach(tracker: WatchTracker, price?: number) {
   if (!price) return null;
@@ -147,9 +151,7 @@ function TickerDrawer({
   tracker: WatchTracker;
   fallbackPrice?: number;
   onClose: () => void;
-  onUpdate: (
-    patch: Partial<Pick<WatchTracker, "lowerTrigger" | "upperTrigger" | "notes">>
-  ) => void;
+  onUpdate: (patch: WatchTrackerPatch) => void;
 }) {
   const { trades } = useTrades();
   const [details, setDetails] = useState<TickerDetails | null>(null);
@@ -157,13 +159,34 @@ function TickerDrawer({
   const [lower, setLower] = useState(tracker.lowerTrigger?.toString() ?? "");
   const [upper, setUpper] = useState(tracker.upperTrigger?.toString() ?? "");
   const [notes, setNotes] = useState(tracker.notes);
+  const onUpdateRef = useRef(onUpdate);
+  const trackerRef = useRef(tracker);
+  onUpdateRef.current = onUpdate;
+  trackerRef.current = tracker;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     fetch(`/api/ticker/${encodeURIComponent(tracker.ticker)}`, { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data) => !cancelled && setDetails(data as TickerDetails | null))
+      .then((data) => {
+        if (cancelled) return;
+        const next = data as TickerDetails | null;
+        setDetails(next);
+        const cached = trackerRef.current;
+        if (
+          next?.earnings &&
+          (next.earnings.date !== cached.earningsDate ||
+            next.earnings.timing !== cached.earningsTiming ||
+            cached.earningsCheckedAt !== todayISO())
+        ) {
+          onUpdateRef.current({
+            earningsDate: next.earnings.date,
+            earningsTiming: next.earnings.timing,
+            earningsCheckedAt: todayISO(),
+          });
+        }
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -181,6 +204,16 @@ function TickerDrawer({
     (trade) => trade.status === "open" && trade.ticker === tracker.ticker
   );
   const alert = breach(tracker, price);
+  const cachedEarnings =
+    tracker.earningsDate && tracker.earningsDate >= todayISO()
+    ? {
+        date: tracker.earningsDate,
+        timing: tracker.earningsTiming ?? "Time not announced",
+        epsForecast: null,
+        fiscalQuarter: null,
+      }
+    : null;
+  const earnings = details?.earnings ?? cachedEarnings;
 
   function save() {
     onUpdate({
@@ -339,18 +372,18 @@ function TickerDrawer({
             Upcoming earnings
           </div>
           <div className="mt-2 rounded-xl bg-otto-surface p-3.5">
-            {details?.earnings ? (
+            {earnings ? (
               <>
-                <div className="font-bold">{fmtDate(details.earnings.date)}</div>
+                <div className="font-bold">{fmtDate(earnings.date)}</div>
                 <div className="mt-1 text-xs text-otto-text-dim">
-                  {details.earnings.timing}
-                  {details.earnings.epsForecast
-                    ? ` · EPS estimate ${details.earnings.epsForecast}`
+                  {earnings.timing}
+                  {earnings.epsForecast
+                    ? ` · EPS estimate ${earnings.epsForecast}`
                     : ""}
                 </div>
-                {details.earnings.fiscalQuarter && (
+                {earnings.fiscalQuarter && (
                   <div className="mt-1 text-xs text-otto-text-faint">
-                    Fiscal quarter {details.earnings.fiscalQuarter}
+                    Fiscal quarter {earnings.fiscalQuarter}
                   </div>
                 )}
               </>

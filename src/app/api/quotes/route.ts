@@ -1,9 +1,11 @@
-import { fetchLatestTrades } from "@/lib/alpacaServer";
+import { fetchAlpacaClock, fetchLatestTrades } from "@/lib/alpacaServer";
+import { resolveSchedule } from "@/lib/marketSession";
 import {
   maybeWriteMarketSnapshot,
   readMarketSnapshot,
 } from "@/lib/marketSnapshot";
 import { serverSupabaseForRequest } from "@/lib/serverSupabase";
+import { fetchSupabaseAuthStatus } from "@/lib/supabaseAuthStatus";
 
 async function profileClient(request: Request) {
   const supabase = serverSupabaseForRequest(request);
@@ -17,10 +19,20 @@ async function profileClient(request: Request) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  if (url.searchParams.get("auth") === "1") {
+    return Response.json(await fetchSupabaseAuthStatus());
+  }
+
+  const wantClock = url.searchParams.get("clock") === "1";
   const symbols = (url.searchParams.get("symbols") ?? "")
     .split(",")
     .map((symbol) => symbol.trim().toUpperCase())
     .filter(Boolean);
+
+  if (wantClock && !symbols.length) {
+    const schedule = resolveSchedule(new Date(), await fetchAlpacaClock());
+    return Response.json(schedule);
+  }
 
   if (!symbols.length) {
     return Response.json({ error: "symbols_required" }, { status: 400 });

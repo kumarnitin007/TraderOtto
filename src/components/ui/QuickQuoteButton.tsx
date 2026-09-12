@@ -19,12 +19,17 @@ export function QuickQuoteButton({
     if (!ticker) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/quote/${encodeURIComponent(ticker)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/quotes?symbols=${encodeURIComponent(ticker.toUpperCase())}`,
+        { cache: "no-store" }
+      );
       if (res.ok) {
-        const q = (await res.json()) as { price: number };
-        onFill(q.price.toFixed(2));
+        const data = (await res.json()) as {
+          quotes?: Record<string, { price?: number }>;
+        };
+        const price = data.quotes?.[ticker.toUpperCase()]?.price;
+        if (typeof price !== "number") return;
+        onFill(price.toFixed(2));
         setFlash(true);
         setTimeout(() => setFlash(false), 900);
       }
