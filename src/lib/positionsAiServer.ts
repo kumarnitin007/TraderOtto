@@ -240,6 +240,10 @@ type OpenAiResponse = {
   error?: { message?: string };
 };
 
+export function isOpenAiConfigured() {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
 function outputText(payload: OpenAiResponse) {
   if (payload.output_text) return payload.output_text;
   for (const item of payload.output ?? []) {
@@ -250,14 +254,23 @@ function outputText(payload: OpenAiResponse) {
   return null;
 }
 
-async function createAiReport<T>(
-  prompt: string,
-  name: string,
-  schema: object
+function parseJson<T>(text: string) {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced?.[1]?.trim() ?? trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    throw new Error("ChatGPT returned no JSON report.");
+  }
+  return JSON.parse(candidate.slice(start, end + 1)) as T;
+}
+
+async function requestOpenAi(
+  key: string,
+  model: string,
+  body: Record<string, unknown>
 ) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OpenAI is not configured.");
-  const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 55_000);
   try {
@@ -267,36 +280,71 @@ async function createAiReport<T>(
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        input: prompt,
-        tools: [{ type: "web_search", search_context_size: "medium" }],
-        text: {
-          format: {
-            type: "json_schema",
-            name,
-            strict: true,
-            schema,
-          },
-        },
-      }),
+      body: JSON.stringify({ model, ...body }),
       signal: controller.signal,
     });
     const payload = (await response.json()) as OpenAiResponse;
     if (!response.ok) {
       throw new Error(payload.error?.message || `OpenAI failed (${response.status}).`);
     }
-    const text = outputText(payload);
-    if (!text) throw new Error("OpenAI returned no report.");
-    return {
-      report: JSON.parse(text) as T,
-      model: payload.model ?? model,
-      tokensIn: payload.usage?.input_tokens ?? null,
-      tokensOut: payload.usage?.output_tokens ?? null,
-    };
+    return payload;
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new Error("ChatGPT timed out. Try again.");
+    }
+    throw cause;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function createAiReport<T>(
+  prompt: string,
+  name: string,
+  schema: object
+) {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  if (!key) {
+    throw new Error("Add OPENAI_API_KEY to .env, then restart the server.");
+  }
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  const attempts = [
+    {
+      input: prompt,
+      tools: [{ type: "web_search" }],
+      text: {
+        format: { type: "json_schema", name, strict: true, schema },
+      },
+    },
+    {
+      input: prompt,
+      text: {
+        format: { type: "json_schema", name, strict: true, schema },
+      },
+    },
+    {
+      input: `${prompt}\n\nReturn only the JSON object. No markdown.`,
+      text: { format: { type: "json_object" } },
+    },
+  ];
+
+  let lastError: Error | null = null;
+  for (const body of attempts) {
+    try {
+      const payload = await requestOpenAi(key, model, body);
+      const text = outputText(payload);
+      if (!text) throw new Error("ChatGPT returned no report.");
+      return {
+        report: parseJson<T>(text),
+        model: payload.model ?? model,
+        tokensIn: payload.usage?.input_tokens ?? null,
+        tokensOut: payload.usage?.output_tokens ?? null,
+      };
+    } catch (cause) {
+      lastError = cause instanceof Error ? cause : new Error("ChatGPT failed.");
+    }
+  }
+  throw lastError ?? new Error("ChatGPT failed.");
 }
 
 export function createPortfolioAiReport(prompt: string) {

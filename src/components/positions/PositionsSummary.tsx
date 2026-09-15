@@ -68,6 +68,7 @@ export function PositionsSummary({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
   const context = useMemo(() => tickerContextFromGroups(groups), [groups]);
   const prompt = useMemo(
     () => openPositionsPrompt(trades, quotes, marks, context, technicals),
@@ -85,6 +86,22 @@ export function PositionsSummary({
       ),
     [trades, quotes, marks, technicals, context]
   );
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/quotes?ai=status", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { configured?: boolean } | null) => {
+        if (!cancelled) setAiReady(Boolean(payload?.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setAiReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || readonly) return;
@@ -114,12 +131,11 @@ export function PositionsSummary({
   }, [open, readonly]);
 
   async function runAi() {
-    if (readonly || running || !local.openCount) return;
+    if (running || !local.openCount) return;
     setRunning(true);
     setError("");
     try {
-      const headers = await authorization();
-      if (!headers) throw new Error("Sign in to request and save AI insights.");
+      const headers = (await authorization()) ?? {};
       const response = await fetch("/api/quotes", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
@@ -238,7 +254,7 @@ export function PositionsSummary({
                 </div>
                 <button
                   type="button"
-                  disabled={running || readonly || !local.openCount}
+                  disabled={running || !local.openCount || aiReady === false}
                   onClick={() => void runAi()}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-otto-green px-3.5 py-2 text-xs font-bold text-black disabled:opacity-50"
                 >
@@ -253,9 +269,15 @@ export function PositionsSummary({
                 </button>
               </div>
 
-              {readonly && (
+              {aiReady === false && (
                 <div className="mt-3 text-xs text-otto-amber">
-                  Sign in to request and save AI insights.
+                  Add OPENAI_API_KEY to .env (and Vercel env vars), then restart the
+                  server. Optional OPENAI_MODEL defaults to gpt-4o-mini.
+                </div>
+              )}
+              {readonly && aiReady !== false && (
+                <div className="mt-3 text-xs text-otto-text-faint">
+                  Sign in to save ChatGPT reports. You can still run a one-off call.
                 </div>
               )}
               {error && <div className="mt-3 text-xs text-otto-red">{error}</div>}

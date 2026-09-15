@@ -63,6 +63,7 @@ export function WatchGroupSummary({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
   const prompt = useMemo(
     () => watchlistPrompt(group, quotes, technicals),
     [group, quotes, technicals]
@@ -109,6 +110,22 @@ export function WatchGroupSummary({
   }, [group.trackers, quotes, technicals]);
 
   useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/quotes?ai=status", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { configured?: boolean } | null) => {
+        if (!cancelled) setAiReady(Boolean(payload?.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setAiReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open || readonly) return;
     let cancelled = false;
     setLoadingSaved(true);
@@ -134,12 +151,11 @@ export function WatchGroupSummary({
   }, [group.id, open, readonly]);
 
   async function runAi() {
-    if (readonly || running || !group.trackers.length) return;
+    if (running || !group.trackers.length) return;
     setRunning(true);
     setError("");
     try {
-      const headers = await authHeaders();
-      if (!headers) throw new Error("Sign in to request and save AI insights.");
+      const headers = (await authHeaders()) ?? {};
       const response = await fetch("/api/quotes", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
@@ -241,7 +257,7 @@ export function WatchGroupSummary({
                 <button
                   type="button"
                   onClick={() => void runAi()}
-                  disabled={readonly || running || !group.trackers.length}
+                  disabled={running || !group.trackers.length || aiReady === false}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-otto-green px-3.5 py-2 text-xs font-bold text-black disabled:opacity-50"
                 >
                   {running ? (
@@ -254,9 +270,15 @@ export function WatchGroupSummary({
                   {running ? "Researching…" : saved ? "Refresh AI" : "Get AI insights"}
                 </button>
               </div>
-              {readonly && (
+              {aiReady === false && (
                 <div className="mt-3 text-xs text-otto-amber">
-                  Sign in to request and save AI insights.
+                  Add OPENAI_API_KEY to .env (and Vercel env vars), then restart the
+                  server. Optional OPENAI_MODEL defaults to gpt-4o-mini.
+                </div>
+              )}
+              {readonly && aiReady !== false && (
+                <div className="mt-3 text-xs text-otto-text-faint">
+                  Sign in to save ChatGPT reports. You can still run a one-off call.
                 </div>
               )}
               {error && <div className="mt-3 text-xs text-otto-red">{error}</div>}

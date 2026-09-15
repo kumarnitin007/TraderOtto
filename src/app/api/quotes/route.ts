@@ -13,6 +13,7 @@ import { fetchSupabaseAuthStatus } from "@/lib/supabaseAuthStatus";
 import {
   createPortfolioAiReport,
   createWatchlistAiReport,
+  isOpenAiConfigured,
 } from "@/lib/positionsAiServer";
 
 export const maxDuration = 60;
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   if (url.searchParams.get("auth") === "1") {
     return Response.json(await fetchSupabaseAuthStatus());
+  }
+
+  if (url.searchParams.get("ai") === "status") {
+    return Response.json({ configured: isOpenAiConfigured() });
   }
 
   if (url.searchParams.get("ai") === "latest") {
@@ -154,7 +159,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const profile = await profileClient(request);
-  if (!profile) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   let body: {
     action?: string;
@@ -185,34 +189,41 @@ export async function POST(request: Request) {
       kind === "watchlist_summary"
         ? await createWatchlistAiReport(prompt)
         : await createPortfolioAiReport(prompt);
-    const { data, error } = await profile.supabase
-      .from("tr_api_events")
-      .insert({
-        user_id: profile.userId,
-        provider: "openai",
-        kind,
-        status: "success",
-        model: result.model,
-        duration_ms: Date.now() - started,
-        tokens_in: result.tokensIn,
-        tokens_out: result.tokensOut,
-        captured: {
-          promptKind: kind,
-          portfolioHash: body.portfolioHash ?? null,
-          contextId: body.contextId ?? null,
-          report: result.report,
-        },
-        expires_at: new Date(
-          Date.now() + 10 * 365 * 86_400_000
-        ).toISOString(),
-      })
-      .select("id,created_at")
-      .single();
-    if (error) throw new Error(error.message);
+    let savedId = "unsaved";
+    let createdAt = new Date().toISOString();
+    if (profile) {
+      const { data, error } = await profile.supabase
+        .from("tr_api_events")
+        .insert({
+          user_id: profile.userId,
+          provider: "openai",
+          kind,
+          status: "success",
+          model: result.model,
+          duration_ms: Date.now() - started,
+          tokens_in: result.tokensIn,
+          tokens_out: result.tokensOut,
+          captured: {
+            promptKind: kind,
+            portfolioHash: body.portfolioHash ?? null,
+            contextId: body.contextId ?? null,
+            report: result.report,
+          },
+          expires_at: new Date(
+            Date.now() + 10 * 365 * 86_400_000
+          ).toISOString(),
+        })
+        .select("id,created_at")
+        .single();
+      if (!error && data) {
+        savedId = data.id;
+        createdAt = data.created_at;
+      }
+    }
     return Response.json({
       saved: {
-        id: data.id,
-        createdAt: data.created_at,
+        id: savedId,
+        createdAt,
         model: result.model,
         tokensIn: result.tokensIn,
         tokensOut: result.tokensOut,
@@ -223,15 +234,17 @@ export async function POST(request: Request) {
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "AI summary failed.";
-    await profile.supabase.from("tr_api_events").insert({
-      user_id: profile.userId,
-      provider: "openai",
-      kind,
-      status: "error",
-      duration_ms: Date.now() - started,
-      captured: { promptKind: kind, contextId: body.contextId ?? null },
-      error: message.slice(0, 500),
-    });
+    if (profile) {
+      await profile.supabase.from("tr_api_events").insert({
+        user_id: profile.userId,
+        provider: "openai",
+        kind,
+        status: "error",
+        duration_ms: Date.now() - started,
+        captured: { promptKind: kind, contextId: body.contextId ?? null },
+        error: message.slice(0, 500),
+      });
+    }
     return Response.json({ error: message }, { status: 502 });
   }
 }
