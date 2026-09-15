@@ -1,12 +1,14 @@
 /** Browser cache for UI screen options only — not trades or groups. */
 
 import type { PnlRange } from "@/lib/pnl";
+import type { PositionFocusFilter } from "@/lib/positionFocus";
 
 export const SCREEN_CACHE_KEY = "trader-otto:screen-options";
 
 export type ScreenOptions = {
   positionsView: string;
   positionsFilter: "open" | "closed" | "all";
+  positionsFocus: PositionFocusFilter;
   logMode: "new" | "edit" | "groups";
   logEditFilter: "open" | "closed";
   performancePeriod: "weekly" | "monthly";
@@ -20,6 +22,7 @@ export type ScreenOptions = {
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   positionsView: "positions",
   positionsFilter: "open",
+  positionsFocus: "focus",
   logMode: "new",
   logEditFilter: "open",
   performancePeriod: "monthly",
@@ -32,6 +35,16 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
   return value === "open" || value === "closed" || value === "all";
+}
+
+function isFocus(value: unknown): value is PositionFocusFilter {
+  return (
+    value === "focus" ||
+    value === "near" ||
+    value === "time" ||
+    value === "losing" ||
+    value === "all"
+  );
 }
 
 function isLogMode(value: unknown): value is ScreenOptions["logMode"] {
@@ -66,6 +79,9 @@ export function readScreenOptions(): ScreenOptions {
       positionsFilter: isFilter(parsed.positionsFilter)
         ? parsed.positionsFilter
         : SCREEN_OPTION_DEFAULTS.positionsFilter,
+      positionsFocus: isFocus(parsed.positionsFocus)
+        ? parsed.positionsFocus
+        : SCREEN_OPTION_DEFAULTS.positionsFocus,
       logMode: isLogMode(parsed.logMode) ? parsed.logMode : SCREEN_OPTION_DEFAULTS.logMode,
       logEditFilter: parsed.logEditFilter === "closed" ? "closed" : "open",
       performancePeriod: parsed.performancePeriod === "weekly" ? "weekly" : "monthly",

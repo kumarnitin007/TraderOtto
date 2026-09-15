@@ -7,6 +7,7 @@ import { useTickerTechnicals } from "@/hooks/useTickerTechnicals";
 import { getSupabaseClient } from "@/lib/supabase";
 import { todayISO } from "@/lib/pnl";
 import { watchlistPrompt } from "@/lib/watchlistPrompt";
+import { PromptPreview } from "@/components/positions/PositionsSummary";
 import type { AiWatchlistReport } from "@/types/positionsAi";
 import type { WatchGroup } from "@/types/watchGroup";
 
@@ -61,6 +62,7 @@ export function WatchGroupSummary({
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
   const prompt = useMemo(
     () => watchlistPrompt(group, quotes, technicals),
     [group, quotes, technicals]
@@ -274,6 +276,12 @@ export function WatchGroupSummary({
                   <WatchlistReport report={saved.report} />
                 </div>
               )}
+
+              <PromptPreview
+                prompt={prompt}
+                copied={copied}
+                onCopy={setCopied}
+              />
             </div>
           </div>
         </div>

@@ -84,8 +84,7 @@ export function PositionsView() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
-  const [focusFilter, setFocusFilter] =
-    useState<PositionFocusFilter>("focus");
+  const [focusFilter, setFocusFilter] = useScreenOption("positionsFocus");
   const [selectedView, setSelectedView] = useScreenOption("positionsView");
 
   const pinnedGroups = groups.slice(0, PINNED_LISTS);
