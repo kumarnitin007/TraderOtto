@@ -44,6 +44,24 @@ export async function fetchAlpacaClock() {
 
 export type LatestTrade = { price: number; ts?: string };
 
+type DailyBar = {
+  c?: number;
+  v?: number;
+  vw?: number;
+  t?: string;
+};
+
+export type TickerTechnical = {
+  lastClose: number;
+  sma20: number | null;
+  sma50: number | null;
+  volume: number;
+  avgVolume20: number | null;
+  volumeRatio: number | null;
+  vwap: number | null;
+  asOf: string | null;
+};
+
 function parseTrade(value: unknown): LatestTrade | null {
   const trade = value as { p?: number; t?: string } | undefined;
   if (typeof trade?.p !== "number") return null;
@@ -106,4 +124,61 @@ export async function fetchLatestTrades(symbols: string[]) {
   }
 
   return { quotes, source: "alpaca" as const };
+}
+
+function average(values: number[]) {
+  return values.length
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : null;
+}
+
+/** Daily price/volume context used by local and AI portfolio analysis. */
+export async function fetchTickerTechnicals(symbols: string[]) {
+  const unique = Array.from(
+    new Set(symbols.map((symbol) => symbol.toUpperCase()).filter(Boolean))
+  ).slice(0, 50);
+  const technicals: Record<string, TickerTechnical> = {};
+  const creds = alpacaCredentials();
+  if (!unique.length || !creds.configured) return technicals;
+
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - 100);
+  const url = new URL("/v2/stocks/bars", creds.dataUrl);
+  url.searchParams.set("symbols", unique.join(","));
+  url.searchParams.set("timeframe", "1Day");
+  url.searchParams.set("start", start.toISOString());
+  url.searchParams.set("limit", "5000");
+  url.searchParams.set("adjustment", "all");
+  const response = await fetch(url, {
+    headers: alpacaHeaders(creds.key, creds.secret),
+    next: { revalidate: 900 },
+  });
+  if (!response.ok) return technicals;
+
+  const payload = (await response.json()) as {
+    bars?: Record<string, DailyBar[]>;
+  };
+  for (const symbol of unique) {
+    const bars = (payload.bars?.[symbol] ?? []).filter(
+      (bar): bar is DailyBar & { c: number; v: number } =>
+        typeof bar.c === "number" && typeof bar.v === "number"
+    );
+    const latest = bars.at(-1);
+    if (!latest) continue;
+    const prior20 = bars.slice(-21, -1);
+    const closes20 = bars.slice(-20).map((bar) => bar.c);
+    const closes50 = bars.slice(-50).map((bar) => bar.c);
+    const avgVolume20 = average(prior20.map((bar) => bar.v));
+    technicals[symbol] = {
+      lastClose: latest.c,
+      sma20: closes20.length >= 15 ? average(closes20) : null,
+      sma50: closes50.length >= 35 ? average(closes50) : null,
+      volume: latest.v,
+      avgVolume20,
+      volumeRatio: avgVolume20 ? latest.v / avgVolume20 : null,
+      vwap: typeof latest.vw === "number" ? latest.vw : null,
+      asOf: latest.t ?? null,
+    };
+  }
+  return technicals;
 }

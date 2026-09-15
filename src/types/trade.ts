@@ -88,5 +88,7 @@ export type ClosePayload = {
   premiumClose: number;
 };
 
+export type ClosedTradeImport = NewTrade & ClosePayload;
+
 /** Open fields plus optional close fields when editing a closed trade. */
 export type TradeUpdate = NewTrade & Partial<ClosePayload>;

@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClosePayload, NewTrade, Trade, TradeUpdate } from "@/types/trade";
+import type {
+  ClosedTradeImport,
+  ClosePayload,
+  NewTrade,
+  Trade,
+  TradeUpdate,
+} from "@/types/trade";
 import { realizedPnl } from "@/lib/pnl";
+import { isDuplicateClosedTrade } from "@/lib/tradeDuplicate";
 
 type TradeRow = {
   id: string;
@@ -110,6 +117,58 @@ export function createSupabaseTradeRepository(
           open_date: trade.openDate,
           premium_open: trade.premiumOpen,
           details: detailsFromTrade(trade),
+        })
+        .select()
+        .single();
+      return requireRow(data, error);
+    },
+
+    async addClosed(
+      trade: ClosedTradeImport,
+      allowDuplicate = false
+    ): Promise<Trade> {
+      const { data: matches, error: matchError } = await supabase
+        .from("tr_trades")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("ticker", trade.ticker.toUpperCase())
+        .eq("status", "closed")
+        .eq("expiry", trade.expiry)
+        .eq("close_date", trade.closeDate)
+        .is("deleted_at", null);
+      if (matchError) throw new Error(matchError.message);
+      if (
+        !allowDuplicate &&
+        ((matches ?? []) as TradeRow[]).map(mapRow).some((item) =>
+          isDuplicateClosedTrade(item, trade)
+        )
+      ) {
+        throw new Error("This closed trade is already in your journal.");
+      }
+
+      const { data, error } = await supabase
+        .from("tr_trades")
+        .insert({
+          user_id: userId,
+          ticker: trade.ticker.toUpperCase(),
+          strategy: trade.strategy,
+          status: "closed",
+          contracts: trade.contracts,
+          expiry: trade.expiry,
+          open_date: trade.openDate,
+          close_date: trade.closeDate,
+          premium_open: trade.premiumOpen,
+          premium_close: trade.premiumClose,
+          pnl: realizedPnl(
+            trade.premiumOpen,
+            trade.premiumClose,
+            trade.contracts,
+            trade.strategy
+          ),
+          details: {
+            ...detailsFromTrade(trade),
+            stockPriceClose: trade.stockPriceClose,
+          },
         })
         .select()
         .single();

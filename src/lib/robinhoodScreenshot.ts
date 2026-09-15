@@ -9,6 +9,9 @@ export type ScreenshotTradeFields = {
   openDate?: string;
   expiry?: string;
   premiumOpen?: string;
+  closeDate?: string;
+  premiumClose?: string;
+  closed?: boolean;
   notes?: string;
 };
 
@@ -23,6 +26,18 @@ function parseDateParts(value: string) {
 
 function isoDate(month: number, day: number, year: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+const MONTHS = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
+];
+
+function parseWrittenDate(value: string) {
+  const match = value.match(/([A-Za-z]{3,9})\s+(\d{1,2}),?\s*(\d{4})/);
+  if (!match) return null;
+  const month = MONTHS.indexOf(match[1].slice(0, 3).toLowerCase()) + 1;
+  return month ? isoDate(month, Number(match[2]), Number(match[3])) : null;
 }
 
 function detectStrategy(
@@ -87,7 +102,21 @@ export function parseRobinhoodScreenshot(
   const quantityMatch =
     text.match(/(?:Contracts|Quantity)\s+Current price[\s\S]{0,40}?\n?\s*(-?\d+)\s+\$[\d.]+/i) ??
     text.match(/(?:Contracts|Quantity)[\s\S]{0,30}?(-?\d+)\b/i);
-  const contracts = quantityMatch ? String(Math.abs(Number(quantityMatch[1])) || 1) : undefined;
+  const closedContracts = text.match(/x\s+(\d+)\s+contracts?\b/i)?.[1];
+  const contracts = quantityMatch
+    ? String(Math.abs(Number(quantityMatch[1])) || 1)
+    : closedContracts;
+
+  const closedMatch = text.match(/Closed\s+on\s+([A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4})/i);
+  const closeDate = closedMatch ? parseWrittenDate(closedMatch[1]) ?? undefined : undefined;
+  const closed = Boolean(closeDate);
+
+  // Realized P/L details show the reliable per-contract amounts on the two "avg" rows.
+  const averageAmounts = Array.from(
+    text.matchAll(/[$£]?\s*(\d+(?:\.\d+)?)\s+avg\s+x\s+100/gi)
+  ).map((match) => Number(match[1]));
+  const closedPremiumOpen = averageAmounts[0];
+  const closedPremiumClose = averageAmounts[1];
 
   // Sold positions show "Average credit"; bought ones show "Average cost"/"Average debit".
   const premiumMatch = text.match(
@@ -110,13 +139,16 @@ export function parseRobinhoodScreenshot(
     )?.[1];
     expiryRaw = text.match(new RegExp(`Expiration date[\\s\\S]{0,40}?(${DATE})`, "i"))?.[1];
   }
+  if (closed && !expiryRaw) {
+    expiryRaw = header.match(new RegExp(`(${DATE})(?![\\s\\S]*${DATE})`))?.[1];
+  }
 
-  const currentYear = now.getFullYear();
+  const currentYear = closeDate ? Number(closeDate.slice(0, 4)) : now.getFullYear();
   const openParts = openRaw ? parseDateParts(openRaw) : null;
   const expiryParts = expiryRaw ? parseDateParts(expiryRaw) : null;
   const openDate = openParts
     ? isoDate(openParts.month, openParts.day, openParts.explicitYear ?? currentYear)
-    : undefined;
+    : closeDate;
   let expiry = expiryParts
     ? isoDate(expiryParts.month, expiryParts.day, expiryParts.explicitYear ?? currentYear)
     : undefined;
@@ -153,6 +185,7 @@ export function parseRobinhoodScreenshot(
   const currentOption = currentOptionMatch?.[1];
   const noteParts = [
     "Imported from Robinhood screenshot.",
+    closed && !openRaw ? "Open date unavailable; using close date." : "",
     currentOption ? `Screenshot option price: $${currentOption}.` : "",
   ].filter(Boolean);
 
@@ -165,7 +198,16 @@ export function parseRobinhoodScreenshot(
     openDate,
     expiry,
     // Premium is a magnitude; direction comes from the strategy.
-    premiumOpen: premium == null ? undefined : String(Math.abs(premium)),
+    premiumOpen:
+      closedPremiumOpen != null
+        ? String(Math.abs(closedPremiumOpen))
+        : premium == null
+          ? undefined
+          : String(Math.abs(premium)),
+    closeDate,
+    premiumClose:
+      closedPremiumClose == null ? undefined : String(Math.abs(closedPremiumClose)),
+    closed: closed || undefined,
     notes: noteParts.join(" "),
   };
 }

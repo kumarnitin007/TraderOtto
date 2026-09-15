@@ -6,6 +6,7 @@ import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { TickerResearch } from "@/components/ticker/TickerResearch";
+import { WatchGroupSummary } from "@/components/groups/WatchGroupSummary";
 import { fmtDate, fmtMoney, tickerAvatarColor, todayISO } from "@/lib/pnl";
 import { useEnsureGroupEarnings } from "@/hooks/useEnsureGroupEarnings";
 import type { TickerDetails } from "@/types/tickerDetails";
@@ -24,7 +25,7 @@ function breach(tracker: WatchTracker, price?: number) {
 
 export function WatchGroupView({ group }: { group: WatchGroup }) {
   const { trades } = useTrades();
-  const { updateTracker } = useWatchGroups();
+  const { updateTracker, readonly } = useWatchGroups();
   useEnsureGroupEarnings([group]);
   const tickers = useMemo(() => group.trackers.map((tracker) => tracker.ticker), [group]);
   const quotes = useTickerQuotes(tickers);
@@ -45,6 +46,7 @@ export function WatchGroupView({ group }: { group: WatchGroup }) {
             {group.trackers.length} ticker{group.trackers.length === 1 ? "" : "s"} · tap for details
           </div>
         </div>
+        <WatchGroupSummary group={group} quotes={quotes} readonly={readonly} />
       </div>
 
       {group.trackers.length === 0 && (

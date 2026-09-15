@@ -326,6 +326,12 @@ export function TradeForm() {
       try {
         const result = await worker.recognize(file);
         const parsed = parseRobinhoodScreenshot(result.data.text);
+        if (parsed.closed) {
+          setError(
+            "This is a closed-trade screenshot. Import it from Positions → Load screenshot."
+          );
+          return;
+        }
         const populated = Object.entries(parsed).filter(
           ([key, value]) => key !== "notes" && value != null && value !== ""
         ).length;

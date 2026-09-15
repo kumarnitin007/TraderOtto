@@ -10,19 +10,86 @@ import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { Tabs } from "@/components/ui/Tabs";
 import { TradeRow } from "@/components/positions/TradeRow";
 import { PositionTickerDrawer } from "@/components/positions/PositionTickerDrawer";
+import { PositionsScreenshotImport } from "@/components/positions/PositionsScreenshotImport";
 import type { ClosePayload } from "@/types/trade";
 import { WatchGroupView } from "@/components/groups/WatchGroupView";
+import {
+  matchesPositionFocus,
+  positionFocus,
+  type PositionFocusFilter,
+} from "@/lib/positionFocus";
+
+/** 10 letters keeps Open + two or three list names readable on a phone row. */
+const LIST_TAB_CHARS = 10;
+const PINNED_LISTS = 3;
+const FOCUS_OPTIONS: { value: PositionFocusFilter; label: string }[] = [
+  { value: "focus", label: "Focus" },
+  { value: "near", label: "Near ±20%" },
+  { value: "time", label: "≤50% time" },
+  { value: "losing", label: "Losing" },
+  { value: "all", label: "All" },
+];
+
+function tabLabel(name: string) {
+  const trimmed = name.trim();
+  if (trimmed.length <= LIST_TAB_CHARS) return trimmed;
+  return `${trimmed.slice(0, LIST_TAB_CHARS).trimEnd()}…`;
+}
+
+function MoreLists({
+  extraGroups,
+  selectedView,
+  onChange,
+}: {
+  extraGroups: { id: string; name: string }[];
+  selectedView: string;
+  onChange: (value: string) => void;
+}) {
+  if (extraGroups.length === 0) return null;
+  const extraSelected = extraGroups.some((group) => group.id === selectedView);
+  return (
+    <div className="relative">
+      <select
+        value={extraSelected ? selectedView : ""}
+        onChange={(event) => {
+          if (event.target.value) onChange(event.target.value);
+        }}
+        className={`appearance-none rounded-none border-none bg-transparent py-0 pr-5 text-sm font-semibold ${
+          extraSelected ? "text-otto-text" : "text-otto-text-faint"
+        }`}
+        aria-label="More lists"
+      >
+        <option value="" disabled>
+          More
+        </option>
+        {extraGroups.map((group) => (
+          <option key={group.id} value={group.id}>
+            {group.name}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={13}
+        className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-otto-text-faint"
+      />
+    </div>
+  );
+}
 
 export function PositionsView() {
   const { trades, closeTrade, deleteTrade, loading } = useTrades();
   const { groups, loading: groupsLoading } = useWatchGroups();
   const live = useLiveQuotes(trades);
   const optionMarks = useOptionMarks(trades);
-  const [filter, setFilter] = useScreenOption("positionsFilter");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
+  const [focusFilter, setFocusFilter] =
+    useState<PositionFocusFilter>("focus");
   const [selectedView, setSelectedView] = useScreenOption("positionsView");
+
+  const pinnedGroups = groups.slice(0, PINNED_LISTS);
+  const extraGroups = groups.slice(PINNED_LISTS);
 
   useEffect(() => {
     if (groupsLoading || selectedView === "positions") return;
@@ -40,22 +107,43 @@ export function PositionsView() {
     setSelectedTradeId(null);
   }
 
-  const visible = useMemo(
+  const openWithFocus = useMemo(
     () =>
       trades
-        .filter((t) => (filter === "all" ? true : t.status === filter))
-        .sort((a, b) => {
-          const aOpen = a.status === "open";
-          const bOpen = b.status === "open";
-          if (aOpen && bOpen) {
-            return a.expiry.localeCompare(b.expiry) || a.ticker.localeCompare(b.ticker);
-          }
-          if (filter === "all" && aOpen !== bOpen) return aOpen ? -1 : 1;
-          const aDate = a.closeDate ?? a.openDate;
-          const bDate = b.closeDate ?? b.openDate;
-          return aDate < bDate ? 1 : -1;
-        }),
-    [trades, filter]
+        .filter((trade) => trade.status === "open")
+        .map((trade) => ({
+          trade,
+          focus: positionFocus(
+            trade,
+            live[trade.ticker],
+            optionMarks[trade.id]
+          ),
+        }))
+        .sort(
+          (a, b) =>
+            a.trade.expiry.localeCompare(b.trade.expiry) ||
+            a.trade.ticker.localeCompare(b.trade.ticker)
+        ),
+    [trades, live, optionMarks]
+  );
+  const visible = useMemo(
+    () =>
+      openWithFocus
+        .filter(({ focus }) => matchesPositionFocus(focus, focusFilter))
+        .map(({ trade }) => trade),
+    [focusFilter, openWithFocus]
+  );
+  const focusCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        FOCUS_OPTIONS.map((option) => [
+          option.value,
+          openWithFocus.filter(({ focus }) =>
+            matchesPositionFocus(focus, option.value)
+          ).length,
+        ])
+      ) as Record<PositionFocusFilter, number>,
+    [openWithFocus]
   );
 
   async function onConfirmClose(id: string, payload: ClosePayload) {
@@ -73,23 +161,27 @@ export function PositionsView() {
 
   return (
     <div>
-      <div className="relative mb-4 max-w-[320px]">
-        <select
+      <div className="mb-3.5">
+        <Tabs
           value={selectedView}
-          onChange={(event) => changeView(event.target.value)}
-          className="rounded-xl border border-otto-divider bg-otto-surface px-3.5 py-2.5 pr-9 text-sm font-bold"
-          aria-label="Choose positions or tracker group"
-        >
-          <option value="positions">Positions</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          size={15}
-          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-otto-text-faint"
+          onChange={changeView}
+          end={
+            extraGroups.length > 0 ? (
+              <MoreLists
+                extraGroups={extraGroups}
+                selectedView={selectedView}
+                onChange={changeView}
+              />
+            ) : undefined
+          }
+          options={[
+            { value: "positions", label: "Open", title: "Open positions" },
+            ...pinnedGroups.map((group) => ({
+              value: group.id,
+              label: tabLabel(group.name),
+              title: group.name,
+            })),
+          ]}
         />
       </div>
 
@@ -97,50 +189,80 @@ export function PositionsView() {
         <WatchGroupView group={selectedGroup} />
       ) : (
         <>
-      <div className="mb-3.5">
-        <Tabs
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: "open", label: "Open" },
-            { value: "closed", label: "Closed" },
-            { value: "all", label: "All" },
-          ]}
-        />
-      </div>
+          <PositionsScreenshotImport quotes={live} marks={optionMarks} />
 
-      {!loading && visible.length === 0 && (
-        <div className="px-1 py-10 text-center text-sm text-otto-text-faint">
-          No trades here yet. Log one from the trade tab.
-        </div>
-      )}
+          <div className="mb-2 overflow-x-auto pb-1">
+            <div className="flex min-w-max gap-2">
+              {FOCUS_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setFocusFilter(option.value);
+                    setExpanded(null);
+                    setClosingId(null);
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                    focusFilter === option.value
+                      ? "bg-otto-text text-otto-bg"
+                      : "border border-otto-divider text-otto-text-dim"
+                  }`}
+                >
+                  {option.label} {focusCounts[option.value]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-2 px-1 text-[11px] text-otto-text-faint">
+            {focusFilter === "focus"
+              ? "Near a key strike, half the original duration used, or currently losing."
+              : focusFilter === "near"
+                ? "Stock is within 20% of the nearest key or short strike."
+                : focusFilter === "time"
+                  ? "50% or less of the original open-to-expiry duration remains."
+                  : focusFilter === "losing"
+                    ? "Live option mark shows an unrealized loss."
+                    : "Every open position."}
+          </div>
 
-      <div>
-        {visible.map((t) => (
-          <TradeRow
-            key={t.id}
-            t={t}
-            open={expanded === t.id}
-            onToggle={() => setExpanded(expanded === t.id ? null : t.id)}
-            closing={closingId === t.id}
-            onStartClose={() => setClosingId(t.id)}
-            onCancelClose={() => setClosingId(null)}
-            onConfirmClose={(payload) => onConfirmClose(t.id, payload)}
-            onDelete={() => void onDelete(t.id)}
-            onTickerClick={() => setSelectedTradeId(t.id)}
-            live={live[t.ticker]}
-            optionMark={optionMarks[t.id]}
-          />
-        ))}
-      </div>
-      {selectedTradeId &&
-        trades.find((trade) => trade.id === selectedTradeId) && (
-          <PositionTickerDrawer
-            trade={trades.find((trade) => trade.id === selectedTradeId)!}
-            optionMark={optionMarks[selectedTradeId]}
-            onClose={() => setSelectedTradeId(null)}
-          />
-        )}
+          {!loading && openWithFocus.length === 0 && (
+            <div className="px-1 py-10 text-center text-sm text-otto-text-faint">
+              No open trades. Closed trades stay on Performance.
+            </div>
+          )}
+          {!loading && openWithFocus.length > 0 && visible.length === 0 && (
+            <div className="px-1 py-8 text-center text-sm text-otto-text-faint">
+              No positions match this attention filter. Choose All to see every
+              open position.
+            </div>
+          )}
+
+          <div>
+            {visible.map((t) => (
+              <TradeRow
+                key={t.id}
+                t={t}
+                open={expanded === t.id}
+                onToggle={() => setExpanded(expanded === t.id ? null : t.id)}
+                closing={closingId === t.id}
+                onStartClose={() => setClosingId(t.id)}
+                onCancelClose={() => setClosingId(null)}
+                onConfirmClose={(payload) => onConfirmClose(t.id, payload)}
+                onDelete={() => void onDelete(t.id)}
+                onTickerClick={() => setSelectedTradeId(t.id)}
+                live={live[t.ticker]}
+                optionMark={optionMarks[t.id]}
+              />
+            ))}
+          </div>
+          {selectedTradeId &&
+            trades.find((trade) => trade.id === selectedTradeId) && (
+              <PositionTickerDrawer
+                trade={trades.find((trade) => trade.id === selectedTradeId)!}
+                optionMark={optionMarks[selectedTradeId]}
+                onClose={() => setSelectedTradeId(null)}
+              />
+            )}
         </>
       )}
     </div>

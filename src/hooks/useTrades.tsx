@@ -12,7 +12,13 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { getSupabaseClient } from "@/lib/supabase";
 import { createSupabaseTradeRepository } from "@/lib/data/supabaseTradeRepository";
-import type { ClosePayload, NewTrade, Trade, TradeUpdate } from "@/types/trade";
+import type {
+  ClosedTradeImport,
+  ClosePayload,
+  NewTrade,
+  Trade,
+  TradeUpdate,
+} from "@/types/trade";
 
 type TradesContextValue = {
   trades: Trade[];
@@ -20,6 +26,10 @@ type TradesContextValue = {
   error: string;
   readonly: boolean;
   addTrade: (trade: NewTrade) => Promise<Trade>;
+  addClosedTrade: (
+    trade: ClosedTradeImport,
+    allowDuplicate?: boolean
+  ) => Promise<Trade>;
   updateTrade: (id: string, trade: TradeUpdate) => Promise<Trade>;
   closeTrade: (id: string, payload: ClosePayload) => Promise<Trade>;
   deleteTrade: (id: string) => Promise<void>;
@@ -77,6 +87,16 @@ export function TradesProvider({ children }: { children: ReactNode }) {
     return created;
   }, [repository]);
 
+  const addClosedTrade = useCallback(async (
+    trade: ClosedTradeImport,
+    allowDuplicate = false
+  ) => {
+    if (!repository) throw new Error("Sign in to save trades.");
+    const created = await repository.addClosed(trade, allowDuplicate);
+    setTrades((prev) => [created, ...prev]);
+    return created;
+  }, [repository]);
+
   const closeTrade = useCallback(async (id: string, payload: ClosePayload) => {
     if (!repository) throw new Error("Sign in to update trades.");
     const updated = await repository.close(id, payload);
@@ -104,6 +124,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       error,
       readonly,
       addTrade,
+      addClosedTrade,
       updateTrade,
       closeTrade,
       deleteTrade,
@@ -114,6 +135,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       error,
       readonly,
       addTrade,
+      addClosedTrade,
       updateTrade,
       closeTrade,
       deleteTrade,
