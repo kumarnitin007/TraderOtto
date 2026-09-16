@@ -21,10 +21,9 @@ import {
   openPositionsPrompt,
   tickerContextFromGroups,
 } from "@/lib/positionsPrompt";
-import type {
-  AiPortfolioReport,
-  SavedAiPortfolioReport,
-} from "@/types/positionsAi";
+import { AiPortfolioReportViews } from "@/components/positions/AiPortfolioReportViews";
+import { AiReportHistory } from "@/components/ai/AiReportHistory";
+import type { SavedAiPortfolioReport } from "@/types/positionsAi";
 
 type SavedResponse = SavedAiPortfolioReport & { portfolioHash: string | null };
 
@@ -64,6 +63,7 @@ export function PositionsSummary({
     useTickerTechnicals(openTickers);
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState<SavedResponse | null>(null);
+  const [history, setHistory] = useState<SavedResponse[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -110,7 +110,7 @@ export function PositionsSummary({
     void authorization()
       .then((headers) =>
         headers
-          ? fetch("/api/quotes?ai=latest", {
+          ? fetch("/api/quotes?ai=history&kind=portfolio_summary&limit=10", {
               headers,
               cache: "no-store",
             })
@@ -118,8 +118,12 @@ export function PositionsSummary({
       )
       .then((response) => (response?.ok ? response.json() : null))
       .then(
-        (payload: { saved?: SavedResponse | null } | null) => {
-          if (!cancelled) setSaved(payload?.saved ?? null);
+        (payload: { items?: SavedResponse[] } | null) => {
+          if (!cancelled) {
+            const items = payload?.items ?? [];
+            setHistory(items);
+            setSaved(items[0] ?? null);
+          }
         }
       )
       .finally(() => {
@@ -153,6 +157,10 @@ export function PositionsSummary({
         throw new Error(payload.error || "AI analysis failed.");
       }
       setSaved(payload.saved);
+      setHistory((current) => [
+        payload.saved!,
+        ...current.filter((item) => item.id !== payload.saved!.id),
+      ]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "AI analysis failed.");
     } finally {
@@ -289,11 +297,16 @@ export function PositionsSummary({
               )}
               {saved && (
                 <div className="mt-3">
+                  <AiReportHistory
+                    items={history}
+                    selectedId={saved.id}
+                    onSelect={setSaved}
+                  />
                   <div className="mb-2 text-[11px] text-otto-text-faint">
                     Saved {new Date(saved.createdAt).toLocaleString()}
                     {stale ? " · positions or market data changed since this report" : ""}
                   </div>
-                  <AiReport report={saved.report} />
+                  <AiPortfolioReportViews report={saved.report} />
                 </div>
               )}
 
@@ -387,104 +400,5 @@ function Stat({
         {value}
       </div>
     </div>
-  );
-}
-
-function AiReport({ report }: { report: AiPortfolioReport }) {
-  return (
-    <div className="space-y-3 rounded-2xl border border-otto-divider p-3.5">
-      <div>
-        <div className="text-sm font-extrabold">{report.headline}</div>
-        <div className="mt-1 text-xs text-otto-text-dim">
-          Book risk: <span className="font-bold uppercase">{report.bookRisk.level}</span>
-          {" · "}
-          {report.bookRisk.drivers.join(" · ")}
-        </div>
-      </div>
-      {report.catalysts.length > 0 && (
-        <ReportSection title="Catalysts">
-          {report.catalysts.map((item, index) => (
-            <div key={`${item.date}-${item.event}-${index}`} className="text-xs">
-              <span className="font-bold">{item.date}</span> · {item.scope} ·{" "}
-              {item.event}
-              {item.sourceUrl && (
-                <>
-                  {" · "}
-                  <a
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-otto-green underline"
-                  >
-                    source
-                  </a>
-                </>
-              )}
-            </div>
-          ))}
-        </ReportSection>
-      )}
-      {report.positions.length > 0 && (
-        <ReportSection title="Position decisions">
-          {report.positions.map((item) => (
-            <div key={item.id} className="rounded-lg bg-otto-surface p-2.5 text-xs">
-              <div className="font-bold">
-                {item.tkr} · {item.action.toUpperCase()} · {item.risk} risk
-              </div>
-              <div className="mt-1 text-otto-text-dim">{item.why}</div>
-              {item.volumeSignal && (
-                <div className="mt-1 text-otto-text-faint">
-                  Volume: {item.volumeSignal}
-                </div>
-              )}
-            </div>
-          ))}
-        </ReportSection>
-      )}
-      {report.concentration.length > 0 && (
-        <ReportSection title="Hidden concentration">
-          {report.concentration.map((item, index) => (
-            <div key={`${item.factor}-${index}`} className="text-xs">
-              <span className="font-bold">{item.factor}:</span> {item.note}
-            </div>
-          ))}
-        </ReportSection>
-      )}
-      {report.scenarios.length > 0 && (
-        <ReportSection title="Stress scenarios">
-          {report.scenarios.map((item, index) => (
-            <div key={`${item.name}-${index}`} className="text-xs">
-              <span className="font-bold">{item.name}:</span> {item.bookImpact}
-            </div>
-          ))}
-        </ReportSection>
-      )}
-      {report.blindSpots.length > 0 && (
-        <ReportSection title="Blind spots">
-          {report.blindSpots.map((item, index) => (
-            <div key={`${item}-${index}`} className="text-xs">
-              {item}
-            </div>
-          ))}
-        </ReportSection>
-      )}
-    </div>
-  );
-}
-
-function ReportSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-otto-text-faint">
-        {title}
-      </div>
-      <div className="space-y-1.5">{children}</div>
-    </section>
   );
 }

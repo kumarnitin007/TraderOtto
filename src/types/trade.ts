@@ -48,6 +48,7 @@ export function isDebitStrategy(strategy: Strategy | string) {
 }
 
 export type TradeStatus = "open" | "closed";
+export type CloseReason = "closed" | "expired" | "assigned" | "rolled";
 
 /** Matches supabase/schema.sql columns (camelCase in the app). */
 export type Trade = {
@@ -72,6 +73,13 @@ export type Trade = {
   closeDate: string | null;
   stockPriceClose: number | null;
   premiumClose: number | null;
+  /** Total transaction costs in dollars, not per contract. */
+  commissionOpen?: number;
+  /** Total transaction costs in dollars, not per contract. */
+  commissionClose?: number;
+  closeReason?: CloseReason;
+  rolledFromTradeId?: string | null;
+  rolledToTradeId?: string | null;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -79,13 +87,25 @@ export type Trade = {
 
 export type NewTrade = Omit<
   Trade,
-  "id" | "status" | "closeDate" | "stockPriceClose" | "premiumClose" | "createdAt" | "updatedAt" | "userId"
+  | "id"
+  | "status"
+  | "closeDate"
+  | "stockPriceClose"
+  | "premiumClose"
+  | "commissionClose"
+  | "closeReason"
+  | "rolledToTradeId"
+  | "createdAt"
+  | "updatedAt"
+  | "userId"
 >;
 
 export type ClosePayload = {
   closeDate: string;
   stockPriceClose: number;
   premiumClose: number;
+  commissionClose?: number;
+  closeReason?: CloseReason;
 };
 
 export type ClosedTradeImport = NewTrade & ClosePayload;

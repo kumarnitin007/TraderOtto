@@ -14,11 +14,13 @@ export function realizedPnl(
   premiumOpen: number,
   premiumClose: number,
   contracts: number,
-  strategy: Strategy | string
+  strategy: Strategy | string,
+  fees: { commissionOpen?: number; commissionClose?: number } = {}
 ) {
   const open = Math.abs(premiumOpen);
   const close = Math.abs(premiumClose);
-  return premiumDirection(strategy) * (open - close) * contracts * 100;
+  const gross = premiumDirection(strategy) * (open - close) * contracts * 100;
+  return gross - (fees.commissionOpen ?? 0) - (fees.commissionClose ?? 0);
 }
 
 export function tradePnl(trade: Trade): number | null {
@@ -27,7 +29,11 @@ export function tradePnl(trade: Trade): number | null {
     trade.premiumOpen,
     trade.premiumClose,
     trade.contracts,
-    trade.strategy
+    trade.strategy,
+    {
+      commissionOpen: trade.commissionOpen,
+      commissionClose: trade.commissionClose,
+    }
   );
 }
 
@@ -176,13 +182,22 @@ export function rangeStart(range: PnlRange, now = new Date()): Date | null {
 }
 
 export function realizedInRange(trades: Trade[], range: PnlRange, now = new Date()) {
+  return closedTradesInRange(trades, range, now)
+    .reduce((sum, trade) => sum + (tradePnl(trade) ?? 0), 0);
+}
+
+/** Closed rows whose close date falls in the selected global performance window. */
+export function closedTradesInRange(
+  trades: Trade[],
+  range: PnlRange,
+  now = new Date()
+) {
   const start = rangeStart(range, now);
   return trades
     .filter((trade) => trade.status === "closed" && trade.closeDate)
     .filter(
       (trade) => !start || new Date(trade.closeDate + "T00:00:00") >= start
-    )
-    .reduce((sum, trade) => sum + (tradePnl(trade) ?? 0), 0);
+    );
 }
 
 export function unrealizedFromMarks(

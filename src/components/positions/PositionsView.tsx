@@ -18,6 +18,8 @@ import {
   positionFocus,
   type PositionFocusFilter,
 } from "@/lib/positionFocus";
+import { fmtMoney } from "@/lib/pnl";
+import { committedCapital } from "@/lib/roi";
 
 /** 10 letters keeps Open + two or three list names readable on a phone row. */
 const LIST_TAB_CHARS = 10;
@@ -98,6 +100,7 @@ export function PositionsView() {
   }, [groups, groupsLoading, selectedView, setSelectedView]);
 
   const selectedGroup = groups.find((group) => group.id === selectedView);
+  const assignment = useMemo(() => committedCapital(trades), [trades]);
 
   function changeView(value: string) {
     setSelectedView(value);
@@ -189,6 +192,23 @@ export function PositionsView() {
       ) : (
         <>
           <PositionsScreenshotImport quotes={live} marks={optionMarks} />
+
+          <div className="mb-3 rounded-xl bg-otto-surface px-3.5 py-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <div>
+                <div className="text-[11px] text-otto-text-faint">
+                  Assignment cash backup
+                </div>
+                <div className="mt-0.5 text-[10px] text-otto-text-faint">
+                  {assignment.counted} open short-put position
+                  {assignment.counted === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div className="text-[17px] font-bold tabular-nums">
+                {fmtMoney(assignment.total)}
+              </div>
+            </div>
+          </div>
 
           <div className="mb-2 overflow-x-auto pb-1">
             <div className="flex min-w-max gap-2">

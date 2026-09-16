@@ -3,7 +3,8 @@ export type NotificationEventKind =
   | "position_risk"
   | "near_max"
   | "expiry_soon"
-  | "earnings_soon";
+  | "earnings_soon"
+  | "assignment_cash_high";
 
 export type NotificationChannel = "browser" | "email" | "discord" | "telegram";
 
@@ -25,6 +26,8 @@ export type NotificationPreferences = {
   };
   expiryDays: number;
   earningsDays: number;
+  /** Total short-put assignment backup limit; 0 disables the alert. */
+  assignmentCashThreshold: number;
   mutedTickers: string[];
   mutedGroupIds: string[];
   events: Record<NotificationEventKind, EventPreference>;

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Trash2 } from "lucide-react";
-import type { ClosePayload, Trade } from "@/types/trade";
+import type { ClosePayload, CloseReason, Trade } from "@/types/trade";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
 import {
@@ -20,6 +21,8 @@ import { Sparkline } from "@/components/ui/Sparkline";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
 import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { PaceBadge } from "@/components/positions/PaceBadge";
+import { assignmentCapital } from "@/lib/roi";
+import { AI_TRADE_DRAFT_KEY } from "@/lib/aiTradeDraft";
 
 export function TradeRow({
   t,
@@ -40,12 +43,13 @@ export function TradeRow({
   closing: boolean;
   onStartClose: () => void;
   onCancelClose: () => void;
-  onConfirmClose: (payload: ClosePayload) => void;
+  onConfirmClose: (payload: ClosePayload) => Promise<void>;
   onDelete: () => void;
   onTickerClick: () => void;
   live?: LiveQuote;
   optionMark?: OptionMark;
 }) {
+  const router = useRouter();
   const pnl = tradePnl(t);
   const livePrice = live?.price ?? t.stockPriceOpen ?? t.stockPriceClose ?? 0;
   const movedUp = livePrice >= (t.stockPriceOpen || 0);
@@ -55,12 +59,19 @@ export function TradeRow({
   const currentMark = optionMark?.mark;
   const unrealizedPnl = currentMark == null ? null : markPnl(t, currentMark);
   const pace = positionAlert(t, currentMark);
+  const assignmentCash = assignmentCapital(t);
   const [closeDate, setCloseDate] = useState(t.closeDate || todayISO());
   const [stockPriceClose, setStockPriceClose] = useState(
     t.stockPriceClose != null ? String(t.stockPriceClose) : ""
   );
   const [premiumClose, setPremiumClose] = useState(
     t.premiumClose != null ? String(t.premiumClose) : ""
+  );
+  const [commissionClose, setCommissionClose] = useState(
+    String(t.commissionClose || "")
+  );
+  const [closeReason, setCloseReason] = useState<CloseReason>(
+    t.closeReason ?? "closed"
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -220,6 +231,13 @@ export function TradeRow({
               value={fmtGreek(optionMark?.vega, t.sigma)}
             />
             <GreekReadout label="Opened" value={fmtDate(t.openDate)} />
+            {assignmentCash != null && (
+              <GreekReadout
+                label="Assignment cash"
+                value={fmtMoney(assignmentCash)}
+                accent="rgb(var(--otto-amber))"
+              />
+            )}
             {t.status === "open" && (
               <GreekReadout
                 label="Live px"
@@ -234,6 +252,20 @@ export function TradeRow({
               <GreekReadout
                 label={debit ? "Credit received" : "Debit paid"}
                 value={t.premiumClose}
+              />
+            )}
+            {(t.commissionOpen || t.commissionClose) && (
+              <GreekReadout
+                label="Total fees"
+                value={fmtMoney(
+                  (t.commissionOpen ?? 0) + (t.commissionClose ?? 0)
+                )}
+              />
+            )}
+            {t.status === "closed" && (
+              <GreekReadout
+                label="Close reason"
+                value={t.closeReason ?? "closed"}
               />
             )}
           </div>
@@ -308,11 +340,44 @@ export function TradeRow({
                     placeholder="0.62"
                   />
               </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
+                    Close reason
+                  </label>
+                  <select
+                    value={closeReason}
+                    onChange={(event) =>
+                      setCloseReason(event.target.value as CloseReason)
+                    }
+                  >
+                    <option value="closed">Closed</option>
+                    <option value="expired">Expired</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="rolled">Rolled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-otto-text-dim">
+                    Closing fees ($ total)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={commissionClose}
+                    onChange={(event) => setCommissionClose(event.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
               <RealizedPnlPreview
                 premiumOpen={t.premiumOpen}
                 premiumClose={premiumClose}
                 contracts={t.contracts}
                 strategy={t.strategy}
+                commissionOpen={t.commissionOpen}
+                commissionClose={commissionClose}
               />
               <div className="flex gap-2">
                 <button
@@ -324,16 +389,30 @@ export function TradeRow({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    onConfirmClose({
+                  onClick={async () => {
+                    await onConfirmClose({
                       closeDate,
                       stockPriceClose: parseFloat(stockPriceClose) || 0,
                       premiumClose: parseFloat(premiumClose) || 0,
-                    })
-                  }
+                      commissionClose: parseFloat(commissionClose) || 0,
+                      closeReason,
+                    });
+                    if (closeReason === "rolled") {
+                      window.sessionStorage.setItem(
+                        AI_TRADE_DRAFT_KEY,
+                        JSON.stringify({
+                          ticker: t.ticker,
+                          strategy: t.strategy,
+                          rolledFromTradeId: t.id,
+                          notes: `Rolled from ${t.ticker} ${strikesLabel} exp ${t.expiry}`,
+                        })
+                      );
+                      router.push("/log?draft=ai");
+                    }
+                  }}
                   className="flex-[2] rounded-full border-none bg-otto-green py-[11px] text-[13.5px] font-bold text-black"
                 >
-                  Confirm close
+                  {closeReason === "rolled" ? "Close & draft roll" : "Confirm close"}
                 </button>
               </div>
             </div>

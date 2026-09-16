@@ -1,4 +1,4 @@
-import type { Strategy } from "@/types/trade";
+import type { CloseReason, Strategy } from "@/types/trade";
 
 export type ScreenshotTradeFields = {
   ticker?: string;
@@ -6,12 +6,20 @@ export type ScreenshotTradeFields = {
   contracts?: string;
   shortStrike?: string;
   longStrike?: string;
+  callShort?: string;
+  callLong?: string;
   openDate?: string;
   expiry?: string;
+  stockPriceOpen?: string;
+  iv?: string;
+  delta?: string;
+  sigma?: string;
+  theta?: string;
   premiumOpen?: string;
   closeDate?: string;
   premiumClose?: string;
   closed?: boolean;
+  closeReason?: CloseReason;
   notes?: string;
 };
 
@@ -47,6 +55,12 @@ function detectStrategy(
   breakeven?: number
 ): { strategy?: Strategy; side?: "put" | "call"; credit: boolean } {
   const lower = text.toLowerCase();
+  if (lower.includes("iron condor") || (strikeCount >= 4 && lower.includes(" put") && lower.includes(" call"))) {
+    return { strategy: "Iron Condor", credit: true };
+  }
+  if (lower.includes("strangle") || (strikeCount === 2 && lower.includes(" put") && lower.includes(" call"))) {
+    return { strategy: "Strangle", credit: true };
+  }
   // "Average cost" and "Date bought" mean the position was opened for a debit.
   const debit =
     lower.includes("debit") || lower.includes("average cost") || lower.includes("date bought");
@@ -96,7 +110,7 @@ export function parseRobinhoodScreenshot(
   const headerAmounts = Array.from(headerAfterTicker.matchAll(/\$(\d+(?:\.\d+)?)/g))
     .map((match) => Number(match[1]))
     .filter((value) => value >= 5);
-  const strikes = Array.from(new Set(headerAmounts)).slice(0, 2);
+  const strikes = Array.from(new Set(headerAmounts)).slice(0, 4);
 
   // Robinhood labels this row "Contracts" on options and "Quantity" on shares.
   const quantityMatch =
@@ -110,6 +124,13 @@ export function parseRobinhoodScreenshot(
   const closedMatch = text.match(/Closed\s+on\s+([A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4})/i);
   const closeDate = closedMatch ? parseWrittenDate(closedMatch[1]) ?? undefined : undefined;
   const closed = Boolean(closeDate);
+  const closeReason: CloseReason | undefined = /assign(?:ed|ment)/i.test(text)
+    ? "assigned"
+    : /expir(?:ed|ation)(?:\s+worthless)?/i.test(text)
+      ? "expired"
+      : closed
+        ? "closed"
+        : undefined;
 
   // Realized P/L details show the reliable per-contract amounts on the two "avg" rows.
   const averageAmounts = Array.from(
@@ -161,9 +182,19 @@ export function parseRobinhoodScreenshot(
   const breakeven = breakevenMatch ? Number(breakevenMatch[1]) : undefined;
   const detected = detectStrategy(text, strikes.length, strikes[0], breakeven);
 
-  let shortStrike = strikes[0];
-  let longStrike = strikes[1];
-  if (strikes.length >= 2 && detected.side) {
+  let shortStrike: number | undefined = strikes[0];
+  let longStrike: number | undefined = strikes[1];
+  let callShortStrike: number | undefined;
+  let callLongStrike: number | undefined;
+  if (detected.strategy === "Iron Condor" && strikes.length >= 4) {
+    const ordered = strikes.slice().sort((a, b) => a - b);
+    [longStrike, shortStrike, callShortStrike, callLongStrike] = ordered;
+  } else if (detected.strategy === "Strangle" && strikes.length >= 2) {
+    const ordered = strikes.slice().sort((a, b) => a - b);
+    shortStrike = ordered[0];
+    longStrike = undefined;
+    callShortStrike = ordered[ordered.length - 1];
+  } else if (strikes.length >= 2 && detected.side) {
     const low = Math.min(...strikes);
     const high = Math.max(...strikes);
     if (
@@ -183,6 +214,12 @@ export function parseRobinhoodScreenshot(
       /(?:Contracts|Quantity)\s+Current price[\s\S]{0,40}?-?\d+\s+\$(\d+(?:\.\d+)?)/i
     ) ?? text.match(/Current price[\s\S]{0,30}?\$(\d+(?:\.\d+)?)/i);
   const currentOption = currentOptionMatch?.[1];
+  const stockPriceOpen =
+    text.match(/(?:stock|share|underlying)\s+price[\s\S]{0,30}?\$(\d+(?:\.\d+)?)/i)?.[1];
+  const iv = text.match(/(?:implied volatility|IV)\s*[: ]\s*(\d+(?:\.\d+)?)%?/i)?.[1];
+  const delta = text.match(/\bdelta\s*[: ]\s*(-?\d+(?:\.\d+)?)/i)?.[1];
+  const theta = text.match(/\btheta\s*[: ]\s*(-?\d+(?:\.\d+)?)/i)?.[1];
+  const sigma = text.match(/\b(?:sigma|vega)\s*[: ]\s*(-?\d+(?:\.\d+)?)/i)?.[1];
   const noteParts = [
     "Imported from Robinhood screenshot.",
     closed && !openRaw ? "Open date unavailable; using close date." : "",
@@ -195,8 +232,16 @@ export function parseRobinhoodScreenshot(
     contracts,
     shortStrike: shortStrike != null ? String(shortStrike) : undefined,
     longStrike: longStrike != null ? String(longStrike) : undefined,
+    callShort:
+      callShortStrike != null ? String(callShortStrike) : undefined,
+    callLong: callLongStrike != null ? String(callLongStrike) : undefined,
     openDate,
     expiry,
+    stockPriceOpen,
+    iv,
+    delta,
+    theta,
+    sigma,
     // Premium is a magnitude; direction comes from the strategy.
     premiumOpen:
       closedPremiumOpen != null
@@ -208,6 +253,7 @@ export function parseRobinhoodScreenshot(
     premiumClose:
       closedPremiumClose == null ? undefined : String(Math.abs(closedPremiumClose)),
     closed: closed || undefined,
+    closeReason,
     notes: noteParts.join(" "),
   };
 }

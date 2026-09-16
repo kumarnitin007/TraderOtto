@@ -28,6 +28,10 @@ export const EVENT_LABELS: Record<
     label: "Earnings soon",
     description: "A watched company is approaching earnings.",
   },
+  assignment_cash_high: {
+    label: "Assignment cash limit",
+    description: "Your short-put assignment backup exceeds your limit.",
+  },
 };
 
 const event = (enabled = true): EventPreference => ({
@@ -44,6 +48,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   quietHours: { enabled: false, start: "20:00", end: "09:00" },
   expiryDays: 3,
   earningsDays: 7,
+  assignmentCashThreshold: 0,
   mutedTickers: [],
   mutedGroupIds: [],
   events: {
@@ -52,6 +57,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     near_max: event(),
     expiry_soon: event(),
     earnings_soon: event(),
+    assignment_cash_high: event(false),
   },
   discordWebhook: "",
   telegramChatId: "",

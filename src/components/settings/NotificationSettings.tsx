@@ -241,6 +241,26 @@ export function NotificationSettings() {
               }
             />
           </Field>
+          <Field label="Assignment cash limit ($)">
+            <input
+              type="number"
+              min={0}
+              step={1000}
+              value={preferences.assignmentCashThreshold}
+              onChange={(event) =>
+                void save({
+                  ...preferences,
+                  assignmentCashThreshold: Math.max(
+                    0,
+                    Number(event.target.value) || 0
+                  ),
+                })
+              }
+            />
+            <div className="mt-1 text-[10px] text-otto-text-faint">
+              0 disables this alert.
+            </div>
+          </Field>
         </div>
         <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-otto-text-dim">
           <input

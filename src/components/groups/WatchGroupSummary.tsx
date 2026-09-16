@@ -8,6 +8,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { todayISO } from "@/lib/pnl";
 import { watchlistPrompt } from "@/lib/watchlistPrompt";
 import { PromptPreview } from "@/components/positions/PositionsSummary";
+import { AiReportHistory } from "@/components/ai/AiReportHistory";
 import type { AiWatchlistReport } from "@/types/positionsAi";
 import type { WatchGroup } from "@/types/watchGroup";
 
@@ -59,6 +60,7 @@ export function WatchGroupSummary({
     useTickerTechnicals(tickers);
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState<Saved | null>(null);
+  const [history, setHistory] = useState<Saved[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -133,14 +135,18 @@ export function WatchGroupSummary({
       .then((headers) =>
         headers
           ? fetch(
-              `/api/quotes?ai=latest&kind=watchlist_summary&contextId=${encodeURIComponent(group.id)}`,
+              `/api/quotes?ai=history&kind=watchlist_summary&contextId=${encodeURIComponent(group.id)}&limit=10`,
               { headers, cache: "no-store" }
             )
           : null
       )
       .then((response) => (response?.ok ? response.json() : null))
-      .then((payload: { saved?: Saved } | null) => {
-        if (!cancelled) setSaved(payload?.saved ?? null);
+      .then((payload: { items?: Saved[] } | null) => {
+        if (!cancelled) {
+          const items = payload?.items ?? [];
+          setHistory(items);
+          setSaved(items[0] ?? null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingSaved(false);
@@ -174,6 +180,10 @@ export function WatchGroupSummary({
         throw new Error(payload.error || "AI research failed.");
       }
       setSaved(payload.saved);
+      setHistory((current) => [
+        payload.saved!,
+        ...current.filter((item) => item.id !== payload.saved!.id),
+      ]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "AI research failed.");
     } finally {
@@ -289,6 +299,11 @@ export function WatchGroupSummary({
               )}
               {saved && (
                 <div className="mt-3">
+                  <AiReportHistory
+                    items={history}
+                    selectedId={saved.id}
+                    onSelect={setSaved}
+                  />
                   <div className="mb-2 text-[11px] text-otto-text-faint">
                     Saved {new Date(saved.createdAt).toLocaleString()}
                     {saved.portfolioHash !== currentHash
@@ -356,8 +371,16 @@ function WatchlistReport({ report }: { report: AiWatchlistReport }) {
               {candidate.entryTrigger}
             </div>
             <div className="mt-1">
+              <span className="font-semibold">Invalid if:</span>{" "}
+              {candidate.invalidation}
+            </div>
+            <div className="mt-1">
               <span className="font-semibold">Structure:</span>{" "}
               {candidate.strategy}
+            </div>
+            <div className="mt-1">
+              <span className="font-semibold">Events:</span>{" "}
+              {candidate.events}
             </div>
             {candidate.volumeSignal && (
               <div className="mt-1 text-otto-text-faint">
@@ -382,6 +405,10 @@ function WatchlistReport({ report }: { report: AiWatchlistReport }) {
           {report.correlations.map((item, index) => (
             <div key={`${item.factor}-${index}`} className="text-xs">
               <span className="font-bold">{item.factor}:</span> {item.note}
+              <span className="text-otto-text-faint">
+                {" "}
+                · {item.ids.length ? item.ids.map((id) => `#${id}`).join(", ") : "no IDs"}
+              </span>
             </div>
           ))}
         </Section>
@@ -391,6 +418,16 @@ function WatchlistReport({ report }: { report: AiWatchlistReport }) {
           {report.avoid.map((item) => (
             <div key={item.id} className="text-xs">
               #{item.id}: {item.reason}
+            </div>
+          ))}
+        </Section>
+      )}
+      {report.verify.length > 0 && (
+        <Section title="Verify before acting">
+          {report.verify.map((item, index) => (
+            <div key={`${item.claim}-${index}`} className="text-xs">
+              <div className="font-bold">{item.claim}</div>
+              <div className="mt-0.5 text-otto-text-dim">{item.why}</div>
             </div>
           ))}
         </Section>

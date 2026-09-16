@@ -38,6 +38,9 @@ function detailsFromTrade(trade: NewTrade, existing?: Record<string, unknown>) {
     delta: trade.delta,
     sigma: trade.sigma,
     theta: trade.theta,
+    commissionOpen: trade.commissionOpen ?? existing?.commissionOpen ?? 0,
+    rolledFromTradeId:
+      trade.rolledFromTradeId ?? existing?.rolledFromTradeId ?? null,
     notes: trade.notes,
   };
 }
@@ -77,6 +80,25 @@ function mapRow(row: TradeRow): Trade {
     stockPriceClose: nullableNumber(detail, "stockPriceClose"),
     premiumClose:
       row.premium_close == null ? null : Number(row.premium_close),
+    commissionOpen: number(detail, "commissionOpen"),
+    commissionClose: number(detail, "commissionClose"),
+    closeReason:
+      detail.closeReason === "expired" ||
+      detail.closeReason === "assigned" ||
+      detail.closeReason === "rolled"
+        ? detail.closeReason
+        : row.status === "closed" &&
+            row.close_date != null &&
+            row.close_date >= row.expiry &&
+            Number(row.premium_close ?? 0) === 0
+          ? "expired"
+          : "closed",
+    rolledFromTradeId:
+      typeof detail.rolledFromTradeId === "string"
+        ? detail.rolledFromTradeId
+        : null,
+    rolledToTradeId:
+      typeof detail.rolledToTradeId === "string" ? detail.rolledToTradeId : null,
     notes: typeof detail.notes === "string" ? detail.notes : "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -120,7 +142,28 @@ export function createSupabaseTradeRepository(
         })
         .select()
         .single();
-      return requireRow(data, error);
+      const created = requireRow(data, error);
+      if (trade.rolledFromTradeId) {
+        const { data: previous } = await supabase
+          .from("tr_trades")
+          .select("details")
+          .eq("id", trade.rolledFromTradeId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (previous) {
+          await supabase
+            .from("tr_trades")
+            .update({
+              details: {
+                ...((previous.details as Record<string, unknown> | null) ?? {}),
+                rolledToTradeId: created.id,
+              },
+            })
+            .eq("id", trade.rolledFromTradeId)
+            .eq("user_id", userId);
+        }
+      }
+      return created;
     },
 
     async addClosed(
@@ -163,11 +206,17 @@ export function createSupabaseTradeRepository(
             trade.premiumOpen,
             trade.premiumClose,
             trade.contracts,
-            trade.strategy
+            trade.strategy,
+            {
+              commissionOpen: trade.commissionOpen,
+              commissionClose: trade.commissionClose,
+            }
           ),
           details: {
             ...detailsFromTrade(trade),
             stockPriceClose: trade.stockPriceClose,
+            commissionClose: trade.commissionClose ?? 0,
+            closeReason: trade.closeReason ?? "closed",
           },
         })
         .select()
@@ -204,11 +253,18 @@ export function createSupabaseTradeRepository(
           trade.premiumOpen,
           trade.premiumClose,
           trade.contracts,
-          trade.strategy
+          trade.strategy,
+          {
+            commissionOpen: trade.commissionOpen,
+            commissionClose: trade.commissionClose,
+          }
         );
         patch.details = {
           ...details,
           stockPriceClose: trade.stockPriceClose ?? existingDetails.stockPriceClose ?? null,
+          commissionClose:
+            trade.commissionClose ?? existingDetails.commissionClose ?? 0,
+          closeReason: trade.closeReason ?? existingDetails.closeReason ?? "closed",
         };
       }
       const { data, error } = await supabase
@@ -237,7 +293,11 @@ export function createSupabaseTradeRepository(
         Number(current.premium_open),
         payload.premiumClose,
         Number(current.contracts),
-        String(current.strategy)
+        String(current.strategy),
+        {
+          commissionOpen: number(existingDetails, "commissionOpen"),
+          commissionClose: payload.commissionClose,
+        }
       );
       const { data, error } = await supabase
         .from("tr_trades")
@@ -249,6 +309,8 @@ export function createSupabaseTradeRepository(
           details: {
             ...existingDetails,
             stockPriceClose: payload.stockPriceClose,
+            commissionClose: payload.commissionClose ?? 0,
+            closeReason: payload.closeReason ?? "closed",
           },
         })
         .eq("id", id)

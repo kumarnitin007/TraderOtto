@@ -9,6 +9,7 @@ import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { getSupabaseClient } from "@/lib/supabase";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/pnl";
 import { positionAlert } from "@/lib/premiumPace";
+import { committedCapital } from "@/lib/roi";
 import { dispatchedDayKey, firedToday, signalDay } from "@/lib/notificationDedupe";
 import type {
   NotificationChannel,
@@ -109,6 +110,28 @@ export function NotificationEngine() {
           dedupeKey: `expiry_soon:${trade.id}:${trade.expiry}`,
         });
       }
+    }
+
+    const assignment = committedCapital(trades);
+    if (
+      preferences.assignmentCashThreshold > 0 &&
+      assignment.total > preferences.assignmentCashThreshold
+    ) {
+      drafts.push({
+        kind: "assignment_cash_high",
+        ticker: null,
+        tradeId: null,
+        groupId: null,
+        title: "Assignment backup exceeds your limit",
+        message: `${fmtMoney(assignment.total)} across ${assignment.counted} short-put position${
+          assignment.counted === 1 ? "" : "s"
+        } · limit ${fmtMoney(preferences.assignmentCashThreshold)}`,
+        severity:
+          assignment.total >= preferences.assignmentCashThreshold * 1.25
+            ? "critical"
+            : "warning",
+        dedupeKey: "assignment_cash_high:book",
+      });
     }
 
     for (const group of groups) {

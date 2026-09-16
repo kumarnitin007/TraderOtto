@@ -17,6 +17,7 @@ export type ScreenOptions = {
   performanceUnrealized: boolean;
   performanceView: "overview" | "ticker";
   performanceTicker: string;
+  portfolioReportLayout: "actions" | "board" | "detail";
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -27,10 +28,11 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   logEditFilter: "open",
   performancePeriod: "monthly",
   collapsedGroups: {},
-  pnlRange: "all",
+  pnlRange: "year",
   performanceUnrealized: false,
   performanceView: "overview",
   performanceTicker: "",
+  portfolioReportLayout: "actions",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -53,6 +55,12 @@ function isLogMode(value: unknown): value is ScreenOptions["logMode"] {
 
 function isPerformanceView(value: unknown): value is ScreenOptions["performanceView"] {
   return value === "overview" || value === "ticker";
+}
+
+function isReportLayout(
+  value: unknown
+): value is ScreenOptions["portfolioReportLayout"] {
+  return value === "actions" || value === "board" || value === "detail";
 }
 
 function isPnlRange(value: unknown): value is PnlRange {
@@ -98,6 +106,9 @@ export function readScreenOptions(): ScreenOptions {
         typeof parsed.performanceTicker === "string"
           ? parsed.performanceTicker
           : "",
+      portfolioReportLayout: isReportLayout(parsed.portfolioReportLayout)
+        ? parsed.portfolioReportLayout
+        : SCREEN_OPTION_DEFAULTS.portfolioReportLayout,
     };
   } catch {
     return SCREEN_OPTION_DEFAULTS;

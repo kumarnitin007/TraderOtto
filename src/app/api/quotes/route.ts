@@ -11,12 +11,29 @@ import {
 import { serverSupabaseForRequest } from "@/lib/serverSupabase";
 import { fetchSupabaseAuthStatus } from "@/lib/supabaseAuthStatus";
 import {
+  createPerformanceAiReport,
   createPortfolioAiReport,
   createWatchlistAiReport,
   isOpenAiConfigured,
 } from "@/lib/positionsAiServer";
 
 export const maxDuration = 60;
+
+const AI_KINDS = [
+  "portfolio_summary",
+  "watchlist_summary",
+  "performance_review",
+  "performance_trade_ideas",
+  "performance_coach",
+] as const;
+
+type AiKind = (typeof AI_KINDS)[number];
+
+function aiKind(value: string | null): AiKind {
+  return AI_KINDS.includes(value as AiKind)
+    ? (value as AiKind)
+    : "portfolio_summary";
+}
 
 async function profileClient(request: Request) {
   const supabase = serverSupabaseForRequest(request);
@@ -41,10 +58,7 @@ export async function GET(request: Request) {
   if (url.searchParams.get("ai") === "latest") {
     const profile = await profileClient(request);
     if (!profile) return Response.json({ error: "unauthorized" }, { status: 401 });
-    const kind =
-      url.searchParams.get("kind") === "watchlist_summary"
-        ? "watchlist_summary"
-        : "portfolio_summary";
+    const kind = aiKind(url.searchParams.get("kind"));
     const contextId = url.searchParams.get("contextId");
     let query = profile.supabase
       .from("tr_api_events")
@@ -56,7 +70,7 @@ export async function GET(request: Request) {
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(1);
-    if (kind === "watchlist_summary" && contextId) {
+    if (contextId) {
       query = query.contains("captured", { contextId });
     }
     const { data, error } = await query.maybeSingle();
@@ -78,6 +92,52 @@ export async function GET(request: Request) {
         portfolioHash: captured.portfolioHash ?? null,
         contextId: captured.contextId ?? null,
       },
+    });
+  }
+
+  if (url.searchParams.get("ai") === "history") {
+    const profile = await profileClient(request);
+    if (!profile) return Response.json({ error: "unauthorized" }, { status: 401 });
+    const kind = aiKind(url.searchParams.get("kind"));
+    const contextId = url.searchParams.get("contextId");
+    const requestedLimit = Number(url.searchParams.get("limit") ?? 10);
+    const limit = Math.min(25, Math.max(1, requestedLimit || 10));
+    let query = profile.supabase
+      .from("tr_api_events")
+      .select("id,created_at,model,tokens_in,tokens_out,captured")
+      .eq("user_id", profile.userId)
+      .eq("provider", "openai")
+      .eq("kind", kind)
+      .eq("status", "success")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (contextId) {
+      query = query.contains("captured", { contextId });
+    }
+    const { data, error } = await query;
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({
+      items: (data ?? []).flatMap((row) => {
+        const captured = row.captured as {
+          report?: unknown;
+          portfolioHash?: string;
+          contextId?: string;
+        };
+        if (!captured.report) return [];
+        return [
+          {
+            id: row.id,
+            createdAt: row.created_at,
+            model: row.model,
+            tokensIn: row.tokens_in,
+            tokensOut: row.tokens_out,
+            report: captured.report,
+            portfolioHash: captured.portfolioHash ?? null,
+            contextId: captured.contextId ?? null,
+          },
+        ];
+      }),
     });
   }
 
@@ -173,7 +233,10 @@ export async function POST(request: Request) {
   }
   if (
     body.action !== "portfolio_summary" &&
-    body.action !== "watchlist_summary"
+    body.action !== "watchlist_summary" &&
+    body.action !== "performance_review" &&
+    body.action !== "performance_trade_ideas" &&
+    body.action !== "performance_coach"
   ) {
     return Response.json({ error: "unsupported_action" }, { status: 400 });
   }
@@ -188,7 +251,12 @@ export async function POST(request: Request) {
     const result =
       kind === "watchlist_summary"
         ? await createWatchlistAiReport(prompt)
-        : await createPortfolioAiReport(prompt);
+        : kind === "portfolio_summary"
+          ? await createPortfolioAiReport(prompt)
+          : await createPerformanceAiReport(
+              prompt,
+              kind === "performance_trade_ideas"
+            );
     let savedId = "unsaved";
     let createdAt = new Date().toISOString();
     if (profile) {

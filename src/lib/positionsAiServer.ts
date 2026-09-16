@@ -2,6 +2,7 @@ import type {
   AiPortfolioReport,
   AiWatchlistReport,
 } from "@/types/positionsAi";
+import type { AiPerformanceReport } from "@/types/performanceAi";
 
 const string = { type: "string" };
 const stringArray = { type: "array", items: string };
@@ -229,6 +230,143 @@ const WATCHLIST_SCHEMA = {
   ],
 } as const;
 
+const PERFORMANCE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    asOf: string,
+    mode: { type: "string", enum: ["review", "trade_ideas", "coach"] },
+    period: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        label: string,
+        start: string,
+        end: string,
+        tradeCount: { type: "integer" },
+      },
+      required: ["label", "start", "end", "tradeCount"],
+    },
+    headline: string,
+    verdict: string,
+    scorecard: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        realizedPnl: { type: "number" },
+        winRate: { type: "number" },
+        avgRoi: { type: "number" },
+        avgHoldDays: { type: "number" },
+        bestDimension: string,
+        worstDimension: string,
+      },
+      required: [
+        "realizedPnl",
+        "winRate",
+        "avgRoi",
+        "avgHoldDays",
+        "bestDimension",
+        "worstDimension",
+      ],
+    },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: string,
+          evidence: string,
+          tradeIds: { type: "array", items: { type: "integer" } },
+          significance: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+          },
+        },
+        required: ["title", "evidence", "tradeIds", "significance"],
+      },
+    },
+    tradeIdeas: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          ticker: string,
+          bias: {
+            type: "string",
+            enum: ["bullish", "bearish", "neutral"],
+          },
+          strategy: string,
+          setup: string,
+          entryTrigger: string,
+          invalidation: string,
+          whyFitsStyle: string,
+          risk: string,
+          sourceUrl: string,
+        },
+        required: [
+          "ticker",
+          "bias",
+          "strategy",
+          "setup",
+          "entryTrigger",
+          "invalidation",
+          "whyFitsStyle",
+          "risk",
+          "sourceUrl",
+        ],
+      },
+    },
+    improvements: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          priority: { type: "integer" },
+          change: string,
+          evidence: string,
+          implementation: string,
+          measure: string,
+        },
+        required: [
+          "priority",
+          "change",
+          "evidence",
+          "implementation",
+          "measure",
+        ],
+      },
+    },
+    strengths: stringArray,
+    cautions: stringArray,
+    verify: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: { claim: string, why: string },
+        required: ["claim", "why"],
+      },
+    },
+  },
+  required: [
+    "asOf",
+    "mode",
+    "period",
+    "headline",
+    "verdict",
+    "scorecard",
+    "findings",
+    "tradeIdeas",
+    "improvements",
+    "strengths",
+    "cautions",
+    "verify",
+  ],
+} as const;
+
 type OpenAiResponse = {
   model?: string;
   output_text?: string;
@@ -301,27 +439,25 @@ async function requestOpenAi(
 async function createAiReport<T>(
   prompt: string,
   name: string,
-  schema: object
+  schema: object,
+  options: { webSearch?: boolean } = {}
 ) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) {
     throw new Error("Add OPENAI_API_KEY to .env, then restart the server.");
   }
   const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  const structuredAttempt = {
+    input: prompt,
+    text: {
+      format: { type: "json_schema", name, strict: true, schema },
+    },
+  };
   const attempts = [
-    {
-      input: prompt,
-      tools: [{ type: "web_search" }],
-      text: {
-        format: { type: "json_schema", name, strict: true, schema },
-      },
-    },
-    {
-      input: prompt,
-      text: {
-        format: { type: "json_schema", name, strict: true, schema },
-      },
-    },
+    ...(options.webSearch === false
+      ? []
+      : [{ ...structuredAttempt, tools: [{ type: "web_search" }] }]),
+    structuredAttempt,
     {
       input: `${prompt}\n\nReturn only the JSON object. No markdown.`,
       text: { format: { type: "json_object" } },
@@ -360,5 +496,17 @@ export function createWatchlistAiReport(prompt: string) {
     prompt,
     "watchlist_entry_report",
     WATCHLIST_SCHEMA
+  );
+}
+
+export function createPerformanceAiReport(
+  prompt: string,
+  webSearch: boolean
+) {
+  return createAiReport<AiPerformanceReport>(
+    prompt,
+    "performance_coach_report",
+    PERFORMANCE_SCHEMA,
+    { webSearch }
   );
 }

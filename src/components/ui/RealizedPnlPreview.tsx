@@ -7,11 +7,15 @@ export function RealizedPnlPreview({
   premiumClose,
   contracts,
   strategy,
+  commissionOpen = 0,
+  commissionClose = 0,
 }: {
   premiumOpen: string | number;
   premiumClose: string;
   contracts: string | number;
   strategy: string;
+  commissionOpen?: string | number;
+  commissionClose?: string | number;
 }) {
   if (premiumClose.trim() === "") return null;
   const close = Number(premiumClose);
@@ -20,7 +24,12 @@ export function RealizedPnlPreview({
   if (!Number.isFinite(close) || !Number.isFinite(open) || !Number.isFinite(count) || count <= 0) {
     return null;
   }
-  const pnl = realizedPnl(open, close, count, strategy);
+  const fees = Number(commissionOpen) + Number(commissionClose);
+  const gross = realizedPnl(open, close, count, strategy);
+  const pnl = realizedPnl(open, close, count, strategy, {
+    commissionOpen: Number(commissionOpen) || 0,
+    commissionClose: Number(commissionClose) || 0,
+  });
   const positive = pnl >= 0;
   return (
     <div
@@ -32,6 +41,11 @@ export function RealizedPnlPreview({
     >
       Realized P/L {positive ? "+" : ""}
       {fmtMoney(pnl)}
+      {fees > 0 && (
+        <span className="ml-1.5 font-medium opacity-80">
+          gross {fmtMoney(gross)} − fees {fmtMoney(fees)}
+        </span>
+      )}
       <span className="ml-1.5 font-medium opacity-80">Preview — not saved yet</span>
     </div>
   );

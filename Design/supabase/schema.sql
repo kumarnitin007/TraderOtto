@@ -51,6 +51,9 @@ create table if not exists tr_profiles (
 
 -- ---------------------------------------------------------------------------
 -- Trades  (Performance = closed rows, computed on read)
+-- details also carries optional lifecycle fields without a migration:
+-- commissionOpen, commissionClose (total dollars), closeReason
+-- (closed|expired|assigned|rolled), rolledFromTradeId, rolledToTradeId.
 -- ---------------------------------------------------------------------------
 create table if not exists tr_trades (
   id uuid primary key default gen_random_uuid(),

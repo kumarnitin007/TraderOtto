@@ -1,17 +1,21 @@
 "use client";
 
 import { useMemo } from "react";
+import { Download } from "lucide-react";
 import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { Tabs } from "@/components/ui/Tabs";
 import { SummaryTile } from "@/components/performance/SummaryTile";
 import { TickerPerformance } from "@/components/performance/TickerPerformance";
+import { PerformanceAiCoach } from "@/components/performance/PerformanceAiCoach";
 import {
+  closedTradesInRange,
   fmtDate,
   fmtMoney,
   groupClosedTrades,
   markPnl,
+  PNL_RANGE_OPTIONS,
   summarize,
   tickerAvatarColor,
   tradePnl,
@@ -19,7 +23,8 @@ import {
   winRateFor,
 } from "@/lib/pnl";
 import type { Trade } from "@/types/trade";
-import { fmtPct, tradeRoi } from "@/lib/roi";
+import { committedCapital, fmtPct, tradeRoi } from "@/lib/roi";
+import { downloadJournalCsv } from "@/lib/journalExport";
 
 export function PerformanceList() {
   const { trades } = useTrades();
@@ -27,9 +32,14 @@ export function PerformanceList() {
   const [period, setPeriod] = useScreenOption("performancePeriod");
   const [includeOpen, setIncludeOpen] = useScreenOption("performanceUnrealized");
   const [view, setView] = useScreenOption("performanceView");
+  const [range, setRange] = useScreenOption("pnlRange");
   const closed = useMemo(
     () => trades.filter((trade) => trade.status === "closed"),
     [trades]
+  );
+  const closedInRange = useMemo(
+    () => closedTradesInRange(closed, range),
+    [closed, range]
   );
   const open = useMemo(
     () =>
@@ -39,11 +49,20 @@ export function PerformanceList() {
         .sort((a, b) => a.expiry.localeCompare(b.expiry) || a.ticker.localeCompare(b.ticker)),
     [trades]
   );
-  const { allTime, mtd, wtd, closedCount, wins } = summarize(closed);
+  const {
+    allTime: realized,
+    closedCount,
+    wins,
+  } = summarize(closedInRange);
+  const rangeLabel =
+    PNL_RANGE_OPTIONS.find((option) => option.id === range)?.label ?? "Selected period";
   // "Include open" scores open positions off their live mark too.
   const winRate = useMemo(
-    () => (includeOpen ? winRateFor(trades, marks) : winRateFor(closed)),
-    [includeOpen, trades, closed, marks]
+    () =>
+      includeOpen
+        ? winRateFor([...closedInRange, ...open], marks)
+        : winRateFor(closedInRange),
+    [includeOpen, closedInRange, open, marks]
   );
   const winRateCaption = includeOpen
     ? `${winRate.wins}/${winRate.counted} incl. open${
@@ -51,15 +70,19 @@ export function PerformanceList() {
       }`
     : `${winRate.wins}/${winRate.counted} closed`;
   const unrealized = unrealizedFromMarks(trades, marks);
-  const combined = allTime + (unrealized ?? 0);
-  const grouped = useMemo(() => groupClosedTrades(closed, period), [closed, period]);
+  const combined = realized + (unrealized ?? 0);
+  const capital = useMemo(() => committedCapital(trades), [trades]);
+  const grouped = useMemo(
+    () => groupClosedTrades(closedInRange, period),
+    [closedInRange, period]
+  );
   const maxAbs = Math.max(1, ...grouped.map((g) => Math.abs(g.pnl)));
   const closedRows = useMemo(
     () =>
-      closed
+      closedInRange
         .slice()
         .sort((a, b) => (b.closeDate ?? "").localeCompare(a.closeDate ?? "")),
-    [closed]
+    [closedInRange]
   );
 
   return (
@@ -85,20 +108,39 @@ export function PerformanceList() {
             ? "Realized P/L from closed trades, plus unrealized P/L on open positions from live marks."
             : "Realized P/L from closed trades only. Open positions are not included."}
         </p>
-        <Tabs
-          value={includeOpen ? "all" : "realized"}
-          onChange={(value) => setIncludeOpen(value === "all")}
-          options={[
-            { value: "realized", label: "Realized" },
-            { value: "all", label: "Include open" },
-          ]}
-        />
+        <div className="flex flex-wrap items-end gap-3">
+          <select
+            value={range}
+            onChange={(event) => setRange(event.target.value as typeof range)}
+            aria-label="Performance date range"
+            className="rounded-full border border-otto-divider bg-otto-bg px-3 py-2 text-xs font-semibold text-otto-text-dim"
+          >
+            {PNL_RANGE_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <PerformanceAiCoach />
+          <Tabs
+            value={includeOpen ? "all" : "realized"}
+            onChange={(value) => setIncludeOpen(value === "all")}
+            options={[
+              { value: "realized", label: "Realized" },
+              { value: "all", label: "Include open" },
+            ]}
+          />
+        </div>
       </div>
 
       <div className="mb-[22px] mt-0.5 grid grid-cols-2 gap-2.5 desk:grid-cols-4">
         {includeOpen ? (
           <>
-            <SummaryTile label="Realized" value={allTime} />
+            <SummaryTile
+              label="Realized"
+              value={realized}
+              caption={rangeLabel}
+            />
             <SummaryTile label="Unrealized" value={unrealized} />
             <SummaryTile label="Combined" value={combined} />
             <SummaryTile
@@ -110,9 +152,19 @@ export function PerformanceList() {
           </>
         ) : (
           <>
-            <SummaryTile label="All-time" value={allTime} />
-            <SummaryTile label="This month" value={mtd} />
-            <SummaryTile label="This week" value={wtd} />
+            <SummaryTile label={rangeLabel} value={realized} />
+            <SummaryTile
+              label="Trades"
+              value={null}
+              display={String(closedCount)}
+              caption="closed in period"
+            />
+            <SummaryTile
+              label="Wins"
+              value={null}
+              display={String(wins ?? 0)}
+              caption="profitable trades"
+            />
             <SummaryTile
               label="Win rate"
               value={null}
@@ -123,9 +175,44 @@ export function PerformanceList() {
         )}
       </div>
 
+      <div className="mb-[22px] rounded-xl bg-otto-surface px-3.5 py-[13px]">
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="text-[11px] text-otto-text-faint">
+            Assignment cash (backup)
+          </div>
+          <div className="text-[17px] font-bold tabular-nums">
+            {fmtMoney(capital.total)}
+          </div>
+        </div>
+        <div className="mt-[5px] text-[10.5px] leading-snug text-otto-text-faint">
+          Cash to buy the shares if short puts are assigned on{" "}
+          {capital.counted} open position{capital.counted === 1 ? "" : "s"}. A
+          200/190 put spread and a 200 cash-secured put both count as $20,000
+          (strike × 100 × contracts).
+          {capital.excluded > 0
+            ? ` ${capital.excluded} call-side, covered-call, or long position${
+                capital.excluded === 1 ? "" : "s"
+              } excluded — those do not take cash to take assignment.`
+            : ""}
+        </div>
+      </div>
+
+      {trades.length > 0 && (
+        <div className="-mt-3 mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => downloadJournalCsv(trades)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-1.5 text-[11px] font-semibold text-otto-text-dim"
+          >
+            <Download size={13} />
+            Export complete journal CSV
+          </button>
+        </div>
+      )}
+
       <div className="mb-1 flex items-end justify-between">
         <span className="pb-3 text-[13px] text-otto-text-faint">
-          {closedCount} closed trade{closedCount === 1 ? "" : "s"}
+          {rangeLabel} · {closedCount} closed trade{closedCount === 1 ? "" : "s"}
           {wins != null && closedCount > 0 ? ` · ${wins} win${wins === 1 ? "" : "s"}` : ""}
         </span>
         <Tabs
@@ -141,7 +228,8 @@ export function PerformanceList() {
       <div>
         {grouped.length === 0 && (
           <div className="px-1 py-[30px] text-center text-sm text-otto-text-faint">
-            Close a position to see realized P/L here. Open trades stay on Positions until they are closed.
+            No closed trades in {rangeLabel.toLowerCase()}. Change the P/L range
+            in the header to see another period.
           </div>
         )}
         {grouped.map((g) => (
@@ -278,6 +366,9 @@ function ClosedTradeRow({ trade }: { trade: Trade }) {
         </div>
         <div className="mt-0.5 text-xs text-otto-text-faint">
           {strikes} · closed {trade.closeDate ? fmtDate(trade.closeDate) : ""}
+          {trade.closeReason && trade.closeReason !== "closed"
+            ? ` · ${trade.closeReason}`
+            : ""}
           {roi ? ` · ${roi.days}d capital` : ""}
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Camera, LoaderCircle, Pencil, Plus, Trash2, X, Zap } from "lucide-react";
 import {
   hasLongLeg,
@@ -20,6 +20,7 @@ import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { useAlpacaConnection } from "@/components/alpaca/AlpacaConnectionProvider";
 import { parseRobinhoodScreenshot } from "@/lib/robinhoodScreenshot";
 import { WatchGroupsPanel } from "@/components/groups/WatchGroupsPanel";
+import { AI_TRADE_DRAFT_KEY, type AiTradeDraft } from "@/lib/aiTradeDraft";
 
 type FormState = {
   ticker: string;
@@ -37,9 +38,13 @@ type FormState = {
   sigma: string;
   theta: string;
   premiumOpen: string;
+  commissionOpen: string;
   closeDate: string;
   stockPriceClose: string;
   premiumClose: string;
+  commissionClose: string;
+  closeReason: "closed" | "expired" | "assigned" | "rolled";
+  rolledFromTradeId: string;
   notes: string;
 };
 
@@ -60,9 +65,13 @@ function blankForm(): FormState {
     sigma: "",
     theta: "",
     premiumOpen: "",
+    commissionOpen: "",
     closeDate: "",
     stockPriceClose: "",
     premiumClose: "",
+    commissionClose: "",
+    closeReason: "closed",
+    rolledFromTradeId: "",
     notes: "",
   };
 }
@@ -84,9 +93,13 @@ function tradeToForm(trade: Trade): FormState {
     sigma: String(trade.sigma || ""),
     theta: String(trade.theta || ""),
     premiumOpen: String(trade.premiumOpen),
+    commissionOpen: String(trade.commissionOpen || ""),
     closeDate: trade.closeDate ?? "",
     stockPriceClose: trade.stockPriceClose == null ? "" : String(trade.stockPriceClose),
     premiumClose: trade.premiumClose == null ? "" : String(trade.premiumClose),
+    commissionClose: String(trade.commissionClose || ""),
+    closeReason: trade.closeReason ?? "closed",
+    rolledFromTradeId: trade.rolledFromTradeId ?? "",
     notes: trade.notes,
   };
 }
@@ -156,6 +169,7 @@ export function TradeForm() {
   const { trades, addTrade, updateTrade, deleteTrade, readonly } = useTrades();
   const { state: alpacaState } = useAlpacaConnection();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showBanner, setShowBanner] = useState(true);
   const [error, setError] = useState("");
   const [mode, setMode] = useScreenOption("logMode");
@@ -169,6 +183,29 @@ export function TradeForm() {
   const editableTrades = trades.filter((trade) => trade.status === editFilter);
   const selectedTrade = trades.find((trade) => trade.id === selectedId);
   const editingClosed = mode === "edit" && selectedTrade?.status === "closed";
+
+  useEffect(() => {
+    if (searchParams.get("draft") !== "ai") return;
+    const raw = window.sessionStorage.getItem(AI_TRADE_DRAFT_KEY);
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as AiTradeDraft;
+      setMode("new");
+      setSelectedId("");
+      setF({
+        ...blankForm(),
+        ticker: draft.ticker,
+        strategy: draft.strategy ?? STRATEGIES[0],
+        rolledFromTradeId: draft.rolledFromTradeId ?? "",
+        notes: draft.notes,
+      });
+      setShowBanner(false);
+      window.sessionStorage.removeItem(AI_TRADE_DRAFT_KEY);
+      router.replace("/log");
+    } catch {
+      window.sessionStorage.removeItem(AI_TRADE_DRAFT_KEY);
+    }
+  }, [router, searchParams, setMode]);
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF({ ...f, [k]: e.target.value });
@@ -253,6 +290,10 @@ export function TradeForm() {
       setError("Enter the call strike you sold.");
       return;
     }
+    if (f.strategy === "Iron Condor" && (!f.callShort || !f.callLong)) {
+      setError("Enter both call strikes for the iron condor.");
+      return;
+    }
     setError("");
     const trade: TradeUpdate = {
       ticker: f.ticker.toUpperCase(),
@@ -270,6 +311,8 @@ export function TradeForm() {
       sigma: parseFloat(f.sigma) || 0,
       theta: parseFloat(f.theta) || 0,
       premiumOpen: parseFloat(f.premiumOpen) || 0,
+      commissionOpen: parseFloat(f.commissionOpen) || 0,
+      rolledFromTradeId: f.rolledFromTradeId || null,
       notes: f.notes,
     };
     if (editingClosed) {
@@ -280,6 +323,8 @@ export function TradeForm() {
       trade.closeDate = f.closeDate;
       trade.stockPriceClose = parseFloat(f.stockPriceClose) || 0;
       trade.premiumClose = parseFloat(f.premiumClose) || 0;
+      trade.commissionClose = parseFloat(f.commissionClose) || 0;
+      trade.closeReason = f.closeReason;
     }
     try {
       if (mode === "edit" && selectedId) {
@@ -539,6 +584,16 @@ export function TradeForm() {
             onChange={set("premiumOpen")}
           />
         </Field>
+        <Field label="Opening fees ($ total)">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            value={f.commissionOpen}
+            onChange={set("commissionOpen")}
+          />
+        </Field>
       </div>
 
       {editingClosed && (
@@ -575,6 +630,24 @@ export function TradeForm() {
                 onChange={set("premiumClose")}
               />
             </Field>
+            <Field label="Close reason">
+              <select value={f.closeReason} onChange={set("closeReason")}>
+                <option value="closed">Closed</option>
+                <option value="expired">Expired</option>
+                <option value="assigned">Assigned</option>
+                <option value="rolled">Rolled</option>
+              </select>
+            </Field>
+            <Field label="Closing fees ($ total)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={f.commissionClose}
+                onChange={set("commissionClose")}
+              />
+            </Field>
           </div>
           <div className="mt-3">
             <RealizedPnlPreview
@@ -582,6 +655,8 @@ export function TradeForm() {
               premiumClose={f.premiumClose}
               contracts={f.contracts}
               strategy={f.strategy}
+              commissionOpen={f.commissionOpen}
+              commissionClose={f.commissionClose}
             />
           </div>
         </>

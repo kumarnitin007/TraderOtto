@@ -7,6 +7,7 @@ import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { SummaryTile } from "@/components/performance/SummaryTile";
 import {
+  closedTradesInRange,
   fmtDate,
   fmtMoney,
   markPnl,
@@ -27,19 +28,28 @@ export function TickerPerformance() {
   const { trades } = useTrades();
   const marks = useOptionMarks(trades);
   const [ticker, setTicker] = useScreenOption("performanceTicker");
+  const [range] = useScreenOption("pnlRange");
+  const closedIds = useMemo(
+    () => new Set(closedTradesInRange(trades, range).map((trade) => trade.id)),
+    [range, trades]
+  );
   const symbols = useMemo(() => tradedTickers(trades), [trades]);
   const selected = symbols.includes(ticker) ? ticker : symbols[0] ?? "";
   const rows = useMemo(
     () =>
       trades
-        .filter((trade) => trade.ticker === selected)
+        .filter(
+          (trade) =>
+            trade.ticker === selected &&
+            (trade.status === "open" || closedIds.has(trade.id))
+        )
         .slice()
         .sort((a, b) => {
           const aDate = a.closeDate ?? a.openDate;
           const bDate = b.closeDate ?? b.openDate;
           return aDate < bDate ? 1 : -1;
         }),
-    [selected, trades]
+    [closedIds, selected, trades]
   );
   const stats = useMemo(() => tickerStats(rows), [rows]);
   const months = useMemo(() => tickerMonthSplit(rows), [rows]);
@@ -202,7 +212,13 @@ function TickerTradeRow({ trade, mark }: { trade: Trade; mark?: number }) {
         : `${trade.shortStrike}`;
   const statusLabel = !closed
     ? "Open"
-    : early
+    : trade.closeReason === "expired"
+      ? "Expired"
+      : trade.closeReason === "assigned"
+        ? "Assigned"
+        : trade.closeReason === "rolled"
+          ? "Rolled"
+          : early
       ? "Closed early"
       : "Held to expiry";
 

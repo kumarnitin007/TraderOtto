@@ -78,6 +78,61 @@ export function capitalUsed(trade: Trade): number | null {
   return null;
 }
 
+/**
+ * Backup cash to take assignment of the short put: short strike × contracts × 100.
+ * A 200/190 put spread and a 200 CSP both need $20,000 to buy 100 shares at 200.
+ * Call-side assignment is a short-stock/margin obligation, not a cash outlay.
+ */
+export function assignmentCapital(trade: Trade): number | null {
+  const n = trade.contracts;
+  if (!n || n <= 0) return null;
+  const short = trade.shortStrike;
+  if (short == null || short <= 0) return null;
+
+  if (
+    strategyIsPutAssignment(trade.strategy)
+  ) {
+    return short * n * 100;
+  }
+
+  return null;
+}
+
+function strategyIsPutAssignment(
+  strategy: Trade["strategy"]
+): boolean {
+  return (
+    strategy === "Put Credit Spread" ||
+    strategy === "Iron Condor" ||
+    strategy === "Cash-Secured Put" ||
+    strategy === "Strangle"
+  );
+}
+
+export type CommittedCapital = {
+  total: number;
+  counted: number;
+  excluded: number;
+};
+
+/** Totals assignment capital across open positions. */
+export function committedCapital(trades: Trade[]): CommittedCapital {
+  let total = 0;
+  let counted = 0;
+  let excluded = 0;
+  for (const trade of trades) {
+    if (trade.status !== "open") continue;
+    const capital = assignmentCapital(trade);
+    if (capital == null || capital <= 0) {
+      excluded += 1;
+      continue;
+    }
+    total += capital;
+    counted += 1;
+  }
+  return { total, counted, excluded };
+}
+
 export type TradeRoi = {
   pnl: number;
   capital: number;
