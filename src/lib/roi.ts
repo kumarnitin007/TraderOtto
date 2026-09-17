@@ -1,5 +1,5 @@
 import { isDebitStrategy, type Trade } from "@/types/trade";
-import { tradePnl } from "@/lib/pnl";
+import { todayISO, tradePnl } from "@/lib/pnl";
 
 const MS_PER_DAY = 86_400_000;
 const DAYS_PER_YEAR = 365;
@@ -131,6 +131,63 @@ export function committedCapital(trades: Trade[]): CommittedCapital {
     counted += 1;
   }
   return { total, counted, excluded };
+}
+
+const SOON_DAYS = 14;
+
+export type AssignmentDetail = CommittedCapital & {
+  shares: number;
+  /** Credit still at stake on the assignment-eligible legs. */
+  creditOpen: number;
+  /** Largest single-ticker exposure. */
+  topTicker: { ticker: string; amount: number } | null;
+  /** Assignment cash on legs expiring within two weeks. */
+  soonTotal: number;
+  soonCount: number;
+  /** Closest expiry among assignment-eligible legs. */
+  nearest: { ticker: string; expiry: string; days: number } | null;
+};
+
+/** Assignment totals plus the facts that make the number actionable. */
+export function assignmentDetail(
+  trades: Trade[],
+  today = new Date()
+): AssignmentDetail {
+  const base = committedCapital(trades);
+  const byTicker = new Map<string, number>();
+  let shares = 0;
+  let creditOpen = 0;
+  let soonTotal = 0;
+  let soonCount = 0;
+  let nearest: AssignmentDetail["nearest"] = null;
+
+  for (const trade of trades) {
+    if (trade.status !== "open") continue;
+    const capital = assignmentCapital(trade);
+    if (capital == null || capital <= 0) continue;
+
+    shares += trade.contracts * 100;
+    if (!isDebitStrategy(trade.strategy)) {
+      creditOpen += Math.abs(trade.premiumOpen) * trade.contracts * 100;
+    }
+    byTicker.set(trade.ticker, (byTicker.get(trade.ticker) ?? 0) + capital);
+
+    const days = calendarDays(todayISO(today), trade.expiry);
+    if (days <= SOON_DAYS) {
+      soonTotal += capital;
+      soonCount += 1;
+    }
+    if (!nearest || days < nearest.days) {
+      nearest = { ticker: trade.ticker, expiry: trade.expiry, days };
+    }
+  }
+
+  let topTicker: AssignmentDetail["topTicker"] = null;
+  for (const [ticker, amount] of byTicker) {
+    if (!topTicker || amount > topTicker.amount) topTicker = { ticker, amount };
+  }
+
+  return { ...base, shares, creditOpen, topTicker, soonTotal, soonCount, nearest };
 }
 
 export type TradeRoi = {

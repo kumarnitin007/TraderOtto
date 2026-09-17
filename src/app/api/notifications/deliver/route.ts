@@ -1,5 +1,5 @@
 import { mergeNotificationPreferences } from "@/lib/notificationDefaults";
-import { resendFromAddress, sendResendEmail } from "@/lib/resendMail";
+import { notificationFromAddress, sendAlertEmail } from "@/lib/sendgridMail";
 import { serverSupabaseForRequest } from "@/lib/serverSupabase";
 import { telegramCall, telegramToken } from "@/lib/telegram";
 import type {
@@ -96,14 +96,14 @@ export async function POST(request: Request) {
   }
 
   if (body.channel === "email") {
-    const from = resendFromAddress();
-    if (!preferences.emailAddress) {
+    const from = notificationFromAddress();
+    if (!from || !preferences.emailAddress) {
       return Response.json(
         { error: "Email delivery is not configured on the server." },
         { status: 400 }
       );
     }
-    const sent = await sendResendEmail({
+    const sent = await sendAlertEmail({
       from,
       to: preferences.emailAddress,
       subject: body.title,

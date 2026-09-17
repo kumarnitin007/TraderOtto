@@ -336,7 +336,7 @@ export function NotificationSettings() {
 
       <Channel
         title="Email"
-        description="No domain needed for testing: server From is onboarding@resend.dev. Delivery email must be the address on your Resend account. Then turn on Email for each alert type, or Use for live alerts."
+        description="Otto sends through SendGrid. Verify a Single Sender in SendGrid, put that address in NOTIFICATION_FROM_EMAIL, then any Delivery email works. Turn on Email per alert type, or Use for live alerts."
         action={() => void test("email")}
         busy={testing === "email"}
         configured={Boolean(preferences.emailAddress)}
@@ -350,7 +350,10 @@ export function NotificationSettings() {
             type="email"
             value={preferences.emailAddress}
             onChange={(event) =>
-              void save({ ...preferences, emailAddress: event.target.value.trim() })
+              void save({
+                ...preferences,
+                emailAddress: event.target.value.trim().toLowerCase(),
+              })
             }
             placeholder="you@example.com"
           />

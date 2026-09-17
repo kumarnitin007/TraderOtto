@@ -98,7 +98,6 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
     useLiveMarket();
   const [open, setOpen] = useState(false);
   const asOf = snapshotAt ?? lastMarkAt ?? lastQuoteAt;
-  const lastSavedLabel = savedAt ? formatAsOf(savedAt, compact) : null;
   const stale = dataSource === "cache" || (state === "offline" && Boolean(asOf));
 
   const appearance: Appearance =
@@ -123,20 +122,18 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
     offline: "border-otto-red/35 bg-otto-red-soft text-otto-red",
   }[appearance];
 
-  const label =
+  const chipLabel =
     appearance === "checking"
-      ? "Checking Otto"
+      ? "Checking"
       : appearance === "offline"
-        ? "Otto offline"
-        : appearance === "cached" && lastSavedLabel
-          ? `As of ${lastSavedLabel}`
+        ? "Offline"
+        : appearance === "cached"
+          ? "Cached"
           : appearance === "asOfClose"
-            ? asOf
-              ? `As of ${formatAsOf(asOf, compact)}`
-              : "As of close"
+            ? "Closed"
             : appearance === "delayed"
-              ? "Otto delayed"
-              : "Otto active";
+              ? "Delayed"
+              : "Active";
 
   useEffect(() => {
     if (!open) return;
@@ -164,14 +161,15 @@ export function AlpacaStatus({ compact = false }: { compact?: boolean }) {
         }`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title="Otto status — tap for Active, Delayed, and other modes"
+        title={`${chipLabel} — tap for details`}
+        aria-label={`Otto status ${chipLabel}. Tap for details.`}
       >
         {state === "checking" ? (
           <RefreshCw size={11} className="otto-spin" />
         ) : (
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${appearanceDot(appearance)}`} />
         )}
-        {label}
+        {chipLabel}
       </button>
 
       {open && (

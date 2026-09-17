@@ -118,7 +118,7 @@ Event types:
 - Earnings soon (configurable days)
 - Assignment cash exceeds the trader’s configured dollar limit (disabled until a limit is set and the event is enabled)
 
-Channels: in-app inbox (archive or remove from view), browser push, email, Discord webhook, Telegram. Quiet hours and per-ticker / per-list mutes. Test-send from Settings does not enable a channel for live alerts; each event type has its own channel checkboxes, plus “Use for live alerts”. Telegram uses one shared bot; users pair a private chat (recommended) or add the bot as a channel admin with Post messages, then Otto fills the chat ID.
+Channels: in-app inbox (archive or remove from view), browser push, email (SendGrid; verify a Single Sender, then any user Delivery email works), Discord webhook, Telegram. Quiet hours and per-ticker / per-list mutes. Test-send from Settings does not enable a channel for live alerts; each event type has its own channel checkboxes, plus “Use for live alerts”. Telegram uses one shared bot; users pair a private chat (recommended) or add the bot as a channel admin with Post messages, then Otto fills the chat ID.
 
 ### 7. AI (OpenAI via existing quotes API — one serverless route)
 

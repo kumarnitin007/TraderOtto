@@ -105,7 +105,7 @@ export function mergeNotificationPreferences(
     mutedGroupIds: Array.isArray(input.mutedGroupIds)
       ? input.mutedGroupIds.filter((id): id is string => typeof id === "string")
       : [],
-    emailAddress: input.emailAddress || fallbackEmail,
+    emailAddress: (input.emailAddress || fallbackEmail).trim().toLowerCase(),
     telegramPairCode:
       typeof input.telegramPairCode === "string" ? input.telegramPairCode : "",
     telegramPairExpires:

@@ -6,6 +6,7 @@ import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
 import { Tabs } from "@/components/ui/Tabs";
+import { AssignmentCashCard } from "@/components/ui/AssignmentCashCard";
 import { SummaryTile } from "@/components/performance/SummaryTile";
 import { TickerPerformance } from "@/components/performance/TickerPerformance";
 import { PerformanceAiCoach } from "@/components/performance/PerformanceAiCoach";
@@ -23,7 +24,7 @@ import {
   winRateFor,
 } from "@/lib/pnl";
 import type { Trade } from "@/types/trade";
-import { committedCapital, fmtPct, tradeRoi } from "@/lib/roi";
+import { assignmentDetail, fmtPct, tradeRoi } from "@/lib/roi";
 import { downloadJournalCsv } from "@/lib/journalExport";
 
 export function PerformanceList() {
@@ -71,7 +72,7 @@ export function PerformanceList() {
     : `${winRate.wins}/${winRate.counted} closed`;
   const unrealized = unrealizedFromMarks(trades, marks);
   const combined = realized + (unrealized ?? 0);
-  const capital = useMemo(() => committedCapital(trades), [trades]);
+  const assignment = useMemo(() => assignmentDetail(trades), [trades]);
   const grouped = useMemo(
     () => groupClosedTrades(closedInRange, period),
     [closedInRange, period]
@@ -175,27 +176,7 @@ export function PerformanceList() {
         )}
       </div>
 
-      <div className="mb-[22px] rounded-xl bg-otto-surface px-3.5 py-[13px]">
-        <div className="flex items-baseline justify-between gap-3">
-          <div className="text-[11px] text-otto-text-faint">
-            Assignment cash (backup)
-          </div>
-          <div className="text-[17px] font-bold tabular-nums">
-            {fmtMoney(capital.total)}
-          </div>
-        </div>
-        <div className="mt-[5px] text-[10.5px] leading-snug text-otto-text-faint">
-          Cash to buy the shares if short puts are assigned on{" "}
-          {capital.counted} open position{capital.counted === 1 ? "" : "s"}. A
-          200/190 put spread and a 200 cash-secured put both count as $20,000
-          (strike × 100 × contracts).
-          {capital.excluded > 0
-            ? ` ${capital.excluded} call-side, covered-call, or long position${
-                capital.excluded === 1 ? "" : "s"
-              } excluded — those do not take cash to take assignment.`
-            : ""}
-        </div>
-      </div>
+      <AssignmentCashCard detail={assignment} className="mb-[22px]" />
 
       {trades.length > 0 && (
         <div className="-mt-3 mb-4 flex justify-end">
