@@ -62,6 +62,25 @@ export type TickerTechnical = {
   asOf: string | null;
 };
 
+export type DailyChartPoint = {
+  t: string;
+  close: number;
+  sma20: number | null;
+  sma50: number | null;
+};
+
+function rollingAverage(values: number[], end: number, window: number) {
+  const start = end - window + 1;
+  if (start < 0) return null;
+  let sum = 0;
+  for (let index = start; index <= end; index += 1) {
+    const value = values[index];
+    if (typeof value !== "number") return null;
+    sum += value;
+  }
+  return sum / window;
+}
+
 function parseTrade(value: unknown): LatestTrade | null {
   const trade = value as { p?: number; t?: string } | undefined;
   if (typeof trade?.p !== "number") return null;
@@ -181,4 +200,41 @@ export async function fetchTickerTechnicals(symbols: string[]) {
     };
   }
   return technicals;
+}
+
+/** Last ~80 daily closes plus SMA20/SMA50, from the same Alpaca bars feed. */
+export async function fetchDailyChart(symbol: string) {
+  const creds = alpacaCredentials();
+  const ticker = symbol.toUpperCase();
+  if (!creds.configured || !ticker) return [];
+
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - 160);
+  const url = new URL("/v2/stocks/bars", creds.dataUrl);
+  url.searchParams.set("symbols", ticker);
+  url.searchParams.set("timeframe", "1Day");
+  url.searchParams.set("start", start.toISOString());
+  url.searchParams.set("limit", "5000");
+  url.searchParams.set("adjustment", "all");
+  const response = await fetch(url, {
+    headers: alpacaHeaders(creds.key, creds.secret),
+    next: { revalidate: 900 },
+  });
+  if (!response.ok) return [];
+
+  const payload = (await response.json()) as {
+    bars?: Record<string, DailyBar[]>;
+  };
+  const bars = (payload.bars?.[ticker] ?? []).filter(
+    (bar): bar is DailyBar & { c: number; t: string } =>
+      typeof bar.c === "number" && typeof bar.t === "string"
+  );
+  const closes = bars.map((bar) => bar.c);
+  const points: DailyChartPoint[] = bars.map((bar, index) => ({
+    t: bar.t.slice(0, 10),
+    close: bar.c,
+    sma20: rollingAverage(closes, index, 20),
+    sma50: rollingAverage(closes, index, 50),
+  }));
+  return points.slice(-80);
 }

@@ -397,7 +397,19 @@ function TickerDrawer({
           </div>
         </section>
 
-        <TickerResearch details={details} />
+        <TickerResearch
+          details={details}
+          levels={[
+            tracker.lowerTrigger != null
+              ? { label: "Low", price: tracker.lowerTrigger }
+              : null,
+            tracker.upperTrigger != null
+              ? { label: "High", price: tracker.upperTrigger }
+              : null,
+          ].filter((level): level is { label: string; price: number } =>
+            Boolean(level)
+          )}
+        />
       </aside>
     </div>
   );

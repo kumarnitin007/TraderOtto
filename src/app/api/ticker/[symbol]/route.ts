@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import type { CorporateAction, TickerNews } from "@/types/tickerDetails";
 import { getFinnhubIndustry, getFinnhubTickerDetails } from "@/lib/finnhub";
 import { lookupNextEarnings } from "@/lib/nextEarnings";
+import { fetchDailyChart } from "@/lib/alpacaServer";
 
 type Bar = { o?: number; h?: number; l?: number; c?: number; v?: number };
 
@@ -166,6 +167,7 @@ export async function GET(
     corporatePayload,
     newsPayload,
     finnhub,
+    chart,
   ] =
     await Promise.all([
     headers
@@ -215,6 +217,7 @@ export async function GET(
           .catch(() => null)
       : Promise.resolve(null),
     getFinnhubTickerDetails(symbol),
+    fetchDailyChart(symbol),
   ]);
 
   const price = marketResult?.latestTrade?.p ?? marketResult?.dailyBar?.c;
@@ -302,5 +305,6 @@ export async function GET(
     },
     marketSource: marketResult ? "alpaca" : "unavailable",
     earningsSource: finnhub.earnings ? "finnhub" : "nasdaq",
+    chart,
   });
 }

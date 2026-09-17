@@ -178,7 +178,25 @@ export function PositionTickerDrawer({
           </div>
         </section>
 
-        <TickerResearch details={details} />
+        <TickerResearch
+          details={details}
+          levels={[
+            trade.longStrike
+              ? { label: "Long", price: trade.longStrike }
+              : null,
+            trade.shortStrike
+              ? { label: "Short", price: trade.shortStrike }
+              : null,
+            trade.callShortStrike
+              ? { label: "Call short", price: trade.callShortStrike }
+              : null,
+            trade.callLongStrike
+              ? { label: "Call long", price: trade.callLongStrike }
+              : null,
+          ].filter((level): level is { label: string; price: number } =>
+            Boolean(level && level.price > 0)
+          )}
+        />
       </aside>
     </div>
   );

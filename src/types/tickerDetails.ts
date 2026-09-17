@@ -76,4 +76,10 @@ export type TickerDetails = {
   };
   marketSource: "alpaca" | "unavailable";
   earningsSource: "finnhub" | "nasdaq";
+  chart: {
+    t: string;
+    close: number;
+    sma20: number | null;
+    sma50: number | null;
+  }[];
 };

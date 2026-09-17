@@ -4,8 +4,15 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { fmtDate } from "@/lib/pnl";
 import type { TickerDetails } from "@/types/tickerDetails";
+import { TickerPriceChart, type ChartLevel } from "@/components/ticker/TickerPriceChart";
 
-export function TickerResearch({ details }: { details: TickerDetails | null }) {
+export function TickerResearch({
+  details,
+  levels,
+}: {
+  details: TickerDetails | null;
+  levels?: ChartLevel[];
+}) {
   if (!details) return null;
 
   const news = details.news;
@@ -13,6 +20,7 @@ export function TickerResearch({ details }: { details: TickerDetails | null }) {
 
   return (
     <>
+      <TickerPriceChart chart={details.chart} levels={levels} />
       {details.company && (
         <section className="mt-6">
           <Title>Company</Title>
