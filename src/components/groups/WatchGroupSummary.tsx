@@ -177,7 +177,7 @@ export function WatchGroupSummary({
         error?: string;
       };
       if (!response.ok || !payload.saved) {
-        throw new Error(payload.error || "AI research failed.");
+        throw new Error(payload.error || "Otto could not finish the research.");
       }
       setSaved(payload.saved);
       setHistory((current) => [
@@ -185,7 +185,11 @@ export function WatchGroupSummary({
         ...current.filter((item) => item.id !== payload.saved!.id),
       ]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "AI research failed.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Otto could not finish the research."
+      );
     } finally {
       setRunning(false);
     }
@@ -258,7 +262,7 @@ export function WatchGroupSummary({
               <div className="mt-6 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-otto-text-faint">
-                    AI candidate research
+                    Otto candidate research
                   </h3>
                   <div className="mt-1 text-xs text-otto-text-faint">
                     Ranks entry setups and suggests strategy families to validate.
@@ -277,7 +281,11 @@ export function WatchGroupSummary({
                   ) : (
                     <Brain size={14} />
                   )}
-                  {running ? "Researching…" : saved ? "Refresh AI" : "Get AI insights"}
+                  {running
+                    ? "Otto is thinking…"
+                    : saved
+                      ? "Ask Otto again"
+                      : "Ask Otto"}
                 </button>
               </div>
               {aiReady === false && (
@@ -288,7 +296,7 @@ export function WatchGroupSummary({
               )}
               {readonly && aiReady !== false && (
                 <div className="mt-3 text-xs text-otto-text-faint">
-                  Sign in to save ChatGPT reports. You can still run a one-off call.
+                  Sign in to save Otto reports. You can still run a one-off call.
                 </div>
               )}
               {error && <div className="mt-3 text-xs text-otto-red">{error}</div>}

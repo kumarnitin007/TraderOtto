@@ -35,6 +35,8 @@ type NotificationContextValue = {
   clearCondition: (dedupeKey: string) => Promise<void>;
   acknowledge: (id: string) => Promise<void>;
   acknowledgeAll: () => Promise<void>;
+  hide: (id: string) => Promise<void>;
+  hideMany: (ids: string[]) => Promise<void>;
 };
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -151,6 +153,22 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     await Promise.all(ids.map((id) => repoRef.current?.acknowledge(id)));
   }, []);
 
+  const hideMany = useCallback(async (ids: string[]) => {
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    setSignals((current) => current.filter((signal) => !idSet.has(signal.id)));
+    await repoRef.current?.hide(ids).catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Could not remove alerts.");
+    });
+  }, []);
+
+  const hide = useCallback(
+    async (id: string) => {
+      await hideMany([id]);
+    },
+    [hideMany]
+  );
+
   const value = useMemo(
     () => ({
       preferences,
@@ -166,6 +184,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       clearCondition,
       acknowledge,
       acknowledgeAll,
+      hide,
+      hideMany,
     }),
     [
       preferences,
@@ -177,6 +197,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       clearCondition,
       acknowledge,
       acknowledgeAll,
+      hide,
+      hideMany,
     ]
   );
 

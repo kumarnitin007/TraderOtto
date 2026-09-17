@@ -33,6 +33,8 @@ export type NotificationPreferences = {
   events: Record<NotificationEventKind, EventPreference>;
   discordWebhook: string;
   telegramChatId: string;
+  telegramPairCode: string;
+  telegramPairExpires: string;
   emailAddress: string;
 };
 

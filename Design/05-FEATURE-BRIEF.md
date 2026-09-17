@@ -85,7 +85,7 @@ P/L is strategy-aware: credits profit as the mark falls; debits profit as it ris
 - Per-ticker lower/upper price triggers.
 - Cached next-earnings dates.
 - Local Otto flags: range breach, unusual volume vs 20-day average, earnings within 30 days, price vs SMA20/SMA50.
-- AI candidate research: ranks setups, suggests strategy *families* (not invented strikes), flags correlated names, lists names to avoid.
+- Otto candidate research (Ask Otto): ranks setups, suggests strategy *families* (not invented strikes), flags correlated names, lists names to avoid.
 
 ### 4. Fast capture
 
@@ -118,11 +118,11 @@ Event types:
 - Earnings soon (configurable days)
 - Assignment cash exceeds the trader’s configured dollar limit (disabled until a limit is set and the event is enabled)
 
-Channels: in-app inbox, browser push, email, Discord webhook, Telegram. Quiet hours and per-ticker / per-list mutes. Test-send from Settings.
+Channels: in-app inbox (archive or remove from view), browser push, email, Discord webhook, Telegram. Quiet hours and per-ticker / per-list mutes. Test-send from Settings does not enable a channel for live alerts; each event type has its own channel checkboxes, plus “Use for live alerts”. Telegram uses one shared bot; users pair a private chat (recommended) or add the bot as a channel admin with Post messages, then Otto fills the chat ID.
 
 ### 7. AI (OpenAI via existing quotes API — one serverless route)
 
-Three distinct coaches, all persisted as structured JSON in `tr_api_events` (not chat transcripts):
+Three distinct coaches, all persisted as structured JSON in `tr_api_events` (not chat transcripts). In the UI every entry point is branded **Ask Otto** (running state “Otto is thinking…”, rerun state “Ask Otto again”):
 
 | Coach | Input | Output emphasis |
 |---|---|---|

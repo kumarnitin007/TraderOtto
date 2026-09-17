@@ -6,6 +6,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { getSupabaseClient } from "@/lib/supabase";
 import { EVENT_LABELS } from "@/lib/notificationDefaults";
+import { TelegramSetup } from "@/components/settings/TelegramSetup";
 import type {
   NotificationChannel,
   NotificationEventKind,
@@ -43,6 +44,24 @@ export function NotificationSettings() {
         [kind]: { ...preferences.events[kind], ...patch },
       },
     });
+  }
+
+  async function enableChannelOnLiveAlerts(
+    channel: "email" | "discord" | "telegram"
+  ) {
+    const events = Object.fromEntries(
+      (Object.keys(EVENT_LABELS) as NotificationEventKind[]).map((kind) => [
+        kind,
+        {
+          ...preferences.events[kind],
+          ...(preferences.events[kind].enabled ? { [channel]: true } : {}),
+        },
+      ])
+    ) as NotificationPreferences["events"];
+    await save({ ...preferences, events });
+    setNotice(
+      `${channel[0].toUpperCase()}${channel.slice(1)} is now on for every enabled alert type.`
+    );
   }
 
   async function requestBrowser() {
@@ -317,10 +336,14 @@ export function NotificationSettings() {
 
       <Channel
         title="Email"
-        description="Requires RESEND_API_KEY and NOTIFICATION_FROM_EMAIL on the server."
+        description="No domain needed for testing: server From is onboarding@resend.dev. Delivery email must be the address on your Resend account. Then turn on Email for each alert type, or Use for live alerts."
         action={() => void test("email")}
         busy={testing === "email"}
         configured={Boolean(preferences.emailAddress)}
+        extraAction={{
+          label: "Use for live alerts",
+          onClick: () => void enableChannelOnLiveAlerts("email"),
+        }}
       >
         <Field label="Delivery email">
           <input
@@ -336,10 +359,14 @@ export function NotificationSettings() {
 
       <Channel
         title="Discord"
-        description="Create a webhook in Discord → Channel settings → Integrations. It is stored in your private profile settings."
+        description="Create a webhook in Discord → Channel settings → Integrations. It is stored in your private profile settings. Test does not turn Discord on for live alerts."
         action={() => void test("discord")}
         busy={testing === "discord"}
         configured={Boolean(preferences.discordWebhook)}
+        extraAction={{
+          label: "Use for live alerts",
+          onClick: () => void enableChannelOnLiveAlerts("discord"),
+        }}
       >
         <Field label="Webhook URL">
           <input
@@ -355,20 +382,20 @@ export function NotificationSettings() {
 
       <Channel
         title="Telegram"
-        description="Message your Trader Otto bot, then enter the destination chat ID. TELEGRAM_BOT_TOKEN stays server-side."
+        description="Otto uses one shared bot (token stays on the server). You only connect your chat. A successful test does not send live alerts until you enable Telegram on each alert type or tap Use for live alerts."
         action={() => void test("telegram")}
         busy={testing === "telegram"}
         configured={Boolean(preferences.telegramChatId)}
+        extraAction={{
+          label: "Use for live alerts",
+          onClick: () => void enableChannelOnLiveAlerts("telegram"),
+        }}
       >
-        <Field label="Chat ID">
-          <input
-            value={preferences.telegramChatId}
-            onChange={(event) =>
-              void save({ ...preferences, telegramChatId: event.target.value.trim() })
-            }
-            placeholder="-1001234567890"
-          />
-        </Field>
+        <TelegramSetup
+          preferences={preferences}
+          save={save}
+          notice={setNotice}
+        />
       </Channel>
 
       {(notice || error) && (
@@ -396,6 +423,7 @@ function Channel({
   configured,
   busy,
   action,
+  extraAction,
   children,
 }: {
   title: string;
@@ -403,6 +431,7 @@ function Channel({
   configured: boolean;
   busy?: boolean;
   action: () => void;
+  extraAction?: { label: string; onClick: () => void };
   children?: React.ReactNode;
 }) {
   return (
@@ -420,15 +449,26 @@ function Channel({
             {description}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={action}
-          disabled={busy}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-otto-divider px-3 py-1.5 text-[11px] font-semibold text-otto-text-dim disabled:opacity-50"
-        >
-          <Send size={12} />
-          {busy ? "Sending…" : "Test"}
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <button
+            type="button"
+            onClick={action}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-1.5 text-[11px] font-semibold text-otto-text-dim disabled:opacity-50"
+          >
+            <Send size={12} />
+            {busy ? "Sending…" : "Test"}
+          </button>
+          {extraAction && (
+            <button
+              type="button"
+              onClick={extraAction.onClick}
+              className="rounded-full border border-otto-divider px-3 py-1.5 text-[11px] font-semibold text-otto-text-dim"
+            >
+              {extraAction.label}
+            </button>
+          )}
+        </div>
       </div>
       {children && <div className="mt-3">{children}</div>}
     </section>

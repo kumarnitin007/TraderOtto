@@ -1,5 +1,7 @@
 import { mergeNotificationPreferences } from "@/lib/notificationDefaults";
+import { resendFromAddress, sendResendEmail } from "@/lib/resendMail";
 import { serverSupabaseForRequest } from "@/lib/serverSupabase";
+import { telegramCall, telegramToken } from "@/lib/telegram";
 import type {
   NotificationChannel,
   NotificationEventKind,
@@ -78,50 +80,37 @@ export async function POST(request: Request) {
   }
 
   if (body.channel === "telegram") {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token || !preferences.telegramChatId) {
+    if (!telegramToken() || !preferences.telegramChatId) {
       return Response.json(
         { error: "Telegram bot token or chat ID is not configured." },
         { status: 400 }
       );
     }
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: preferences.telegramChatId,
-        text: `${body.title}\n${body.message}`,
-      }),
+    const sent = await telegramCall("sendMessage", {
+      chat_id: preferences.telegramChatId,
+      text: `${body.title}\n${body.message}`,
     });
-    if (!response.ok) {
-      return Response.json({ error: "Telegram rejected the message." }, { status: 502 });
+    if (!sent.ok) {
+      return Response.json({ error: sent.error }, { status: 502 });
     }
   }
 
   if (body.channel === "email") {
-    const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.NOTIFICATION_FROM_EMAIL;
-    if (!apiKey || !from || !preferences.emailAddress) {
+    const from = resendFromAddress();
+    if (!preferences.emailAddress) {
       return Response.json(
         { error: "Email delivery is not configured on the server." },
         { status: 400 }
       );
     }
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [preferences.emailAddress],
-        subject: body.title,
-        text: body.message,
-      }),
+    const sent = await sendResendEmail({
+      from,
+      to: preferences.emailAddress,
+      subject: body.title,
+      text: body.message,
     });
-    if (!response.ok) {
-      return Response.json({ error: "Email provider rejected the message." }, { status: 502 });
+    if (!sent.ok) {
+      return Response.json({ error: sent.error }, { status: 502 });
     }
   }
 

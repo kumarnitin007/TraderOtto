@@ -159,6 +159,19 @@ export function createSupabaseNotificationRepository(
         .eq("user_id", userId);
       if (updateError) throw new Error(updateError.message);
     },
+
+    async hide(ids: string[]) {
+      if (!ids.length) return;
+      const { error } = await supabase
+        .from("tr_signals")
+        .update({
+          status: "acked",
+          deleted_at: new Date().toISOString(),
+        })
+        .in("id", ids)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
   };
 }
 

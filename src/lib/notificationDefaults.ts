@@ -61,6 +61,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   },
   discordWebhook: "",
   telegramChatId: "",
+  telegramPairCode: "",
+  telegramPairExpires: "",
   emailAddress: "",
 };
 
@@ -104,5 +106,11 @@ export function mergeNotificationPreferences(
       ? input.mutedGroupIds.filter((id): id is string => typeof id === "string")
       : [],
     emailAddress: input.emailAddress || fallbackEmail,
+    telegramPairCode:
+      typeof input.telegramPairCode === "string" ? input.telegramPairCode : "",
+    telegramPairExpires:
+      typeof input.telegramPairExpires === "string"
+        ? input.telegramPairExpires
+        : "",
   };
 }

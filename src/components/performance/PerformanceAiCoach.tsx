@@ -109,7 +109,7 @@ export function PerformanceAiCoach() {
         }
       })
       .catch(() => {
-        if (!cancelled) setError("Could not load the saved AI report.");
+        if (!cancelled) setError("Could not load the saved Otto report.");
       })
       .finally(() => {
         if (!cancelled) setLoadingSaved(false);
@@ -178,7 +178,7 @@ export function PerformanceAiCoach() {
         className="inline-flex items-center gap-1.5 rounded-full bg-otto-green px-3.5 py-2 text-xs font-bold text-black"
       >
         <Brain size={14} />
-        AI performance coach
+        Ask Otto
       </button>
 
       {open && (
@@ -189,15 +189,13 @@ export function PerformanceAiCoach() {
                 <div className="text-xs font-semibold text-otto-text-faint">
                   Closed-trade journal
                 </div>
-                <h2 className="mt-1 text-xl font-extrabold">
-                  AI performance coach
-                </h2>
+                <h2 className="mt-1 text-xl font-extrabold">Ask Otto</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-otto-surface"
-                aria-label="Close AI performance coach"
+                aria-label="Close Ask Otto"
               >
                 <X size={17} />
               </button>
@@ -240,7 +238,7 @@ export function PerformanceAiCoach() {
               </div>
 
               <h3 className="mt-6 text-[10px] font-bold uppercase tracking-wider text-otto-text-faint">
-                What should AI answer?
+                What should Otto answer?
               </h3>
               <div className="mt-2 grid gap-2 desk:grid-cols-3">
                 {PERFORMANCE_AI_MODES.map((option) => (
@@ -284,10 +282,10 @@ export function PerformanceAiCoach() {
                     <FileText size={14} />
                   )}
                   {running
-                    ? "Analyzing…"
+                    ? "Otto is thinking…"
                     : saved
-                      ? "Refresh this answer"
-                      : "Ask AI"}
+                      ? "Ask Otto again"
+                      : "Ask Otto"}
                 </button>
               </div>
 
