@@ -2,6 +2,11 @@ import type { OptionMark } from "@/hooks/useOptionMarks";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import { markPnl, todayISO } from "@/lib/pnl";
 import type { Trade } from "@/types/trade";
+import {
+  DEFAULT_POSITION_RISK_THRESHOLDS,
+  shortStrikeDistancePct,
+} from "@/lib/premiumPace";
+import type { PositionRiskThresholds } from "@/types/notification";
 
 export type PositionFocusFilter =
   | "focus"
@@ -27,26 +32,18 @@ function utc(date: string) {
 export function positionFocus(
   trade: Trade,
   quote?: LiveQuote,
-  mark?: OptionMark
+  mark?: OptionMark,
+  thresholds: PositionRiskThresholds = DEFAULT_POSITION_RISK_THRESHOLDS
 ): PositionFocus {
   const spot = quote?.price || null;
-  const keyStrikes = [trade.shortStrike, trade.callShortStrike].filter(
-    (strike): strike is number => strike != null && strike > 0
-  );
-  const distancePct =
-    spot && keyStrikes.length
-      ? Math.min(
-          ...keyStrikes.map(
-            (strike) => (Math.abs(spot - strike) / spot) * 100
-          )
-        )
-      : null;
+  const distancePct = shortStrikeDistancePct(trade, spot);
   const totalMs = Math.max(utc(trade.expiry) - utc(trade.openDate), 1);
   const remainingMs = Math.max(utc(trade.expiry) - utc(todayISO()), 0);
   const remainingPct = Math.min(100, (remainingMs / totalMs) * 100);
   const pnl = mark ? markPnl(trade, mark.mark) : null;
-  const near = distancePct != null && distancePct <= 20;
-  const time = remainingPct <= 50;
+  const near =
+    distancePct != null && distancePct <= thresholds.watchStrikeDistancePct;
+  const time = 100 - remainingPct >= thresholds.watchTimeUsedPct;
   const losing = pnl != null && pnl < 0;
 
   return {

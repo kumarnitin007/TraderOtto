@@ -17,6 +17,13 @@ export type EventPreference = {
   telegram: boolean;
 };
 
+export type PositionRiskThresholds = {
+  criticalStrikeDistancePct: number;
+  watchStrikeDistancePct: number;
+  watchTimeUsedPct: number;
+  underwaterPremiumLossPct: number;
+};
+
 export type NotificationPreferences = {
   masterEnabled: boolean;
   quietHours: {
@@ -26,6 +33,9 @@ export type NotificationPreferences = {
   };
   expiryDays: number;
   earningsDays: number;
+  /** Minimum time before the same condition can notify again. */
+  repeatCooldownHours: number;
+  positionRiskThresholds: PositionRiskThresholds;
   /** Total short-put assignment backup limit; 0 disables the alert. */
   assignmentCashThreshold: number;
   mutedTickers: string[];

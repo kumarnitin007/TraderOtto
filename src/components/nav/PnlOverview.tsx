@@ -11,6 +11,7 @@ import {
   realizedInRange,
   unrealizedFromMarks,
 } from "@/lib/pnl";
+import { tradesInScope } from "@/lib/tradeScope";
 
 function moneyClass(value: number) {
   return value >= 0 ? "text-otto-green" : "text-otto-red";
@@ -24,10 +25,12 @@ export function PnlOverview({ compact = false }: { compact?: boolean }) {
   const { trades } = useTrades();
   const marks = useOptionMarks(trades);
   const [range, setRange] = useScreenOption("pnlRange");
+  const [tradeScope] = useScreenOption("tradeScope");
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const realized = realizedInRange(trades, range);
-  const unrealized = unrealizedFromMarks(trades, marks);
+  const scopedTrades = tradesInScope(trades, tradeScope);
+  const realized = realizedInRange(scopedTrades, range);
+  const unrealized = unrealizedFromMarks(scopedTrades, marks);
   const rangeLabel =
     PNL_RANGE_OPTIONS.find((option) => option.id === range)?.label ?? "All time";
 

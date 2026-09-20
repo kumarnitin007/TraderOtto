@@ -16,13 +16,17 @@ import {
   todayISO,
 } from "@/lib/pnl";
 import { isDebitStrategy } from "@/types/trade";
-import { positionAlert } from "@/lib/premiumPace";
+import {
+  positionAlert,
+  shortStrikeDistancePct,
+} from "@/lib/premiumPace";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
 import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { PaceBadge } from "@/components/positions/PaceBadge";
 import { assignmentCapital } from "@/lib/roi";
 import { AI_TRADE_DRAFT_KEY } from "@/lib/aiTradeDraft";
+import type { PositionRiskThresholds } from "@/types/notification";
 
 export function TradeRow({
   t,
@@ -36,6 +40,7 @@ export function TradeRow({
   onTickerClick,
   live,
   optionMark,
+  riskThresholds,
 }: {
   t: Trade;
   open: boolean;
@@ -48,6 +53,7 @@ export function TradeRow({
   onTickerClick: () => void;
   live?: LiveQuote;
   optionMark?: OptionMark;
+  riskThresholds: PositionRiskThresholds;
 }) {
   const router = useRouter();
   const pnl = tradePnl(t);
@@ -58,7 +64,11 @@ export function TradeRow({
     premiumDirection(t.strategy) * Math.abs(t.premiumOpen) * t.contracts * 100;
   const currentMark = optionMark?.mark;
   const unrealizedPnl = currentMark == null ? null : markPnl(t, currentMark);
-  const pace = positionAlert(t, currentMark);
+  const riskDistance = shortStrikeDistancePct(t, live?.price);
+  const pace = positionAlert(t, currentMark, {
+    spot: live?.price,
+    thresholds: riskThresholds,
+  });
   const assignmentCash = assignmentCapital(t);
   const [closeDate, setCloseDate] = useState(t.closeDate || todayISO());
   const [stockPriceClose, setStockPriceClose] = useState(
@@ -97,6 +107,13 @@ export function TradeRow({
             onTickerClick();
             return;
           }
+          const alertLink = (event.target as HTMLElement).closest(
+            "[data-alert-href]"
+          ) as HTMLElement | null;
+          if (alertLink?.dataset.alertHref) {
+            router.push(alertLink.dataset.alertHref);
+            return;
+          }
           onToggle();
         }}
         className="flex w-full items-center gap-2.5 bg-transparent px-1 py-[13px] text-left desk:gap-3"
@@ -118,7 +135,14 @@ export function TradeRow({
             >
               {t.ticker}
             </span>
-            {pace && <PaceBadge signal={pace} />}
+            {pace && (
+              <PaceBadge
+                signal={pace}
+                alertHref={`/notifications?ticker=${encodeURIComponent(t.ticker)}&kind=${
+                  pace.tier === "nearmax" ? "near_max" : "position_risk"
+                }`}
+              />
+            )}
             <span className="truncate text-xs text-otto-text-faint">{t.strategy}</span>
           </div>
           <div className="mt-0.5 truncate text-xs text-otto-text-faint">
@@ -144,9 +168,17 @@ export function TradeRow({
                     {fmtMoney(unrealizedPnl)}
                   </div>
                   <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
-                    <span className="desk:hidden">${currentMark!.toFixed(2)} now</span>
+                    <span className="desk:hidden">
+                      ${currentMark!.toFixed(2)} now
+                      {riskDistance != null && (
+                        <> · <RiskDistance distance={riskDistance} thresholds={riskThresholds} /></>
+                      )}
+                    </span>
                     <span className="hidden desk:inline">
                       ${currentMark!.toFixed(2)} current · ${Math.abs(t.premiumOpen).toFixed(2)} open
+                      {riskDistance != null && (
+                        <> · <RiskDistance distance={riskDistance} thresholds={riskThresholds} /></>
+                      )}
                     </span>
                   </div>
                 </>
@@ -161,9 +193,18 @@ export function TradeRow({
                     {fmtMoney(openingPremium)}
                   </div>
                   <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
-                    <span className="desk:hidden">no live mark</span>
+                    <span className="desk:hidden">
+                      {riskDistance == null ? (
+                        "no live mark"
+                      ) : (
+                        <RiskDistance distance={riskDistance} thresholds={riskThresholds} />
+                      )}
+                    </span>
                     <span className="hidden desk:inline">
                       opening {debit ? "debit" : "credit"} · live mark unavailable
+                      {riskDistance != null && (
+                        <> · <RiskDistance distance={riskDistance} thresholds={riskThresholds} /></>
+                      )}
                     </span>
                   </div>
                 </>
@@ -433,6 +474,33 @@ function fmtIv(live?: number, logged?: number) {
   if (typeof live === "number" && Number.isFinite(live)) return `${(live * 100).toFixed(1)}%`;
   if (typeof logged === "number" && logged !== 0) return `${logged}%`;
   return "—";
+}
+
+function RiskDistance({
+  distance,
+  thresholds,
+}: {
+  distance: number;
+  thresholds: PositionRiskThresholds;
+}) {
+  const label =
+    Math.abs(distance) < 0.05
+      ? "at strike"
+      : `${Math.abs(distance).toFixed(1)}% ${distance >= 0 ? "OTM" : "ITM"}`;
+  const tone =
+    distance <= thresholds.criticalStrikeDistancePct
+      ? "text-otto-red"
+      : distance <= thresholds.watchStrikeDistancePct
+        ? "text-otto-amber"
+        : "text-otto-green";
+  return (
+    <span
+      className={`font-semibold ${tone}`}
+      title={`Distance from the nearest short strike. Critical at ${thresholds.criticalStrikeDistancePct}% or less; Watch at ${thresholds.watchStrikeDistancePct}% or less.`}
+    >
+      {label}
+    </span>
+  );
 }
 
 function GreekReadout({

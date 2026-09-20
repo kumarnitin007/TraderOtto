@@ -10,6 +10,7 @@ import { parseRobinhoodScreenshot } from "@/lib/robinhoodScreenshot";
 import { isDuplicateClosedTrade } from "@/lib/tradeDuplicate";
 import type { ClosedTradeImport } from "@/types/trade";
 import { PositionsSummary } from "@/components/positions/PositionsSummary";
+import { RobinhoodCsvImport } from "@/components/positions/RobinhoodCsvImport";
 
 function toClosedTrade(
   parsed: ReturnType<typeof parseRobinhoodScreenshot>
@@ -163,6 +164,7 @@ export function PositionsScreenshotImport({
             }}
           />
         </label>
+        <RobinhoodCsvImport />
         <PositionsSummary quotes={quotes} marks={marks} />
         {error && <div className="text-xs font-medium text-otto-red">{error}</div>}
       </div>

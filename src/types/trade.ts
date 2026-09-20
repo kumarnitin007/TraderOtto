@@ -80,6 +80,9 @@ export type Trade = {
   closeReason?: CloseReason;
   rolledFromTradeId?: string | null;
   rolledToTradeId?: string | null;
+  /** Origin metadata used to make bulk imports idempotent. */
+  importSource?: string | null;
+  importFingerprint?: string | null;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -109,6 +112,19 @@ export type ClosePayload = {
 };
 
 export type ClosedTradeImport = NewTrade & ClosePayload;
+
+export type TradeImport = NewTrade & Partial<ClosePayload> & {
+  status: TradeStatus;
+  importSource: string;
+  importFingerprint: string;
+};
+
+export type TradeImportResult = {
+  fingerprint: string;
+  status: "imported" | "duplicate" | "failed";
+  trade?: Trade;
+  error?: string;
+};
 
 /** Open fields plus optional close fields when editing a closed trade. */
 export type TradeUpdate = NewTrade & Partial<ClosePayload>;

@@ -19,6 +19,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { useNotifications } from "@/hooks/useNotifications";
 import { summarize } from "@/lib/pnl";
+import { useScreenOption } from "@/hooks/useScreenOption";
+import { tradesInScope } from "@/lib/tradeScope";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/positions", label: "Positions", icon: Rows3 },
@@ -34,7 +36,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { error: groupError } = useWatchGroups();
   const { user, signOut } = useAuth();
   const { unreadCount, error: notificationError } = useNotifications();
-  const { winRate } = summarize(trades);
+  const [tradeScope] = useScreenOption("tradeScope");
+  const { winRate } = summarize(tradesInScope(trades, tradeScope));
 
   return (
     <div className="min-h-screen bg-otto-bg text-otto-text">

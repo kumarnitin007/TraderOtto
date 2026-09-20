@@ -1,5 +1,5 @@
-import { PerformanceList } from "@/components/performance/PerformanceList";
+import { PerformanceDashboard } from "@/components/performance/PerformanceDashboard";
 
 export default function PerformancePage() {
-  return <PerformanceList />;
+  return <PerformanceDashboard />;
 }

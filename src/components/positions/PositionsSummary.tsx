@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useTrades } from "@/hooks/useTrades";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
 import { useTickerTechnicals } from "@/hooks/useTickerTechnicals";
@@ -24,6 +25,7 @@ import {
 import { AiPortfolioReportViews } from "@/components/positions/AiPortfolioReportViews";
 import { AiReportHistory } from "@/components/ai/AiReportHistory";
 import type { SavedAiPortfolioReport } from "@/types/positionsAi";
+import { tradesInScope } from "@/lib/tradeScope";
 
 type SavedResponse = SavedAiPortfolioReport & { portfolioHash: string | null };
 
@@ -51,13 +53,18 @@ export function PositionsSummary({
   marks: Record<string, OptionMark>;
 }) {
   const { trades, readonly } = useTrades();
+  const [tradeScope] = useScreenOption("tradeScope");
+  const scopedTrades = useMemo(
+    () => tradesInScope(trades, tradeScope),
+    [tradeScope, trades]
+  );
   const { groups } = useWatchGroups();
   const openTickers = useMemo(
     () =>
-      trades
+      scopedTrades
         .filter((trade) => trade.status === "open")
         .map((trade) => trade.ticker),
-    [trades]
+    [scopedTrades]
   );
   const { technicals, loading: technicalsLoading } =
     useTickerTechnicals(openTickers);
@@ -71,20 +78,20 @@ export function PositionsSummary({
   const [aiReady, setAiReady] = useState<boolean | null>(null);
   const context = useMemo(() => tickerContextFromGroups(groups), [groups]);
   const prompt = useMemo(
-    () => openPositionsPrompt(trades, quotes, marks, context, technicals),
-    [trades, quotes, marks, context, technicals]
+    () => openPositionsPrompt(scopedTrades, quotes, marks, context, technicals),
+    [scopedTrades, quotes, marks, context, technicals]
   );
   const currentHash = promptHash(prompt);
   const local = useMemo(
     () =>
       buildLocalPositionInsights(
-        trades,
+        scopedTrades,
         quotes,
         marks,
         technicals,
         context
       ),
-    [trades, quotes, marks, technicals, context]
+    [scopedTrades, quotes, marks, technicals, context]
   );
 
   useEffect(() => {

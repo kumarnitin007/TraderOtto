@@ -17,7 +17,11 @@ import {
   createSupabaseNotificationRepository,
   type NotificationRepository,
 } from "@/lib/data/supabaseNotificationRepository";
-import { firedToday } from "@/lib/notificationDedupe";
+import {
+  firedWithinCooldown,
+  groupFiredWithinCooldown,
+  notificationGroupKey,
+} from "@/lib/notificationSmart";
 import type {
   NotificationPreferences,
   NotificationSignal,
@@ -55,9 +59,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [user]);
   const repoRef = useRef(repository);
   const signalsRef = useRef(signals);
+  const preferencesRef = useRef(preferences);
   const saveQueueRef = useRef(Promise.resolve());
   repoRef.current = repository;
   signalsRef.current = signals;
+  preferencesRef.current = preferences;
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +107,29 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const fire = useCallback(async (draft: SignalDraft) => {
     const repo = repoRef.current;
     if (!repo) return;
-    if (firedToday(signalsRef.current, draft.dedupeKey)) {
+    if (
+      firedWithinCooldown(
+        signalsRef.current,
+        draft.dedupeKey,
+        preferencesRef.current.repeatCooldownHours
+      ) ||
+      groupFiredWithinCooldown(
+        signalsRef.current,
+        draft,
+        preferencesRef.current.repeatCooldownHours
+      )
+    ) {
+      return;
+    }
+    // Keep one active inbox row per live condition. External channels may
+    // repeat after the cooldown without creating another in-app duplicate.
+    if (
+      signalsRef.current.some(
+        (signal) =>
+          signal.status === "open" &&
+          notificationGroupKey(signal) === notificationGroupKey(draft)
+      )
+    ) {
       return;
     }
     try {
@@ -114,18 +142,26 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const clearCondition = useCallback(async (dedupeKey: string) => {
     const repo = repoRef.current;
+    const groupKey = dedupeKey.startsWith("smart:")
+      ? dedupeKey.slice("smart:".length)
+      : null;
     const matching = signalsRef.current.filter(
-      (signal) => signal.status === "open" && signal.dedupeKey === dedupeKey
+      (signal) =>
+        signal.status === "open" &&
+        (signal.dedupeKey === dedupeKey ||
+          (groupKey != null && notificationGroupKey(signal) === groupKey))
     );
     if (!repo || !matching.length) return;
     setSignals((current) =>
       current.map((signal) =>
-        signal.status === "open" && signal.dedupeKey === dedupeKey
+        matching.some((match) => match.id === signal.id)
           ? { ...signal, status: "acked" }
           : signal
       )
     );
-    await repo.acknowledgeByKey(dedupeKey).catch(() => undefined);
+    await Promise.all(
+      matching.map((signal) => repo.acknowledge(signal.id))
+    ).catch(() => undefined);
   }, []);
 
   const acknowledge = useCallback(async (id: string) => {
@@ -175,10 +211,15 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       signals,
       loading,
       error,
-      unreadCount: signals.filter(
-        (signal) =>
-          signal.status === "open" && preferences.events[signal.kind]?.inApp !== false
-      ).length,
+      unreadCount: new Set(
+        signals
+          .filter(
+            (signal) =>
+              signal.status === "open" &&
+              preferences.events[signal.kind]?.inApp !== false
+          )
+          .map(notificationGroupKey)
+      ).size,
       updatePreferences,
       fire,
       clearCondition,

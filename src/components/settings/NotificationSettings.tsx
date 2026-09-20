@@ -46,6 +46,18 @@ export function NotificationSettings() {
     });
   }
 
+  function patchRisk(
+    patch: Partial<NotificationPreferences["positionRiskThresholds"]>
+  ) {
+    void save({
+      ...preferences,
+      positionRiskThresholds: {
+        ...preferences.positionRiskThresholds,
+        ...patch,
+      },
+    });
+  }
+
   async function enableChannelOnLiveAlerts(
     channel: "email" | "discord" | "telegram"
   ) {
@@ -119,7 +131,8 @@ export function NotificationSettings() {
         <div>
           <h1 className="text-xl font-extrabold">Notification preferences</h1>
           <p className="mt-1 text-[12.5px] leading-relaxed text-otto-text-faint">
-            Alerts are recorded once when a condition starts and can fire again after it clears.
+            Similar conditions are combined, and the same alert waits for its
+            cooldown before notifying again.
           </p>
         </div>
         <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-otto-text-dim">
@@ -236,6 +249,92 @@ export function NotificationSettings() {
       </section>
 
       <section className="mt-6 rounded-xl bg-otto-surface p-4">
+        <h2 className="text-sm font-bold">Position risk rules</h2>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
+          These rules drive the Watch, Underwater, and Critical tags on
+          Positions and the linked position-risk alerts.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          <Field label="Critical: ≤ % OTM">
+            <input
+              type="number"
+              min={0}
+              max={preferences.positionRiskThresholds.watchStrikeDistancePct}
+              step={0.5}
+              value={
+                preferences.positionRiskThresholds.criticalStrikeDistancePct
+              }
+              onChange={(event) =>
+                patchRisk({
+                  criticalStrikeDistancePct: Math.max(
+                    0,
+                    Math.min(
+                      preferences.positionRiskThresholds.watchStrikeDistancePct,
+                      Number(event.target.value) || 0
+                    )
+                  ),
+                })
+              }
+            />
+          </Field>
+          <Field label="Watch: ≤ % OTM">
+            <input
+              type="number"
+              min={
+                preferences.positionRiskThresholds.criticalStrikeDistancePct
+              }
+              max={100}
+              step={0.5}
+              value={preferences.positionRiskThresholds.watchStrikeDistancePct}
+              onChange={(event) =>
+                patchRisk({
+                  watchStrikeDistancePct: Math.max(
+                    preferences.positionRiskThresholds
+                      .criticalStrikeDistancePct,
+                    Math.min(100, Number(event.target.value) || 0)
+                  ),
+                })
+              }
+            />
+          </Field>
+          <Field label="Watch slow trade after duration used (%)">
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={preferences.positionRiskThresholds.watchTimeUsedPct}
+              onChange={(event) =>
+                patchRisk({
+                  watchTimeUsedPct: Math.min(
+                    100,
+                    Math.max(1, Number(event.target.value) || 75)
+                  ),
+                })
+              }
+            />
+          </Field>
+          <Field label="Underwater at premium loss (%)">
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={
+                preferences.positionRiskThresholds.underwaterPremiumLossPct
+              }
+              onChange={(event) =>
+                patchRisk({
+                  underwaterPremiumLossPct: Math.min(
+                    500,
+                    Math.max(1, Number(event.target.value) || 50)
+                  ),
+                })
+              }
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-xl bg-otto-surface p-4">
         <h2 className="text-sm font-bold">Timing</h2>
         <div className="mt-3 grid grid-cols-2 gap-4">
           <Field label="Expiry alert (days before)">
@@ -278,6 +377,26 @@ export function NotificationSettings() {
             />
             <div className="mt-1 text-[10px] text-otto-text-faint">
               0 disables this alert.
+            </div>
+          </Field>
+          <Field label="Repeat cooldown (hours)">
+            <input
+              type="number"
+              min={1}
+              max={168}
+              value={preferences.repeatCooldownHours}
+              onChange={(event) =>
+                void save({
+                  ...preferences,
+                  repeatCooldownHours: Math.min(
+                    168,
+                    Math.max(1, Number(event.target.value) || 24)
+                  ),
+                })
+              }
+            />
+            <div className="mt-1 text-[10px] text-otto-text-faint">
+              Critical escalations can still alert separately.
             </div>
           </Field>
         </div>

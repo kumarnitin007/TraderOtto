@@ -10,7 +10,12 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/pnl";
 import { positionAlert } from "@/lib/premiumPace";
 import { committedCapital } from "@/lib/roi";
-import { dispatchedDayKey, firedToday, signalDay } from "@/lib/notificationDedupe";
+import {
+  combineSimilarAlerts,
+  firedWithinCooldown,
+  groupFiredWithinCooldown,
+  notificationGroupKey,
+} from "@/lib/notificationSmart";
 import type {
   NotificationChannel,
   NotificationEventKind,
@@ -49,19 +54,31 @@ export function NotificationEngine() {
   } = useNotifications();
   const marks = useOptionMarks(trades);
   const tickers = useMemo(
-    () => [...new Set(groups.flatMap((group) => group.trackers.map((tracker) => tracker.ticker)))],
-    [groups]
+    () => [
+      ...new Set([
+        ...groups.flatMap((group) =>
+          group.trackers.map((tracker) => tracker.ticker)
+        ),
+        ...trades
+          .filter((trade) => trade.status === "open")
+          .map((trade) => trade.ticker),
+      ]),
+    ],
+    [groups, trades]
   );
   const quotes = useTickerQuotes(tickers);
   const activeRef = useRef(new Set<string>());
   const initializedRef = useRef(false);
-  const dispatchedRef = useRef(new Set<string>());
+  const dispatchedRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     if (loading || initializedRef.current) return;
     for (const signal of signals) {
-      if (signalDay(signal.firedAt) === todayISO()) {
-        dispatchedRef.current.add(dispatchedDayKey(signal.dedupeKey));
+      const firedAt = new Date(signal.firedAt).getTime();
+      const previous = dispatchedRef.current.get(signal.dedupeKey) ?? 0;
+      if (firedAt > previous) dispatchedRef.current.set(signal.dedupeKey, firedAt);
+      if (signal.status === "open") {
+        activeRef.current.add(`smart:${notificationGroupKey(signal)}`);
       }
     }
     initializedRef.current = true;
@@ -72,7 +89,10 @@ export function NotificationEngine() {
     const drafts: SignalDraft[] = [];
 
     for (const trade of trades.filter((item) => item.status === "open")) {
-      const alert = positionAlert(trade, marks[trade.id]?.mark);
+      const alert = positionAlert(trade, marks[trade.id]?.mark, {
+        spot: quotes[trade.ticker]?.price,
+        thresholds: preferences.positionRiskThresholds,
+      });
       if (alert?.tier === "nearmax") {
         drafts.push({
           kind: "near_max",
@@ -84,7 +104,11 @@ export function NotificationEngine() {
           severity: "success",
           dedupeKey: `near_max:${trade.id}`,
         });
-      } else if (alert?.tier === "underwater" || alert?.tier === "critical") {
+      } else if (
+        alert?.tier === "watch" ||
+        alert?.tier === "underwater" ||
+        alert?.tier === "critical"
+      ) {
         drafts.push({
           kind: "position_risk",
           ticker: trade.ticker,
@@ -92,7 +116,12 @@ export function NotificationEngine() {
           groupId: null,
           title: `${trade.ticker} is ${alert.label.toLowerCase()}`,
           message: alert.detail,
-          severity: alert.tier === "critical" ? "critical" : "warning",
+          severity:
+            alert.tier === "critical"
+              ? "critical"
+              : alert.tier === "underwater"
+                ? "warning"
+                : "info",
           dedupeKey: `position_risk:${trade.id}`,
         });
       }
@@ -181,7 +210,8 @@ export function NotificationEngine() {
       }
     }
 
-    const active = new Set(drafts.map((draft) => draft.dedupeKey));
+    const smartDrafts = combineSimilarAlerts(drafts);
+    const active = new Set(smartDrafts.map((draft) => draft.dedupeKey));
     for (const oldKey of activeRef.current) {
       if (!active.has(oldKey)) {
         void clearCondition(oldKey);
@@ -189,7 +219,7 @@ export function NotificationEngine() {
     }
     activeRef.current = active;
 
-    for (const draft of drafts) {
+    for (const draft of smartDrafts) {
       if (
         (draft.ticker && preferences.mutedTickers.includes(draft.ticker)) ||
         (draft.groupId && preferences.mutedGroupIds.includes(draft.groupId))
@@ -199,16 +229,27 @@ export function NotificationEngine() {
       const event = preferences.events[draft.kind];
       const hasDestination =
         event.inApp || event.browser || event.email || event.discord || event.telegram;
-      const dayKey = dispatchedDayKey(draft.dedupeKey);
+      const cooldownMs =
+        Math.max(1, preferences.repeatCooldownHours) * 3_600_000;
+      const lastDispatched = dispatchedRef.current.get(draft.dedupeKey) ?? 0;
       if (
         !event.enabled ||
         !hasDestination ||
-        dispatchedRef.current.has(dayKey) ||
-        firedToday(signals, draft.dedupeKey)
+        Date.now() - lastDispatched < cooldownMs ||
+        firedWithinCooldown(
+          signals,
+          draft.dedupeKey,
+          preferences.repeatCooldownHours
+        ) ||
+        groupFiredWithinCooldown(
+          signals,
+          draft,
+          preferences.repeatCooldownHours
+        )
       ) {
         continue;
       }
-      dispatchedRef.current.add(dayKey);
+      dispatchedRef.current.set(draft.dedupeKey, Date.now());
       void fire(draft);
       if (
         event.browser &&

@@ -3,7 +3,14 @@ export type PerformanceAiMode =
   | "performance_trade_ideas"
   | "performance_coach";
 
-export type PerformanceAiRange = "month" | "ytd" | "year" | "5y" | "all";
+export type PerformanceAiRange =
+  | "week"
+  | "month"
+  | "3m"
+  | "ytd"
+  | "year"
+  | "5y"
+  | "all";
 
 export type AiPerformanceReport = {
   asOf: string;

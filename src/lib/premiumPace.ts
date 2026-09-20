@@ -1,5 +1,13 @@
 import { isDebitStrategy, type Trade } from "@/types/trade";
 import { premiumDirection, todayISO } from "@/lib/pnl";
+import type { PositionRiskThresholds } from "@/types/notification";
+
+export const DEFAULT_POSITION_RISK_THRESHOLDS: PositionRiskThresholds = {
+  criticalStrikeDistancePct: 5,
+  watchStrikeDistancePct: 15,
+  watchTimeUsedPct: 75,
+  underwaterPremiumLossPct: 50,
+};
 
 export type AlertTier =
   | "nearmax"
@@ -37,6 +45,39 @@ function dayContext(elapsedDays: number, durationDays: number) {
   return `${elapsedDays} of ${durationDays} days`;
 }
 
+/** Signed distance to the nearest sold strike: positive OTM, negative ITM. */
+export function shortStrikeDistancePct(
+  trade: Trade,
+  spot: number | null | undefined
+) {
+  if (!spot || spot <= 0) return null;
+  const distances: number[] = [];
+  const putSide =
+    trade.strategy === "Put Credit Spread" ||
+    trade.strategy === "Cash-Secured Put" ||
+    trade.strategy === "Iron Condor" ||
+    trade.strategy === "Strangle";
+  const callSide =
+    trade.strategy === "Call Credit Spread" ||
+    trade.strategy === "Covered Call" ||
+    trade.strategy === "Iron Condor" ||
+    trade.strategy === "Strangle";
+
+  if (putSide && trade.shortStrike && trade.shortStrike > 0) {
+    distances.push(((spot - trade.shortStrike) / trade.shortStrike) * 100);
+  }
+  const callStrike =
+    trade.strategy === "Iron Condor"
+      ? trade.callShortStrike
+      : callSide
+        ? trade.shortStrike
+        : null;
+  if (callSide && callStrike && callStrike > 0) {
+    distances.push(((callStrike - spot) / callStrike) * 100);
+  }
+  return distances.length ? Math.min(...distances) : null;
+}
+
 /**
  * One badge for an open position: either ahead of schedule or under pressure.
  * Risk (checked first): Critical ≤ −100% of premium, or still losing in the last ~15% of days;
@@ -47,16 +88,57 @@ function dayContext(elapsedDays: number, durationDays: number) {
 export function positionAlert(
   trade: Trade,
   currentMark: number | undefined,
-  now = todayISO()
+  options: {
+    now?: string;
+    spot?: number;
+    thresholds?: PositionRiskThresholds;
+  } = {}
 ): PositionAlert | null {
   if (trade.status !== "open") return null;
-  if (typeof currentMark !== "number" || !Number.isFinite(currentMark)) return null;
-  if (!trade.premiumOpen) return null;
-
   const durationDays = calendarDays(trade.openDate, trade.expiry);
   if (durationDays <= 0) return null;
 
+  const now = options.now ?? todayISO();
+  const thresholds =
+    options.thresholds ?? DEFAULT_POSITION_RISK_THRESHOLDS;
   const elapsedDays = Math.max(0, calendarDays(trade.openDate, now));
+  const days = dayContext(elapsedDays, durationDays);
+  const strikeDistance = shortStrikeDistancePct(trade, options.spot);
+  if (
+    strikeDistance != null &&
+    strikeDistance <= thresholds.criticalStrikeDistancePct
+  ) {
+    return {
+      tone: "negative",
+      tier: "critical",
+      label: "Critical",
+      capturePct: 0,
+      elapsedDays,
+      durationDays,
+      detail: `${distanceLabel(strikeDistance)} to short strike · ${days}`,
+    };
+  }
+  if (
+    typeof currentMark !== "number" ||
+    !Number.isFinite(currentMark) ||
+    !trade.premiumOpen
+  ) {
+    if (
+      strikeDistance != null &&
+      strikeDistance <= thresholds.watchStrikeDistancePct
+    ) {
+      return {
+        tone: "negative",
+        tier: "watch",
+        label: "Watch",
+        capturePct: 0,
+        elapsedDays,
+        durationDays,
+        detail: `${distanceLabel(strikeDistance)} to short strike · ${days}`,
+      };
+    }
+    return null;
+  }
   const timeUsed = elapsedDays / durationDays;
   const openPremium = Math.abs(trade.premiumOpen);
   const debit = isDebitStrategy(trade.strategy);
@@ -64,11 +146,9 @@ export function positionAlert(
   const capture =
     (premiumDirection(trade.strategy) * (openPremium - Math.abs(currentMark))) / openPremium;
   const capturePct = Math.round(capture * 100);
-  const days = dayContext(elapsedDays, durationDays);
   const remaining = Math.max(0, durationDays - elapsedDays);
   const basis = debit ? "premium paid" : "premium";
   const gained = debit ? "Up" : "Captured";
-
   if (capture <= -1 || (capture < 0 && timeUsed >= 0.85)) {
     return {
       tone: "negative",
@@ -80,7 +160,7 @@ export function positionAlert(
       detail: `Down ${Math.abs(capturePct)}% of ${basis} · ${days}`,
     };
   }
-  if (capture <= -0.5) {
+  if (capture <= -(thresholds.underwaterPremiumLossPct / 100)) {
     return {
       tone: "negative",
       tier: "underwater",
@@ -102,7 +182,24 @@ export function positionAlert(
       detail: `Unrealized loss of ${Math.abs(capturePct)}% of ${basis} · ${days}`,
     };
   }
-  if (timeUsed >= 0.75 && capture < 0.25) {
+  if (
+    strikeDistance != null &&
+    strikeDistance <= thresholds.watchStrikeDistancePct
+  ) {
+    return {
+      tone: "negative",
+      tier: "watch",
+      label: "Watch",
+      capturePct,
+      elapsedDays,
+      durationDays,
+      detail: `${distanceLabel(strikeDistance)} to short strike · ${days}`,
+    };
+  }
+  if (
+    timeUsed >= thresholds.watchTimeUsedPct / 100 &&
+    capture < 0.25
+  ) {
     return {
       tone: "negative",
       tier: "watch",
@@ -160,4 +257,9 @@ export function positionAlert(
     };
   }
   return null;
+}
+
+function distanceLabel(distance: number) {
+  if (Math.abs(distance) < 0.05) return "At the short strike";
+  return `${Math.abs(distance).toFixed(1)}% ${distance >= 0 ? "OTM" : "ITM"}`;
 }

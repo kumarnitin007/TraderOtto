@@ -3,6 +3,7 @@ import type {
   NotificationEventKind,
   NotificationPreferences,
 } from "@/types/notification";
+import { DEFAULT_POSITION_RISK_THRESHOLDS } from "@/lib/premiumPace";
 
 export const EVENT_LABELS: Record<
   NotificationEventKind,
@@ -48,6 +49,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   quietHours: { enabled: false, start: "20:00", end: "09:00" },
   expiryDays: 3,
   earningsDays: 7,
+  repeatCooldownHours: 24,
+  positionRiskThresholds: DEFAULT_POSITION_RISK_THRESHOLDS,
   assignmentCashThreshold: 0,
   mutedTickers: [],
   mutedGroupIds: [],
@@ -98,6 +101,10 @@ export function mergeNotificationPreferences(
       ...DEFAULT_NOTIFICATION_PREFERENCES.quietHours,
       ...(input.quietHours ?? {}),
     },
+    positionRiskThresholds: {
+      ...DEFAULT_NOTIFICATION_PREFERENCES.positionRiskThresholds,
+      ...(input.positionRiskThresholds ?? {}),
+    },
     events,
     mutedTickers: Array.isArray(input.mutedTickers)
       ? input.mutedTickers.filter((ticker): ticker is string => typeof ticker === "string")
@@ -105,6 +112,11 @@ export function mergeNotificationPreferences(
     mutedGroupIds: Array.isArray(input.mutedGroupIds)
       ? input.mutedGroupIds.filter((id): id is string => typeof id === "string")
       : [],
+    repeatCooldownHours:
+      typeof input.repeatCooldownHours === "number" &&
+      Number.isFinite(input.repeatCooldownHours)
+        ? Math.min(168, Math.max(1, input.repeatCooldownHours))
+        : DEFAULT_NOTIFICATION_PREFERENCES.repeatCooldownHours,
     emailAddress: (input.emailAddress || fallbackEmail).trim().toLowerCase(),
     telegramPairCode:
       typeof input.telegramPairCode === "string" ? input.telegramPairCode : "",

@@ -4,6 +4,8 @@ import type {
   ClosePayload,
   NewTrade,
   Trade,
+  TradeImport,
+  TradeImportResult,
   TradeUpdate,
 } from "@/types/trade";
 import { realizedPnl } from "@/lib/pnl";
@@ -41,6 +43,9 @@ function detailsFromTrade(trade: NewTrade, existing?: Record<string, unknown>) {
     commissionOpen: trade.commissionOpen ?? existing?.commissionOpen ?? 0,
     rolledFromTradeId:
       trade.rolledFromTradeId ?? existing?.rolledFromTradeId ?? null,
+    importSource: trade.importSource ?? existing?.importSource ?? null,
+    importFingerprint:
+      trade.importFingerprint ?? existing?.importFingerprint ?? null,
     notes: trade.notes,
   };
 }
@@ -99,6 +104,12 @@ function mapRow(row: TradeRow): Trade {
         : null,
     rolledToTradeId:
       typeof detail.rolledToTradeId === "string" ? detail.rolledToTradeId : null,
+    importSource:
+      typeof detail.importSource === "string" ? detail.importSource : null,
+    importFingerprint:
+      typeof detail.importFingerprint === "string"
+        ? detail.importFingerprint
+        : null,
     notes: typeof detail.notes === "string" ? detail.notes : "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -222,6 +233,120 @@ export function createSupabaseTradeRepository(
         .select()
         .single();
       return requireRow(data, error);
+    },
+
+    async importMany(items: TradeImport[]): Promise<TradeImportResult[]> {
+      if (!items.length) return [];
+      const { data: current, error: readError } = await supabase
+        .from("tr_trades")
+        .select("details")
+        .eq("user_id", userId)
+        .is("deleted_at", null);
+      if (readError) throw new Error(readError.message);
+      const existing = new Set(
+        (current ?? [])
+          .map((row) => {
+            const details =
+              row.details && typeof row.details === "object"
+                ? (row.details as Record<string, unknown>)
+                : {};
+            return typeof details.importFingerprint === "string"
+              ? details.importFingerprint
+              : null;
+          })
+          .filter((value): value is string => Boolean(value))
+      );
+      const seen = new Set(existing);
+      const results: TradeImportResult[] = [];
+      const pending: TradeImport[] = [];
+      for (const item of items) {
+        if (seen.has(item.importFingerprint)) {
+          results.push({
+            fingerprint: item.importFingerprint,
+            status: "duplicate",
+          });
+          continue;
+        }
+        seen.add(item.importFingerprint);
+        pending.push(item);
+      }
+
+      const rowFor = (item: TradeImport) => ({
+        user_id: userId,
+        ticker: item.ticker.toUpperCase(),
+        strategy: item.strategy,
+        status: item.status,
+        contracts: item.contracts,
+        expiry: item.expiry,
+        open_date: item.openDate,
+        close_date: item.status === "closed" ? item.closeDate : null,
+        premium_open: item.premiumOpen,
+        premium_close: item.status === "closed" ? item.premiumClose ?? 0 : null,
+        pnl:
+          item.status === "closed"
+            ? realizedPnl(
+                item.premiumOpen,
+                item.premiumClose ?? 0,
+                item.contracts,
+                item.strategy,
+                {
+                  commissionOpen: item.commissionOpen,
+                  commissionClose: item.commissionClose,
+                }
+              )
+            : null,
+        details: {
+          ...detailsFromTrade(item),
+          stockPriceClose:
+            item.status === "closed" ? item.stockPriceClose ?? 0 : null,
+          commissionClose:
+            item.status === "closed" ? item.commissionClose ?? 0 : 0,
+          closeReason:
+            item.status === "closed" ? item.closeReason ?? "closed" : null,
+          importSource: item.importSource,
+          importFingerprint: item.importFingerprint,
+        },
+      });
+
+      if (pending.length) {
+        const { data, error } = await supabase
+          .from("tr_trades")
+          .insert(pending.map(rowFor))
+          .select();
+        if (!error) {
+          const created = ((data ?? []) as TradeRow[]).map(mapRow);
+          created.forEach((trade) => {
+            results.push({
+              fingerprint: trade.importFingerprint ?? trade.id,
+              status: "imported",
+              trade,
+            });
+          });
+        } else {
+          // Preserve per-row feedback if one row causes a bulk insert to fail.
+          for (const item of pending) {
+            const single = await supabase
+              .from("tr_trades")
+              .insert(rowFor(item))
+              .select()
+              .single();
+            if (single.error || !single.data) {
+              results.push({
+                fingerprint: item.importFingerprint,
+                status: "failed",
+                error: single.error?.message ?? "Supabase returned no trade.",
+              });
+            } else {
+              results.push({
+                fingerprint: item.importFingerprint,
+                status: "imported",
+                trade: mapRow(single.data as TradeRow),
+              });
+            }
+          }
+        }
+      }
+      return results;
     },
 
     async update(id: string, trade: TradeUpdate): Promise<Trade> {

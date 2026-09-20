@@ -2,6 +2,7 @@
 
 import type { PnlRange } from "@/lib/pnl";
 import type { PositionFocusFilter } from "@/lib/positionFocus";
+import type { TradeScope } from "@/lib/tradeScope";
 
 export const SCREEN_CACHE_KEY = "trader-otto:screen-options";
 
@@ -15,9 +16,10 @@ export type ScreenOptions = {
   collapsedGroups: Record<string, boolean>;
   pnlRange: PnlRange;
   performanceUnrealized: boolean;
-  performanceView: "overview" | "ticker";
+  performanceView: "overview" | "ticker" | "strategy";
   performanceTicker: string;
   portfolioReportLayout: "actions" | "board" | "detail";
+  tradeScope: TradeScope;
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -33,6 +35,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   performanceView: "overview",
   performanceTicker: "",
   portfolioReportLayout: "actions",
+  tradeScope: "all",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -54,7 +57,7 @@ function isLogMode(value: unknown): value is ScreenOptions["logMode"] {
 }
 
 function isPerformanceView(value: unknown): value is ScreenOptions["performanceView"] {
-  return value === "overview" || value === "ticker";
+  return value === "overview" || value === "ticker" || value === "strategy";
 }
 
 function isReportLayout(
@@ -66,6 +69,8 @@ function isReportLayout(
 function isPnlRange(value: unknown): value is PnlRange {
   return (
     value === "month" ||
+    value === "week" ||
+    value === "3m" ||
     value === "ytd" ||
     value === "year" ||
     value === "5y" ||
@@ -109,6 +114,8 @@ export function readScreenOptions(): ScreenOptions {
       portfolioReportLayout: isReportLayout(parsed.portfolioReportLayout)
         ? parsed.portfolioReportLayout
         : SCREEN_OPTION_DEFAULTS.portfolioReportLayout,
+      tradeScope:
+        parsed.tradeScope === "credit_spreads" ? "credit_spreads" : "all",
     };
   } catch {
     return SCREEN_OPTION_DEFAULTS;

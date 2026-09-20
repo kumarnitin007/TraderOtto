@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Brain, FileText, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { FileText, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
 import { PromptPreview } from "@/components/positions/PositionsSummary";
 import { AiPerformanceReportView } from "@/components/performance/AiPerformanceReportView";
 import { AiReportHistory } from "@/components/ai/AiReportHistory";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/performancePrompt";
 import { getSupabaseClient } from "@/lib/supabase";
 import { performanceReportDelta } from "@/lib/aiReportDelta";
+import { tradesInScope } from "@/lib/tradeScope";
 import type {
   PerformanceAiMode,
   SavedAiPerformanceReport,
@@ -43,6 +44,7 @@ export function PerformanceAiCoach() {
   const { trades, readonly } = useTrades();
   const [open, setOpen] = useState(false);
   const [range, setRange] = useScreenOption("pnlRange");
+  const [tradeScope] = useScreenOption("tradeScope");
   const [mode, setMode] = useState<PerformanceAiMode>("performance_review");
   const [saved, setSaved] = useState<SavedAiPerformanceReport | null>(null);
   const [history, setHistory] = useState<SavedAiPerformanceReport[]>([]);
@@ -53,17 +55,21 @@ export function PerformanceAiCoach() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const scopedTrades = useMemo(
+    () => tradesInScope(trades, tradeScope),
+    [tradeScope, trades]
+  );
   const selected = useMemo(
-    () => performanceTradesInRange(trades, range),
-    [trades, range]
+    () => performanceTradesInRange(scopedTrades, range),
+    [scopedTrades, range]
   );
   const snapshot = useMemo(
     () => localPerformanceSnapshot(selected),
     [selected]
   );
   const prompt = useMemo(
-    () => performanceAiPrompt(trades, range, mode),
-    [trades, range, mode]
+    () => performanceAiPrompt(scopedTrades, range, mode),
+    [scopedTrades, range, mode]
   );
   const currentHash = promptHash(prompt);
 
@@ -175,9 +181,9 @@ export function PerformanceAiCoach() {
           setCopied(false);
           setOpen(true);
         }}
-        className="inline-flex items-center gap-1.5 rounded-full bg-otto-green px-3.5 py-2 text-xs font-bold text-black"
+        className="inline-flex items-center gap-1.5 rounded-full bg-otto-text px-3.5 py-2 text-xs font-bold text-otto-bg"
       >
-        <Brain size={14} />
+        <Sparkles size={14} />
         Ask Otto
       </button>
 

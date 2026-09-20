@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Archive, Bell, CheckCheck, Settings, Trash2 } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
+import { notificationGroupKey } from "@/lib/notificationSmart";
 import type { NotificationSignal } from "@/types/notification";
 
 type Folder = "inbox" | "archive";
+type AlertTarget = { ticker: string; kind: string };
 
 export function NotificationInbox() {
   const {
@@ -14,11 +16,21 @@ export function NotificationInbox() {
     unreadCount,
     acknowledge,
     acknowledgeAll,
-    hide,
     hideMany,
     preferences,
   } = useNotifications();
   const [folder, setFolder] = useState<Folder>("inbox");
+  const [target, setTarget] = useState<AlertTarget | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ticker = params.get("ticker");
+    const kind = params.get("kind");
+    if (ticker && kind) {
+      setTarget({ ticker: ticker.toUpperCase(), kind });
+      setFolder("inbox");
+    }
+  }, []);
 
   const visible = useMemo(
     () =>
@@ -29,7 +41,44 @@ export function NotificationInbox() {
   );
   const inbox = visible.filter((signal) => signal.status === "open");
   const archive = visible.filter((signal) => signal.status !== "open");
-  const items = folder === "inbox" ? inbox : archive;
+  const inboxGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { signal: NotificationSignal; ids: string[]; count: number }
+    >();
+    for (const signal of inbox) {
+      const key = notificationGroupKey(signal);
+      const existing = groups.get(key);
+      if (existing) {
+        existing.ids.push(signal.id);
+        existing.count += 1;
+      } else {
+        groups.set(key, { signal, ids: [signal.id], count: 1 });
+      }
+    }
+    return Array.from(groups.values());
+  }, [inbox]);
+  const baseItems =
+    folder === "inbox"
+      ? inboxGroups
+      : archive.map((signal) => ({ signal, ids: [signal.id], count: 1 }));
+  const items = target
+    ? baseItems.slice().sort((a, b) => {
+        const aMatch =
+          a.signal.ticker === target.ticker && a.signal.kind === target.kind;
+        const bMatch =
+          b.signal.ticker === target.ticker && b.signal.kind === target.kind;
+        return Number(bMatch) - Number(aMatch);
+      })
+    : baseItems;
+  const targetFound = Boolean(
+    target &&
+      items.some(
+        (item) =>
+          item.signal.ticker === target.ticker &&
+          item.signal.kind === target.kind
+      )
+  );
 
   return (
     <div className="max-w-[720px]">
@@ -52,7 +101,7 @@ export function NotificationInbox() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex rounded-full bg-otto-surface p-1">
           <FolderTab
-            label={`Inbox (${inbox.length})`}
+            label={`Inbox (${inboxGroups.length})`}
             active={folder === "inbox"}
             onClick={() => setFolder("inbox")}
           />
@@ -94,6 +143,13 @@ export function NotificationInbox() {
         )}
       </div>
 
+      {target && !targetFound && (
+        <div className="mb-3 rounded-xl bg-otto-surface px-3 py-2 text-xs text-otto-text-dim">
+          No active {target.ticker} alert matches this tag yet. The position
+          will appear here when the configured threshold creates an alert.
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="rounded-xl bg-otto-surface px-4 py-10 text-center">
           <Bell size={20} className="mx-auto text-otto-text-faint" />
@@ -107,13 +163,20 @@ export function NotificationInbox() {
           </div>
         </div>
       ) : (
-        items.map((signal) => (
+        items.map((item) => (
           <AlertRow
-            key={signal.id}
-            signal={signal}
+            key={item.signal.id}
+            signal={item.signal}
+            count={item.count}
+            highlighted={
+              item.signal.ticker === target?.ticker &&
+              item.signal.kind === target?.kind
+            }
             folder={folder}
-            onArchive={() => void acknowledge(signal.id)}
-            onRemove={() => void hide(signal.id)}
+            onArchive={() =>
+              void Promise.all(item.ids.map((id) => acknowledge(id)))
+            }
+            onRemove={() => void hideMany(item.ids)}
           />
         ))
       )}
@@ -145,17 +208,27 @@ function FolderTab({
 
 function AlertRow({
   signal,
+  count,
+  highlighted,
   folder,
   onArchive,
   onRemove,
 }: {
   signal: NotificationSignal;
+  count: number;
+  highlighted: boolean;
   folder: Folder;
   onArchive: () => void;
   onRemove: () => void;
 }) {
   return (
-    <div className="flex w-full items-start gap-3 border-b border-otto-divider px-1 py-4">
+    <div
+      className={`flex w-full items-start gap-3 border-b px-2 py-4 ${
+        highlighted
+          ? "rounded-xl border-otto-green bg-otto-green-soft"
+          : "border-otto-divider"
+      }`}
+    >
       <span
         className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
           signal.severity === "critical"
@@ -170,6 +243,11 @@ function AlertRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="font-bold">{signal.title}</span>
+          {count > 1 && (
+            <span className="rounded-full bg-otto-surface px-1.5 py-0.5 text-[10px] font-bold text-otto-text-dim">
+              {count} similar
+            </span>
+          )}
           {signal.ticker && (
             <span className="text-[10.5px] font-semibold text-otto-text-faint">
               {signal.ticker}

@@ -17,6 +17,8 @@ import type {
   ClosePayload,
   NewTrade,
   Trade,
+  TradeImport,
+  TradeImportResult,
   TradeUpdate,
 } from "@/types/trade";
 
@@ -30,6 +32,7 @@ type TradesContextValue = {
     trade: ClosedTradeImport,
     allowDuplicate?: boolean
   ) => Promise<Trade>;
+  importTrades: (trades: TradeImport[]) => Promise<TradeImportResult[]>;
   updateTrade: (id: string, trade: TradeUpdate) => Promise<Trade>;
   closeTrade: (id: string, payload: ClosePayload) => Promise<Trade>;
   deleteTrade: (id: string) => Promise<void>;
@@ -97,6 +100,18 @@ export function TradesProvider({ children }: { children: ReactNode }) {
     return created;
   }, [repository]);
 
+  const importTrades = useCallback(async (items: TradeImport[]) => {
+    if (!repository) throw new Error("Sign in to import trades.");
+    const results = await repository.importMany(items);
+    const created = results.flatMap((result) =>
+      result.status === "imported" && result.trade ? [result.trade] : []
+    );
+    if (created.length) {
+      setTrades((previous) => [...created, ...previous]);
+    }
+    return results;
+  }, [repository]);
+
   const closeTrade = useCallback(async (id: string, payload: ClosePayload) => {
     if (!repository) throw new Error("Sign in to update trades.");
     const updated = await repository.close(id, payload);
@@ -125,6 +140,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       readonly,
       addTrade,
       addClosedTrade,
+      importTrades,
       updateTrade,
       closeTrade,
       deleteTrade,
@@ -136,6 +152,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       readonly,
       addTrade,
       addClosedTrade,
+      importTrades,
       updateTrade,
       closeTrade,
       deleteTrade,

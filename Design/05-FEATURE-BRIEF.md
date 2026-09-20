@@ -90,7 +90,7 @@ P/L is strategy-aware: credits profit as the mark falls; debits profit as it ris
 ### 4. Fast capture
 
 - Manual log form with live quote fill.
-- Robinhood screenshot OCR (Tesseract) to prefill a trade; closed-screenshot import on Positions with duplicate detection. The parser recognizes verticals, strangles, and four-leg iron-condor strikes when the OCR text exposes them, plus stock/Greek fields when present.
+- Robinhood screenshot OCR (Tesseract) to prefill a trade; closed-screenshot import on Positions with duplicate detection. A separate review-first Robinhood activity CSV importer reconstructs verticals, clear iron condors, CSPs, covered calls, and long options from option-leg activity, flags ambiguous rows, skips existing Otto trades, and bulk-imports only selected rows. CSV parsing stays in the browser; assignment P/L is option-premium-only and excludes the resulting stock position.
 - Edit and delete existing trades.
 - Optional opening/closing fees (total dollars) feed net P/L.
 - First-class close reasons: Closed, Expired, Assigned, Rolled.

@@ -9,6 +9,7 @@ import { useLiveQuotes } from "@/hooks/useLiveQuotes";
 import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { Tabs } from "@/components/ui/Tabs";
 import { AssignmentCashCard } from "@/components/ui/AssignmentCashCard";
+import { TradeScopeToggle } from "@/components/ui/TradeScopeToggle";
 import { TradeRow } from "@/components/positions/TradeRow";
 import { PositionTickerDrawer } from "@/components/positions/PositionTickerDrawer";
 import { PositionsScreenshotImport } from "@/components/positions/PositionsScreenshotImport";
@@ -20,14 +21,16 @@ import {
   type PositionFocusFilter,
 } from "@/lib/positionFocus";
 import { assignmentDetail } from "@/lib/roi";
+import { tradesInScope } from "@/lib/tradeScope";
+import { useNotifications } from "@/hooks/useNotifications";
 
 /** 10 letters keeps Open + two or three list names readable on a phone row. */
 const LIST_TAB_CHARS = 10;
 const PINNED_LISTS = 3;
 const FOCUS_OPTIONS: { value: PositionFocusFilter; label: string }[] = [
   { value: "focus", label: "Focus" },
-  { value: "near", label: "Near ±20%" },
-  { value: "time", label: "≤50% time" },
+  { value: "near", label: "Near" },
+  { value: "time", label: "Time" },
   { value: "losing", label: "Losing" },
   { value: "all", label: "All" },
 ];
@@ -81,6 +84,7 @@ function MoreLists({
 export function PositionsView() {
   const { trades, closeTrade, deleteTrade, loading } = useTrades();
   const { groups, loading: groupsLoading } = useWatchGroups();
+  const { preferences } = useNotifications();
   const live = useLiveQuotes(trades);
   const optionMarks = useOptionMarks(trades);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -88,6 +92,11 @@ export function PositionsView() {
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [focusFilter, setFocusFilter] = useScreenOption("positionsFocus");
   const [selectedView, setSelectedView] = useScreenOption("positionsView");
+  const [tradeScope] = useScreenOption("tradeScope");
+  const scopedTrades = useMemo(
+    () => tradesInScope(trades, tradeScope),
+    [tradeScope, trades]
+  );
 
   const pinnedGroups = groups.slice(0, PINNED_LISTS);
   const extraGroups = groups.slice(PINNED_LISTS);
@@ -100,7 +109,10 @@ export function PositionsView() {
   }, [groups, groupsLoading, selectedView, setSelectedView]);
 
   const selectedGroup = groups.find((group) => group.id === selectedView);
-  const assignment = useMemo(() => assignmentDetail(trades), [trades]);
+  const assignment = useMemo(
+    () => assignmentDetail(scopedTrades),
+    [scopedTrades]
+  );
 
   function changeView(value: string) {
     setSelectedView(value);
@@ -111,14 +123,15 @@ export function PositionsView() {
 
   const openWithFocus = useMemo(
     () =>
-      trades
+      scopedTrades
         .filter((trade) => trade.status === "open")
         .map((trade) => ({
           trade,
           focus: positionFocus(
             trade,
             live[trade.ticker],
-            optionMarks[trade.id]
+            optionMarks[trade.id],
+            preferences.positionRiskThresholds
           ),
         }))
         .sort(
@@ -126,7 +139,7 @@ export function PositionsView() {
             a.trade.expiry.localeCompare(b.trade.expiry) ||
             a.trade.ticker.localeCompare(b.trade.ticker)
         ),
-    [trades, live, optionMarks]
+    [scopedTrades, live, optionMarks, preferences.positionRiskThresholds]
   );
   const visible = useMemo(
     () =>
@@ -191,12 +204,10 @@ export function PositionsView() {
         <WatchGroupView group={selectedGroup} />
       ) : (
         <>
-          <PositionsScreenshotImport quotes={live} marks={optionMarks} />
-
-          <AssignmentCashCard detail={assignment} />
-
           <div className="mb-2 overflow-x-auto pb-1">
-            <div className="flex min-w-max gap-2">
+            <div className="flex min-w-max items-center gap-2">
+              <TradeScopeToggle className="shrink-0" compact spreadsFirst />
+              <div className="inline-flex shrink-0 rounded-full border border-otto-divider p-0.5">
               {FOCUS_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -206,24 +217,25 @@ export function PositionsView() {
                     setExpanded(null);
                     setClosingId(null);
                   }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${
                     focusFilter === option.value
                       ? "bg-otto-text text-otto-bg"
-                      : "border border-otto-divider text-otto-text-dim"
+                      : "text-otto-text-dim"
                   }`}
                 >
                   {option.label} {focusCounts[option.value]}
                 </button>
               ))}
+              </div>
             </div>
           </div>
           <div className="mb-2 px-1 text-[11px] text-otto-text-faint">
             {focusFilter === "focus"
-              ? "Near a key strike, half the original duration used, or currently losing."
+              ? `Within ${preferences.positionRiskThresholds.watchStrikeDistancePct}% of a short strike, ${preferences.positionRiskThresholds.watchTimeUsedPct}% of duration used, or currently losing.`
               : focusFilter === "near"
-                ? "Stock is within 20% of the nearest key or short strike."
+                ? `Stock is within ${preferences.positionRiskThresholds.watchStrikeDistancePct}% of the nearest short strike.`
                 : focusFilter === "time"
-                  ? "50% or less of the original open-to-expiry duration remains."
+                  ? `${preferences.positionRiskThresholds.watchTimeUsedPct}% or more of the open-to-expiry duration has been used.`
                   : focusFilter === "losing"
                     ? "Live option mark shows an unrealized loss."
                     : "Every open position."}
@@ -256,9 +268,12 @@ export function PositionsView() {
                 onTickerClick={() => setSelectedTradeId(t.id)}
                 live={live[t.ticker]}
                 optionMark={optionMarks[t.id]}
+                riskThresholds={preferences.positionRiskThresholds}
               />
             ))}
           </div>
+          <AssignmentCashCard detail={assignment} className="mb-3 mt-5" />
+          <PositionsScreenshotImport quotes={live} marks={optionMarks} />
           {selectedTradeId &&
             trades.find((trade) => trade.id === selectedTradeId) && (
               <PositionTickerDrawer
