@@ -2,8 +2,10 @@
 
 import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { AlertTriangle, Lock, Timer } from "lucide-react";
-
-const MIN_MASTER_LENGTH = 14;
+import {
+  MIN_MASTER_PASSWORD_LENGTH,
+  RECOMMENDED_MASTER_PASSWORD_LENGTH,
+} from "@/lib/vault/crypto";
 const AUTO_LOCK_OPTIONS = [1, 5, 15, 30] as const;
 
 const inputClassName =
@@ -18,20 +20,32 @@ export type VaultSecuritySettingsProps = {
   error?: string | null;
 };
 
-function nextStrengthHint(password: string): { label: string; ok: boolean } {
+function nextStrengthHint(password: string): { label: string; ok: boolean; weak: boolean } {
   if (password.length === 0) {
-    return { label: `At least ${MIN_MASTER_LENGTH} characters`, ok: false };
-  }
-  if (password.length < MIN_MASTER_LENGTH) {
     return {
-      label: `${MIN_MASTER_LENGTH - password.length} more needed`,
+      label: `At least ${MIN_MASTER_PASSWORD_LENGTH} characters`,
       ok: false,
+      weak: false,
+    };
+  }
+  if (password.length < MIN_MASTER_PASSWORD_LENGTH) {
+    return {
+      label: `${MIN_MASTER_PASSWORD_LENGTH - password.length} more needed`,
+      ok: false,
+      weak: false,
     };
   }
   if (/\s/.test(password) && password.split(/\s+/).filter(Boolean).length >= 3) {
-    return { label: "Strong passphrase", ok: true };
+    return { label: "Strong passphrase", ok: true, weak: false };
   }
-  return { label: "Meets minimum", ok: true };
+  if (password.length < RECOMMENDED_MASTER_PASSWORD_LENGTH) {
+    return {
+      label: `Allowed, but short. Prefer ${RECOMMENDED_MASTER_PASSWORD_LENGTH}+ characters`,
+      ok: true,
+      weak: true,
+    };
+  }
+  return { label: "Recommended length", ok: true, weak: false };
 }
 
 function SecretInput({
@@ -113,7 +127,9 @@ export function VaultSecuritySettings({
       return;
     }
     if (!nextHint.ok) {
-      setLocalError(`New password must be at least ${MIN_MASTER_LENGTH} characters.`);
+      setLocalError(
+        `New password must be at least ${MIN_MASTER_PASSWORD_LENGTH} characters.`
+      );
       return;
     }
     if (next !== confirm) {
@@ -197,8 +213,18 @@ export function VaultSecuritySettings({
           autoComplete="new-password"
         />
         <p className="text-[12px] text-otto-text-dim" aria-live="polite">
-          {nextHint.label}. Prefer a long passphrase (min {MIN_MASTER_LENGTH} characters).
+          {nextHint.label}. Minimum {MIN_MASTER_PASSWORD_LENGTH} characters;{" "}
+          {RECOMMENDED_MASTER_PASSWORD_LENGTH}+ is safer.
         </p>
+        {nextHint.weak && (
+          <div className="flex gap-2 rounded-xl border border-otto-amber/35 bg-otto-amber-soft px-3.5 py-3">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-otto-amber" aria-hidden />
+            <p className="text-[12.5px] leading-relaxed text-otto-text-dim">
+              A 5–13 character master password is easier to guess. Use a longer passphrase unless
+              this is only a test vault.
+            </p>
+          </div>
+        )}
         <SecretInput
           id={`${formId}-confirm`}
           label="Confirm new master password"

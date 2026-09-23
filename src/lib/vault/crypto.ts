@@ -60,11 +60,17 @@ export class VaultCryptoError extends Error {
   }
 }
 
+export const MIN_MASTER_PASSWORD_LENGTH = 5;
+export const RECOMMENDED_MASTER_PASSWORD_LENGTH = 14;
+
 export function validateMasterPassword(password: string): void {
-  if (password.length < 14 || password.length > 1024) {
+  if (
+    password.length < MIN_MASTER_PASSWORD_LENGTH ||
+    password.length > 1024
+  ) {
     throw new VaultCryptoError(
       "INVALID_PASSWORD",
-      "Master password must be between 14 and 1024 characters"
+      `Master password must be between ${MIN_MASTER_PASSWORD_LENGTH} and 1024 characters`
     );
   }
 }

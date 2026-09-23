@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  VaultCryptoError,
   blindIndex,
   createVaultKeyEnvelope,
   decryptJson,
@@ -7,6 +8,7 @@ import {
   itemPayloadAad,
   rewrapVaultKeyForPasswordChange,
   unlockVaultKeyMaterial,
+  validateMasterPassword,
 } from "@/lib/vault/crypto";
 import { zeroize } from "@/lib/vault/encoding";
 
@@ -19,6 +21,11 @@ const USER_ID = "4b8396b9-b79b-49be-9ad3-a431b487a109";
 const PASSWORD = "correct horse battery staple";
 
 describe("Vault cryptography", () => {
+  it("allows a 5-character master password and rejects shorter ones", () => {
+    expect(() => validateMasterPassword("abcde")).not.toThrow();
+    expect(() => validateMasterPassword("abcd")).toThrow(VaultCryptoError);
+  });
+
   it("encrypts JSON with row-bound authenticated encryption", async () => {
     const key = crypto.getRandomValues(new Uint8Array(32));
     const aad = itemPayloadAad(USER_ID, crypto.randomUUID(), 1);

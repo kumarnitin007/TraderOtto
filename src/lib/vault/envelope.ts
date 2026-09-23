@@ -178,7 +178,7 @@ export async function createVaultEnvelopeForUser(
   try {
     validateMasterPassword(masterPassword);
   } catch {
-    return err("INVALID_PASSWORD", "Master password must not be empty");
+    return err("INVALID_PASSWORD", "Master password is too short");
   }
 
   const existing = await fetchVaultEnvelope(supabase, userId);
@@ -300,7 +300,7 @@ export async function changeVaultMasterPassword(
   try {
     validateMasterPassword(newMasterPassword);
   } catch {
-    return err("INVALID_PASSWORD", "Master password must not be empty");
+    return err("INVALID_PASSWORD", "Master password is too short");
   }
 
   let rewrap: Awaited<ReturnType<typeof rewrapVaultKeyForPasswordChange>>;

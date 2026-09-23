@@ -2,8 +2,11 @@
 
 import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { AlertTriangle, KeyRound, Lock, ShieldCheck, WifiOff } from "lucide-react";
+import {
+  MIN_MASTER_PASSWORD_LENGTH,
+  RECOMMENDED_MASTER_PASSWORD_LENGTH,
+} from "@/lib/vault/crypto";
 
-const MIN_MASTER_LENGTH = 14;
 const AUTO_LOCK_OPTIONS = [1, 5, 15, 30] as const;
 
 const inputClassName =
@@ -28,16 +31,29 @@ function masterStrengthHint(password: string): {
 } {
   const len = password.length;
   if (len === 0) {
-    return { label: "At least 14 characters required", bars: 0, ok: false };
+    return {
+      label: `At least ${MIN_MASTER_PASSWORD_LENGTH} characters required`,
+      bars: 0,
+      ok: false,
+    };
   }
   const hasSpace = /\s/.test(password);
   const wordLike = password.split(/\s+/).filter(Boolean).length;
   const passphrase = hasSpace && wordLike >= 3;
-  if (len < MIN_MASTER_LENGTH) {
+  if (len < MIN_MASTER_PASSWORD_LENGTH) {
     return {
-      label: `${MIN_MASTER_LENGTH - len} more character${len === MIN_MASTER_LENGTH - 1 ? "" : "s"} needed`,
-      bars: len >= 10 ? 2 : len >= 6 ? 1 : 0,
+      label: `${MIN_MASTER_PASSWORD_LENGTH - len} more character${
+        len === MIN_MASTER_PASSWORD_LENGTH - 1 ? "" : "s"
+      } needed`,
+      bars: 0,
       ok: false,
+    };
+  }
+  if (len < RECOMMENDED_MASTER_PASSWORD_LENGTH && !passphrase) {
+    return {
+      label: `Allowed, but short. ${RECOMMENDED_MASTER_PASSWORD_LENGTH}+ characters is much safer`,
+      bars: 1,
+      ok: true,
     };
   }
   if (passphrase) {
@@ -46,7 +62,7 @@ function masterStrengthHint(password: string): {
   if (len >= 20) {
     return { label: "Strong password", bars: 4, ok: true };
   }
-  return { label: "Meets minimum — a passphrase is easier to remember", bars: 3, ok: true };
+  return { label: "Recommended length — a passphrase is easier to remember", bars: 3, ok: true };
 }
 
 function PasswordField({
@@ -130,7 +146,9 @@ export function VaultUnlockScreen({
     event.preventDefault();
     setLocalError(null);
     if (!strength.ok) {
-      setLocalError(`Master password must be at least ${MIN_MASTER_LENGTH} characters.`);
+      setLocalError(
+        `Master password must be at least ${MIN_MASTER_PASSWORD_LENGTH} characters.`
+      );
       return;
     }
     if (password !== confirm) {
@@ -208,7 +226,11 @@ export function VaultUnlockScreen({
                   <span
                     key={index}
                     className={`h-1.5 flex-1 rounded-full ${
-                      index < strength.bars ? "bg-otto-green" : "bg-otto-divider"
+                      index < strength.bars
+                        ? password.length < RECOMMENDED_MASTER_PASSWORD_LENGTH
+                          ? "bg-otto-amber"
+                          : "bg-otto-green"
+                        : "bg-otto-divider"
                     }`}
                   />
                 ))}
@@ -216,8 +238,23 @@ export function VaultUnlockScreen({
               </div>
               <p className="text-[12.5px] leading-relaxed text-otto-text-dim">
                 Use a long passphrase (several random words) or a password manager. Minimum{" "}
-                {MIN_MASTER_LENGTH} characters.
+                {MIN_MASTER_PASSWORD_LENGTH} characters; {RECOMMENDED_MASTER_PASSWORD_LENGTH}+ is
+                strongly recommended.
               </p>
+              {password.length >= MIN_MASTER_PASSWORD_LENGTH &&
+                password.length < RECOMMENDED_MASTER_PASSWORD_LENGTH && (
+                  <div className="flex gap-2 rounded-xl border border-otto-amber/35 bg-otto-amber-soft px-3.5 py-3">
+                    <AlertTriangle
+                      size={18}
+                      className="mt-0.5 shrink-0 text-otto-amber"
+                      aria-hidden
+                    />
+                    <p className="text-[12.5px] leading-relaxed text-otto-text-dim">
+                      Short master passwords are easier to guess. Prefer a 14+ character passphrase
+                      unless this is only a test vault.
+                    </p>
+                  </div>
+                )}
 
               <PasswordField
                 id={`${formId}-confirm`}
