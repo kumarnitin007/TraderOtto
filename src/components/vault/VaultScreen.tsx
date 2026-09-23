@@ -15,10 +15,15 @@ import { useMemo, useState } from "react";
 import { VaultRow } from "@/components/vault/VaultRow";
 import type { VaultItem, VaultKind, VaultTag } from "@/lib/vaultRepository";
 import type { VaultSecuritySnapshot } from "@/lib/vaultSecurity";
+import {
+  sortVaultTags,
+  tagUsageCount,
+  VAULT_TAG_SORT_OPTIONS,
+  type VaultTagSort,
+} from "@/lib/vaultTagSort";
 
 export type VaultFilter = "all" | VaultKind | "favorites";
 type ItemSort = "updated" | "name-asc" | "name-desc" | "category" | "favorites";
-type TagSort = "name-asc" | "name-desc" | "count";
 
 export function VaultScreen({
   items,
@@ -57,7 +62,7 @@ export function VaultScreen({
 }) {
   const [sortOpen, setSortOpen] = useState(false);
   const [itemSort, setItemSort] = useState<ItemSort>("updated");
-  const [tagSort, setTagSort] = useState<TagSort>("name-asc");
+  const [tagSort, setTagSort] = useState<VaultTagSort>("name-asc");
   const activeTag = tags.find((tag) => tag.id === tagFilter);
   const showTagGrid = browsingTags && !activeTag;
   const sortedItems = useMemo(() => {
@@ -77,19 +82,10 @@ export function VaultScreen({
     }
     return next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }, [items, itemSort]);
-  const sortedTags = useMemo(() => {
-    const next = [...tags];
-    if (tagSort === "name-desc") return next.sort((a, b) => b.name.localeCompare(a.name));
-    if (tagSort === "count") {
-      return next.sort(
-        (a, b) =>
-          allItems.filter((item) => item.tags.includes(b.id)).length -
-            allItems.filter((item) => item.tags.includes(a.id)).length ||
-          a.name.localeCompare(b.name)
-      );
-    }
-    return next.sort((a, b) => a.name.localeCompare(b.name));
-  }, [tags, tagSort, allItems]);
+  const sortedTags = useMemo(
+    () => sortVaultTags(tags, allItems, tagSort),
+    [tags, tagSort, allItems]
+  );
 
   function toggleTags() {
     if (browsingTags || activeTag) {
@@ -240,30 +236,17 @@ export function VaultScreen({
                 </p>
                 {showTagGrid ? (
                   <>
-                    <SortOption
-                      active={tagSort === "name-asc"}
-                      label="Tag name A–Z"
-                      onClick={() => {
-                        setTagSort("name-asc");
-                        setSortOpen(false);
-                      }}
-                    />
-                    <SortOption
-                      active={tagSort === "name-desc"}
-                      label="Tag name Z–A"
-                      onClick={() => {
-                        setTagSort("name-desc");
-                        setSortOpen(false);
-                      }}
-                    />
-                    <SortOption
-                      active={tagSort === "count"}
-                      label="Most items"
-                      onClick={() => {
-                        setTagSort("count");
-                        setSortOpen(false);
-                      }}
-                    />
+                    {VAULT_TAG_SORT_OPTIONS.map((option) => (
+                      <SortOption
+                        key={option.value}
+                        active={tagSort === option.value}
+                        label={option.label}
+                        onClick={() => {
+                          setTagSort(option.value);
+                          setSortOpen(false);
+                        }}
+                      />
+                    ))}
                   </>
                 ) : (
                   <>
@@ -297,7 +280,7 @@ export function VaultScreen({
       {showTagGrid ? (
         <div className="flex flex-col gap-2">
           {sortedTags.map((tag) => {
-            const count = allItems.filter((item) => item.tags.includes(tag.id)).length;
+            const count = tagUsageCount(allItems, tag.id);
             return (
               <button
                 key={tag.id}

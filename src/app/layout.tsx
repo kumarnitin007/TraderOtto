@@ -28,6 +28,7 @@ export default async function RootLayout({
       <head>
         <script
           nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html:
               "try{var m=document.cookie.match(/(?:^|; )trader-otto-theme=([^;]*)/);document.documentElement.dataset.theme=m&&m[1]==='warm-paper'?'warm-paper':'dark'}catch(e){}",

@@ -159,17 +159,17 @@ export function VaultSecuritySettings({
       <div className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
         <div className="flex items-center gap-3 px-3.5 py-3">
           <Timer size={18} className="shrink-0 text-otto-text-dim" aria-hidden />
-          <label className="flex flex-1 flex-col gap-1">
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-[14px] font-medium">Auto-lock</span>
             <span className="text-[12px] text-otto-text-faint">
               Lock the vault after inactivity on this device
             </span>
-          </label>
+          </span>
           <select
             value={autoLockMinutes}
             onChange={(event) => onAutoLockChange(Number(event.target.value))}
             disabled={busy}
-            className="rounded-[10px] border border-otto-divider bg-otto-bg px-2 py-1.5 text-[13px] font-semibold"
+            className="w-auto shrink-0 rounded-[10px] border border-otto-divider bg-otto-bg px-2.5 py-1.5 text-[13px] font-semibold"
             aria-label="Auto-lock after inactivity"
           >
             {AUTO_LOCK_OPTIONS.map((minutes) => (

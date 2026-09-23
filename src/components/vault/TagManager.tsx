@@ -1,8 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Plus, Tag, Trash2, X } from "lucide-react";
 import type { VaultItem, VaultTag } from "@/lib/vaultRepository";
+import {
+  sortVaultTags,
+  tagUsageCount,
+  VAULT_TAG_SORT_OPTIONS,
+  type VaultTagSort,
+} from "@/lib/vaultTagSort";
 
 export function TagManager({
   tags,
@@ -18,6 +24,8 @@ export function TagManager({
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
+  const [sort, setSort] = useState<VaultTagSort>("name-asc");
+  const sortedTags = useMemo(() => sortVaultTags(tags, items, sort), [tags, items, sort]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -64,30 +72,56 @@ export function TagManager({
           </button>
         </form>
 
-        <div className="flex flex-col gap-2">
-          {tags.map((tag) => (
-            <div
-              key={tag.id}
-              className="flex items-center gap-3 rounded-xl bg-otto-surface px-3 py-3"
-            >
-              <i
-                className="h-3 w-3 shrink-0 rounded-full"
-                style={{ backgroundColor: tag.color }}
-              />
-              <b className="flex-1 text-[14px]">{tag.name}</b>
-              <small className="text-[12px] text-otto-text-dim">
-                {items.filter((item) => item.tags.includes(tag.id)).length} items
-              </small>
+        {tags.length > 0 && (
+          <div
+            className="-mx-[18px] mb-3 flex snap-x gap-2 overflow-x-auto px-[18px] pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="group"
+            aria-label="Sort tags"
+          >
+            {VAULT_TAG_SORT_OPTIONS.map((option) => (
               <button
+                key={option.value}
                 type="button"
-                onClick={() => onRemove(tag.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim hover:bg-otto-bg hover:text-otto-red"
-                aria-label={`Delete ${tag.name}`}
+                onClick={() => setSort(option.value)}
+                className={`shrink-0 snap-start rounded-full px-3 py-1.5 text-[12.5px] font-semibold ${
+                  sort === option.value
+                    ? "bg-otto-text text-otto-bg"
+                    : "border border-otto-divider bg-otto-surface text-otto-text-dim"
+                }`}
               >
-                <Trash2 size={17} />
+                {option.label}
               </button>
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {sortedTags.map((tag) => {
+            const count = tagUsageCount(items, tag.id);
+            return (
+              <div
+                key={tag.id}
+                className="flex items-center gap-3 rounded-xl bg-otto-surface px-3 py-3"
+              >
+                <i
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: tag.color }}
+                />
+                <b className="flex-1 text-[14px]">{tag.name}</b>
+                <small className="text-[12px] text-otto-text-dim">
+                  {count} {count === 1 ? "item" : "items"}
+                </small>
+                <button
+                  type="button"
+                  onClick={() => onRemove(tag.id)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim hover:bg-otto-bg hover:text-otto-red"
+                  aria-label={`Delete ${tag.name}`}
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            );
+          })}
           {!tags.length && (
             <div className="rounded-xl bg-otto-surface px-4 py-10 text-center">
               <Tag className="mx-auto text-otto-text-faint" />
