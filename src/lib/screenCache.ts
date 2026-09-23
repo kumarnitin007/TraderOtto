@@ -1,5 +1,6 @@
 /** Browser cache for UI screen options only — not trades or groups. */
 
+import { isAppWorkspace, type AppWorkspace } from "@/lib/appWorkspace";
 import type { PnlRange } from "@/lib/pnl";
 import type { PositionFocusFilter } from "@/lib/positionFocus";
 import type { TradeScope } from "@/lib/tradeScope";
@@ -20,6 +21,7 @@ export type ScreenOptions = {
   performanceTicker: string;
   portfolioReportLayout: "actions" | "board" | "detail";
   tradeScope: TradeScope;
+  appWorkspace: AppWorkspace;
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -36,6 +38,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   performanceTicker: "",
   portfolioReportLayout: "actions",
   tradeScope: "all",
+  appWorkspace: "trader",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -116,6 +119,9 @@ export function readScreenOptions(): ScreenOptions {
         : SCREEN_OPTION_DEFAULTS.portfolioReportLayout,
       tradeScope:
         parsed.tradeScope === "credit_spreads" ? "credit_spreads" : "all",
+      appWorkspace: isAppWorkspace(parsed.appWorkspace)
+        ? parsed.appWorkspace
+        : SCREEN_OPTION_DEFAULTS.appWorkspace,
     };
   } catch {
     return SCREEN_OPTION_DEFAULTS;

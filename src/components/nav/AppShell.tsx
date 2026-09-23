@@ -13,7 +13,11 @@ import {
 } from "lucide-react";
 import { AlpacaStatus } from "@/components/ui/AlpacaStatus";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { WorkspaceSwitcher } from "@/components/nav/WorkspaceSwitcher";
+import { WorkspacePlaceholder } from "@/components/nav/WorkspacePlaceholder";
+import { VaultWorkspace } from "@/components/vault/VaultWorkspace";
 import { PnlOverview } from "@/components/nav/PnlOverview";
+import { APP_WORKSPACE_META } from "@/lib/appWorkspace";
 import { useTrades } from "@/hooks/useTrades";
 import { useAuth } from "@/hooks/useAuth";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
@@ -37,17 +41,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const { unreadCount, error: notificationError } = useNotifications();
   const [tradeScope] = useScreenOption("tradeScope");
+  const [workspace] = useScreenOption("appWorkspace");
   const { winRate } = summarize(tradesInScope(trades, tradeScope));
+  const product = APP_WORKSPACE_META[workspace];
+  const trading = workspace === "trader";
 
   return (
     <div className="min-h-screen bg-otto-bg text-otto-text">
       <div className="mx-auto flex max-w-[1180px]">
         <aside className="hidden min-h-screen w-[236px] shrink-0 flex-col border-r border-otto-divider px-5 py-7 desk:flex">
-          <div className="text-[19px] font-extrabold tracking-[-0.3px]">Trader Otto</div>
-          <div className="mb-[30px] mt-[3px] text-[12.5px] text-otto-text-faint">
-            Options trade journal
+          <div className="text-[19px] font-extrabold tracking-[-0.3px]">
+            {product.product}
           </div>
-          {NAV.map((item) => {
+          <div className="mb-[30px] mt-[3px] text-[12.5px] text-otto-text-faint">
+            {product.tagline}
+          </div>
+          {trading && NAV.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
             return (
@@ -72,6 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          {trading && (
           <div className="mt-[34px] border-t border-otto-divider pt-5">
             <PnlOverview />
             <div className="mt-4">
@@ -79,8 +89,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="text-lg font-bold">{winRate == null ? "—" : `${winRate}%`}</div>
             </div>
           </div>
-          <AlpacaStatus />
-          <div className="mt-2">
+          )}
+          {trading && <AlpacaStatus />}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <WorkspaceSwitcher />
             <ThemeToggle />
           </div>
           <button
@@ -97,9 +109,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="min-w-0 flex-1 pb-24 desk:px-2 desk:pt-7">
           <header className="sticky top-0 z-[5] bg-otto-bg px-[18px] pb-2.5 pt-4 desk:hidden">
             <div className="flex items-center justify-between gap-2">
-              <div className="truncate text-[17px] font-bold tracking-[-0.2px]">Trader Otto</div>
+              <div className="truncate text-[17px] font-bold tracking-[-0.2px]">
+                {product.product}
+              </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <AlpacaStatus compact />
+                {trading && <AlpacaStatus compact />}
+                <WorkspaceSwitcher compact />
                 <ThemeToggle compact />
                 <button
                   type="button"
@@ -111,9 +126,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             </div>
-            <PnlOverview compact />
+            {trading && <PnlOverview compact />}
           </header>
           <div className="px-[18px] pt-3.5">
+            {workspace === "vault" ? (
+              <VaultWorkspace />
+            ) : !trading ? (
+              <WorkspacePlaceholder workspace={workspace} />
+            ) : (
+            <>
             {(readonly || tradeError || groupError || notificationError) && (
               <div
                 className={`mb-4 rounded-xl border px-3 py-2 text-xs ${
@@ -129,10 +150,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             {children}
+            </>
+            )}
           </div>
         </main>
       </div>
 
+      {trading && (
       <nav className="fixed bottom-0 left-0 right-0 z-10 flex border-t border-otto-divider bg-otto-bg/90 px-2 pb-[calc(9px+env(safe-area-inset-bottom))] pt-[9px] backdrop-blur-[14px] desk:hidden">
         {NAV.map((item) => {
           const Icon = item.icon;
@@ -160,6 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+      )}
     </div>
   );
 }

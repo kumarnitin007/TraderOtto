@@ -1,0 +1,104 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import { Plus, Tag, Trash2, X } from "lucide-react";
+import type { VaultItem, VaultTag } from "@/lib/vaultRepository";
+
+export function TagManager({
+  tags,
+  items,
+  onCreate,
+  onRemove,
+  onClose,
+}: {
+  tags: VaultTag[];
+  items: VaultItem[];
+  onCreate: (name: string) => Promise<VaultTag>;
+  onRemove: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+
+  async function create(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    await onCreate(name);
+    setName("");
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-otto-bg">
+      <header className="flex shrink-0 items-center justify-between border-b border-otto-divider px-3 py-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface"
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+        <b className="text-[15px] font-bold">Tags</b>
+        <span className="w-9" />
+      </header>
+
+      <div className="mx-auto w-full max-w-[720px] flex-1 overflow-y-auto px-[18px] py-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
+          Organize your vault
+        </p>
+        <h1 className="mb-4 text-[24px] font-extrabold">Manage tags</h1>
+
+        <form onSubmit={create} className="mb-5 flex gap-2">
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="New tag name"
+            className="flex-1 rounded-[10px] border border-otto-divider bg-otto-surface px-3 py-2.5 !text-[15px]"
+          />
+          <button
+            type="submit"
+            disabled={!name.trim()}
+            className="flex h-11 w-11 items-center justify-center rounded-xl bg-otto-green text-black disabled:opacity-40"
+            aria-label="Add tag"
+          >
+            <Plus size={17} />
+          </button>
+        </form>
+
+        <div className="flex flex-col gap-2">
+          {tags.map((tag) => (
+            <div
+              key={tag.id}
+              className="flex items-center gap-3 rounded-xl bg-otto-surface px-3 py-3"
+            >
+              <i
+                className="h-3 w-3 shrink-0 rounded-full"
+                style={{ backgroundColor: tag.color }}
+              />
+              <b className="flex-1 text-[14px]">{tag.name}</b>
+              <small className="text-[12px] text-otto-text-dim">
+                {items.filter((item) => item.tags.includes(tag.id)).length} items
+              </small>
+              <button
+                type="button"
+                onClick={() => onRemove(tag.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim hover:bg-otto-bg hover:text-otto-red"
+                aria-label={`Delete ${tag.name}`}
+              >
+                <Trash2 size={17} />
+              </button>
+            </div>
+          ))}
+          {!tags.length && (
+            <div className="rounded-xl bg-otto-surface px-4 py-10 text-center">
+              <Tag className="mx-auto text-otto-text-faint" />
+              <h3 className="mt-3 font-bold">No tags yet</h3>
+              <p className="mt-1 text-sm text-otto-text-dim">
+                Create one to group related items.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
