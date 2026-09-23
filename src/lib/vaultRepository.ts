@@ -56,6 +56,8 @@ export interface VaultRepository {
   list(): Promise<VaultItem[]>;
   listDeleted(): Promise<VaultItem[]>;
   save(item: VaultItem, source?: VaultChangeSource): Promise<VaultItem>;
+  /** Bulk save for import/migration; encrypts client-side on cloud backends. */
+  saveMany?(items: VaultItem[], source?: VaultChangeSource): Promise<VaultItem[]>;
   remove(id: string): Promise<void>;
   restore(id: string): Promise<VaultItem | undefined>;
   purge(id: string): Promise<void>;
@@ -65,7 +67,7 @@ export interface VaultRepository {
   removeTag(id: string): Promise<void>;
 }
 
-const DB_NAME = "traderotto-vault-local-prototype";
+export const LOCAL_VAULT_DB_NAME = "traderotto-vault-local-prototype";
 const DB_VERSION = 2;
 const ITEM_STORE = "vault-items";
 const TAG_STORE = "vault-tags";
@@ -73,7 +75,7 @@ const HISTORY_STORE = "vault-history";
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(LOCAL_VAULT_DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(ITEM_STORE)) {
@@ -103,8 +105,15 @@ function run<T>(
         const request = action(
           db.transaction(storeName, mode).objectStore(storeName)
         );
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const result = request.result;
+          db.close();
+          resolve(result);
+        };
+        request.onerror = () => {
+          db.close();
+          reject(request.error);
+        };
       })
   );
 }
@@ -150,6 +159,17 @@ export class IndexedDbVaultRepository implements VaultRepository {
       });
     }
     return item;
+  }
+
+  async saveMany(
+    items: VaultItem[],
+    source: VaultChangeSource = "manual"
+  ): Promise<VaultItem[]> {
+    const saved: VaultItem[] = [];
+    for (const item of items) {
+      saved.push(await this.save(item, source));
+    }
+    return saved;
   }
 
   async remove(id: string): Promise<void> {
@@ -233,7 +253,48 @@ export class IndexedDbVaultRepository implements VaultRepository {
   }
 }
 
-export const vaultRepository: VaultRepository = new IndexedDbVaultRepository();
+/** Plaintext legacy source used only for one-time encrypted migration. */
+export const plaintextVaultRepository: VaultRepository =
+  new IndexedDbVaultRepository();
+
+export async function countPlaintextVault(): Promise<{
+  items: number;
+  tags: number;
+}> {
+  const [items, deleted, tags] = await Promise.all([
+    plaintextVaultRepository.list(),
+    plaintextVaultRepository.listDeleted(),
+    plaintextVaultRepository.listTags(),
+  ]);
+  return { items: items.length + deleted.length, tags: tags.length };
+}
+
+export function deletePlaintextVaultDatabase(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(LOCAL_VAULT_DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () =>
+      reject(request.error ?? new Error("Could not delete plaintext vault"));
+    request.onblocked = () =>
+      reject(new Error("Close other Otto tabs, then retry plaintext cleanup."));
+  });
+}
+
+/** Persists many items, using saveMany when the repository provides it. */
+export async function saveVaultItems(
+  repository: VaultRepository,
+  items: VaultItem[],
+  source: VaultChangeSource = "manual"
+): Promise<VaultItem[]> {
+  if (repository.saveMany) {
+    return repository.saveMany(items, source);
+  }
+  const saved: VaultItem[] = [];
+  for (const item of items) {
+    saved.push(await repository.save(item, source));
+  }
+  return saved;
+}
 
 function changedFields(
   previous: VaultItem | undefined,

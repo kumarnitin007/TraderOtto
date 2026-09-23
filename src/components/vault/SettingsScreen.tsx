@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import {
   ChevronRight,
-  Fingerprint,
   Heart,
   Import,
   KeyRound,
@@ -50,12 +49,16 @@ export function SettingsScreen({
   onDataTransfer,
   deletedCount,
   onRecentlyDeleted,
+  onSecurity,
+  autoLockMinutes,
 }: {
   tagCount: number;
   onManageTags: () => void;
   onDataTransfer: () => void;
   deletedCount: number;
   onRecentlyDeleted: () => void;
+  onSecurity: () => void;
+  autoLockMinutes: number;
 }) {
   return (
     <section>
@@ -76,13 +79,24 @@ export function SettingsScreen({
       </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
-        <SettingsRow icon={Fingerprint} label="Unlock with biometrics" trailing={<TogglePlaceholder />} />
+        <SettingsRow
+          icon={KeyRound}
+          label="Change master password"
+          onClick={onSecurity}
+        />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow icon={KeyRound} label="Change master password" />
+        <SettingsRow
+          icon={ShieldCheck}
+          label="Privacy & security"
+          onClick={onSecurity}
+        />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow icon={ShieldCheck} label="Privacy & security" />
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow icon={RefreshCw} label="Auto-lock" detail="Coming soon" />
+        <SettingsRow
+          icon={RefreshCw}
+          label="Auto-lock"
+          detail={`${autoLockMinutes} min`}
+          onClick={onSecurity}
+        />
         <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow
           icon={Trash2}
@@ -95,24 +109,12 @@ export function SettingsScreen({
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow icon={Sparkles} label="Suggest an idea" />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow icon={Heart} label="About Otto Vault" detail="Prototype" />
+        <SettingsRow icon={Heart} label="About Otto Vault" detail="Encrypted sync" />
       </div>
 
       <p className="mt-6 text-center text-[12px] leading-relaxed text-otto-text-faint">
-        Appearance and workspace switching live in the Otto shell. Encrypted sync arrives with
-        Supabase.
+        Vault secrets are encrypted in this browser before they are sent to Supabase.
       </p>
     </section>
-  );
-}
-
-function TogglePlaceholder() {
-  return (
-    <span
-      className="relative inline-flex h-6 w-10 shrink-0 rounded-full bg-otto-divider"
-      aria-hidden
-    >
-      <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-otto-text-faint" />
-    </span>
   );
 }

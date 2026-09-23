@@ -66,6 +66,10 @@ export function VaultDataTransfer({
   );
 
   function handleExport() {
+    const confirmed = window.confirm(
+      "This CSV will contain readable passwords and secrets. Store it securely and delete it when finished. Continue?"
+    );
+    if (!confirmed) return;
     const subset = filterItemsForExport(items, exportScope);
     const csv = vaultItemsToCsv(subset, tags);
     downloadVaultCsv(exportFilename(exportScope), csv);
@@ -149,6 +153,10 @@ export function VaultDataTransfer({
           Export a subset of your vault or import items from a vault-format CSV. Journal trade
           exports are not supported here.
         </p>
+        <div className="mb-5 rounded-xl border border-otto-amber/35 bg-otto-amber-soft px-3.5 py-3 text-[12.5px] leading-relaxed text-otto-text-dim">
+          CSV exports are plaintext and include readable secrets. They are not protected by your
+          master password.
+        </div>
 
         <section className="mb-5 rounded-2xl bg-otto-surface p-4">
           <div className="mb-3 flex items-center gap-2">

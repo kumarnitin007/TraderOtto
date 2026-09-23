@@ -16,9 +16,9 @@ import {
 import { useEffect, useState } from "react";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import {
-  vaultRepository,
   type VaultHistoryEntry,
   type VaultItem,
+  type VaultRepository,
   type VaultTag,
 } from "@/lib/vaultRepository";
 
@@ -53,6 +53,7 @@ function Field({
 export function ItemSheet({
   item,
   tags,
+  repository,
   onClose,
   onCopy,
   onEdit,
@@ -61,6 +62,7 @@ export function ItemSheet({
 }: {
   item: VaultItem;
   tags: VaultTag[];
+  repository: VaultRepository;
   onClose: () => void;
   onCopy: (value: string, label?: string) => void;
   onEdit: () => void;
@@ -80,8 +82,8 @@ export function ItemSheet({
     : "";
 
   useEffect(() => {
-    void vaultRepository.listHistory(item.id).then(setHistory);
-  }, [item.id]);
+    void repository.listHistory(item.id).then(setHistory);
+  }, [item.id, repository]);
 
   async function shareItem() {
     const shareData = {

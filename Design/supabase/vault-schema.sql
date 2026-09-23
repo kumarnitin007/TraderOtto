@@ -52,12 +52,22 @@ create table if not exists ov_vaults (
   updated_at timestamptz not null default now(),
   constraint ov_vaults_kdf_ok check (kdf_algorithm in ('argon2id')),
   constraint ov_vaults_kdf_params_obj check (jsonb_typeof(kdf_params) = 'object'),
+  constraint ov_vaults_kdf_params_shape check (
+    kdf_params ?& array['memoryKiB', 'iterations', 'parallelism']
+    and (kdf_params->>'memoryKiB')::integer between 16384 and 262144
+    and (kdf_params->>'iterations')::integer between 1 and 64
+    and (kdf_params->>'parallelism')::integer between 1 and 16
+    and (kdf_params->>'memoryKiB')::integer
+      >= 8 * (kdf_params->>'parallelism')::integer
+  ),
   constraint ov_vaults_settings_obj check (jsonb_typeof(settings) = 'object'),
   constraint ov_vaults_key_version_ok check (key_version > 0),
   constraint ov_vaults_cipher_version_ok check (cipher_version > 0),
   constraint ov_vaults_salt_len check (octet_length(kdf_salt) >= 16),
-  constraint ov_vaults_wrap_nonce_len check (octet_length(wrap_nonce) >= 12),
-  constraint ov_vaults_verifier_nonce_len check (octet_length(verifier_nonce) >= 12)
+  constraint ov_vaults_wrapped_key_len check (octet_length(wrapped_vault_key) = 48),
+  constraint ov_vaults_verifier_len check (octet_length(encrypted_verifier) = 48),
+  constraint ov_vaults_wrap_nonce_len check (octet_length(wrap_nonce) = 12),
+  constraint ov_vaults_verifier_nonce_len check (octet_length(verifier_nonce) = 12)
 );
 
 -- payload_ciphertext decrypts to the full flexible item document:
@@ -82,7 +92,13 @@ create table if not exists ov_items (
   constraint ov_items_kind_len check (char_length(kind) between 1 and 40),
   constraint ov_items_color_len check (color is null or char_length(color) <= 32),
   constraint ov_items_ciphertext_len check (octet_length(payload_ciphertext) >= 16),
-  constraint ov_items_nonce_len check (octet_length(payload_nonce) >= 12),
+  constraint ov_items_nonce_len check (octet_length(payload_nonce) = 12),
+  constraint ov_items_dedupe_index_len check (
+    dedupe_blind_index is null or octet_length(dedupe_blind_index) = 32
+  ),
+  constraint ov_items_name_index_len check (
+    name_sort_blind_index is null or octet_length(name_sort_blind_index) = 32
+  ),
   constraint ov_items_schema_version_ok check (payload_schema_version > 0),
   constraint ov_items_key_version_ok check (key_version > 0),
   unique (user_id, id)
@@ -117,7 +133,10 @@ create table if not exists ov_tags (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint ov_tags_ciphertext_len check (octet_length(name_ciphertext) >= 16),
-  constraint ov_tags_nonce_len check (octet_length(name_nonce) >= 12),
+  constraint ov_tags_nonce_len check (octet_length(name_nonce) = 12),
+  constraint ov_tags_name_index_len check (
+    name_blind_index is null or octet_length(name_blind_index) = 32
+  ),
   constraint ov_tags_color_len check (color is null or char_length(color) <= 32),
   constraint ov_tags_key_version_ok check (key_version > 0),
   unique (user_id, id)
@@ -169,7 +188,7 @@ create table if not exists ov_item_history (
       snapshot_ciphertext is not null
       and snapshot_nonce is not null
       and octet_length(snapshot_ciphertext) >= 16
-      and octet_length(snapshot_nonce) >= 12
+      and octet_length(snapshot_nonce) = 12
     )
   ),
   constraint ov_item_history_key_version_ok check (key_version > 0)
