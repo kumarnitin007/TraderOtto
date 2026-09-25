@@ -21,11 +21,21 @@ const CHANNELS: { id: keyof NotificationPreferences["events"]["price_range"]; la
   { id: "telegram", label: "Telegram" },
 ];
 
-export function NotificationSettings() {
+export type TraderSettingsSection = "alerts" | "muted" | "risk" | "timing";
+
+export function NotificationSettings({
+  section,
+}: {
+  section?: TraderSettingsSection;
+}) {
   const { preferences, updatePreferences, error } = useNotifications();
   const { groups } = useWatchGroups();
   const [notice, setNotice] = useState("");
   const [testing, setTesting] = useState<NotificationChannel | null>(null);
+  const showAlerts = !section || section === "alerts";
+  const showMuted = !section || section === "muted";
+  const showRisk = !section || section === "risk";
+  const showTiming = !section || section === "timing";
 
   async function save(next: NotificationPreferences) {
     setNotice("");
@@ -127,6 +137,7 @@ export function NotificationSettings() {
 
   return (
     <div className="max-w-[760px]">
+      {!section && (
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-extrabold">Notification preferences</h1>
@@ -147,8 +158,28 @@ export function NotificationSettings() {
           All alerts
         </label>
       </div>
+      )}
 
+      {showAlerts && (
       <section className="space-y-3">
+        {section && (
+          <label className="mb-4 flex items-center justify-between rounded-xl bg-otto-surface px-3.5 py-3 text-[13px] font-semibold">
+            <span>
+              <span className="block text-[14px]">All alerts</span>
+              <span className="mt-0.5 block text-[11.5px] font-normal text-otto-text-faint">
+                Master switch for every alert type
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={preferences.masterEnabled}
+              onChange={(event) =>
+                void save({ ...preferences, masterEnabled: event.target.checked })
+              }
+              className="h-4 w-4"
+            />
+          </label>
+        )}
         {(Object.keys(EVENT_LABELS) as NotificationEventKind[]).map((kind) => {
           const event = preferences.events[kind];
           return (
@@ -195,8 +226,10 @@ export function NotificationSettings() {
           );
         })}
       </section>
+      )}
 
-      <section className="mt-6 rounded-xl bg-otto-surface p-4">
+      {showMuted && (
+      <section className="rounded-xl bg-otto-surface p-4">
         <h2 className="text-sm font-bold">Mute selected alerts</h2>
         <p className="mt-1 text-[11.5px] text-otto-text-faint">
           Muted tickers and lists still appear in the app; they just do not create alerts.
@@ -247,8 +280,10 @@ export function NotificationSettings() {
           </div>
         )}
       </section>
+      )}
 
-      <section className="mt-6 rounded-xl bg-otto-surface p-4">
+      {showRisk && (
+      <section className="rounded-xl bg-otto-surface p-4">
         <h2 className="text-sm font-bold">Position risk rules</h2>
         <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
           These rules drive the Watch, Underwater, and Critical tags on
@@ -333,8 +368,10 @@ export function NotificationSettings() {
           </Field>
         </div>
       </section>
+      )}
 
-      <section className="mt-6 rounded-xl bg-otto-surface p-4">
+      {showTiming && (
+      <section className="rounded-xl bg-otto-surface p-4">
         <h2 className="text-sm font-bold">Timing</h2>
         <div className="mt-3 grid grid-cols-2 gap-4">
           <Field label="Expiry alert (days before)">
@@ -443,7 +480,10 @@ export function NotificationSettings() {
           </div>
         )}
       </section>
+      )}
 
+      {showAlerts && (
+      <>
       <Channel
         title="Browser"
         description="Works while Trader Otto is open and your browser has permission."
@@ -519,6 +559,8 @@ export function NotificationSettings() {
           notice={setNotice}
         />
       </Channel>
+      </>
+      )}
 
       {(notice || error) && (
         <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-otto-text-dim">

@@ -20,18 +20,29 @@ export function TagManager({
   tags: VaultTag[];
   items: VaultItem[];
   onCreate: (name: string) => Promise<VaultTag>;
-  onRemove: (id: string) => void;
+  onRemove: (id: string) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
   const [sort, setSort] = useState<VaultTagSort>("name-asc");
+  const [pendingDelete, setPendingDelete] = useState<VaultTag | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const sortedTags = useMemo(() => sortVaultTags(tags, items, sort), [tags, items, sort]);
+  const pendingCount = pendingDelete ? tagUsageCount(items, pendingDelete.id) : 0;
 
   async function create(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
     await onCreate(name);
     setName("");
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    const removed = await onRemove(pendingDelete.id);
+    setDeleting(false);
+    if (removed) setPendingDelete(null);
   }
 
   return (
@@ -113,7 +124,7 @@ export function TagManager({
                 </small>
                 <button
                   type="button"
-                  onClick={() => onRemove(tag.id)}
+                  onClick={() => setPendingDelete(tag)}
                   className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim hover:bg-otto-bg hover:text-otto-red"
                   aria-label={`Delete ${tag.name}`}
                 >
@@ -133,6 +144,54 @@ export function TagManager({
           )}
         </div>
       </div>
+
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 desk:items-center"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-tag-title"
+          aria-describedby="delete-tag-description"
+        >
+          <div className="w-full max-w-[420px] rounded-2xl border border-otto-divider bg-otto-bg p-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <i
+                className="h-3.5 w-3.5 shrink-0 rounded-full"
+                style={{ backgroundColor: pendingDelete.color }}
+              />
+              <h2 id="delete-tag-title" className="text-[18px] font-extrabold">
+                Delete “{pendingDelete.name}”?
+              </h2>
+            </div>
+            <p
+              id="delete-tag-description"
+              className="mt-3 text-[13.5px] leading-relaxed text-otto-text-dim"
+            >
+              {pendingCount === 0
+                ? "This tag is not used by any vault items."
+                : `${pendingCount} ${pendingCount === 1 ? "item" : "items"} will stay in your vault. This tag will be removed from ${pendingCount === 1 ? "it" : "them"}.`}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={deleting}
+                className="rounded-xl border border-otto-divider px-4 py-3 text-[13px] font-bold text-otto-text-dim disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={deleting}
+                className="rounded-xl bg-otto-red-soft px-4 py-3 text-[13px] font-bold text-otto-red disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete tag"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

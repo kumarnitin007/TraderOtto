@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Clock3,
   MoreHorizontal,
   Plus,
   Search,
@@ -21,8 +22,9 @@ import {
   VAULT_TAG_SORT_OPTIONS,
   type VaultTagSort,
 } from "@/lib/vaultTagSort";
+import { orderByRecent } from "@/lib/vaultRecents";
 
-export type VaultFilter = "all" | VaultKind | "favorites";
+export type VaultFilter = "all" | VaultKind | "favorites" | "recent";
 type ItemSort = "updated" | "name-asc" | "name-desc" | "category" | "favorites";
 
 export function VaultScreen({
@@ -38,6 +40,8 @@ export function VaultScreen({
   browsingTags,
   setBrowsingTags,
   security,
+  recentIds,
+  onClearRecents,
   onSelect,
   onCopy,
   onAdd,
@@ -55,6 +59,8 @@ export function VaultScreen({
   browsingTags: boolean;
   setBrowsingTags: (value: boolean) => void;
   security: VaultSecuritySnapshot;
+  recentIds: string[];
+  onClearRecents: () => void;
   onSelect: (item: VaultItem) => void;
   onCopy: (value: string, label?: string) => void;
   onAdd: () => void;
@@ -66,6 +72,7 @@ export function VaultScreen({
   const activeTag = tags.find((tag) => tag.id === tagFilter);
   const showTagGrid = browsingTags && !activeTag;
   const sortedItems = useMemo(() => {
+    if (filter === "recent") return orderByRecent(items, recentIds);
     const next = [...items];
     if (itemSort === "name-asc") return next.sort((a, b) => a.name.localeCompare(b.name));
     if (itemSort === "name-desc") return next.sort((a, b) => b.name.localeCompare(a.name));
@@ -81,7 +88,7 @@ export function VaultScreen({
       );
     }
     return next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, [items, itemSort]);
+  }, [filter, items, itemSort, recentIds]);
   const sortedTags = useMemo(
     () => sortVaultTags(tags, allItems, tagSort),
     [tags, tagSort, allItems]
@@ -151,6 +158,18 @@ export function VaultScreen({
         </FilterChip>
         <button
           type="button"
+          onClick={() => selectFilter("recent")}
+          className={`inline-flex shrink-0 snap-start items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold ${
+            filter === "recent"
+              ? "bg-otto-text text-otto-bg"
+              : "border border-otto-divider bg-otto-surface text-otto-text-dim"
+          }`}
+        >
+          <Clock3 size={14} />
+          Recent
+        </button>
+        <button
+          type="button"
           onClick={toggleTags}
           className={`inline-flex shrink-0 snap-start items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold ${
             browsingTags || activeTag
@@ -206,10 +225,22 @@ export function VaultScreen({
               ? "Browse by Tag"
               : filter === "favorites"
                 ? "Favorites"
-                : "All items"}
+                : filter === "recent"
+                  ? "Recently opened"
+                  : "All items"}
           </h2>
         )}
-        {activeTag ? (
+        {!activeTag && filter === "recent" ? (
+          <button
+            type="button"
+            onClick={onClearRecents}
+            disabled={sortedItems.length === 0}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-otto-text-dim disabled:opacity-40"
+          >
+            <X size={15} />
+            Clear
+          </button>
+        ) : activeTag ? (
           <button
             type="button"
             onClick={toggleTags}
@@ -318,15 +349,24 @@ export function VaultScreen({
               onCopy={onCopy}
             />
           ))}
-          {!items.length && (
-            <div className="rounded-xl bg-otto-surface px-4 py-10 text-center">
-              <Search className="mx-auto text-otto-text-faint" />
-              <h3 className="mt-3 font-bold">No items found</h3>
-              <p className="mt-1 text-sm text-otto-text-dim">
-                Try another search, category, or tag.
-              </p>
-            </div>
-          )}
+          {!sortedItems.length &&
+            (filter === "recent" ? (
+              <div className="rounded-xl bg-otto-surface px-4 py-10 text-center">
+                <Clock3 className="mx-auto text-otto-text-faint" />
+                <h3 className="mt-3 font-bold">No recent entries</h3>
+                <p className="mt-1 text-sm text-otto-text-dim">
+                  Entries you open on this device appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-otto-surface px-4 py-10 text-center">
+                <Search className="mx-auto text-otto-text-faint" />
+                <h3 className="mt-3 font-bold">No items found</h3>
+                <p className="mt-1 text-sm text-otto-text-dim">
+                  Try another search, category, or tag.
+                </p>
+              </div>
+            ))}
         </div>
       )}
     </section>

@@ -1,8 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
 import {
-  ChevronRight,
+  Clock3,
   Heart,
   Import,
   KeyRound,
@@ -12,36 +11,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
-
-function SettingsRow({
-  icon: Icon,
-  label,
-  detail,
-  onClick,
-  trailing,
-}: {
-  icon: typeof Tag;
-  label: string;
-  detail?: string;
-  onClick?: () => void;
-  trailing?: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!onClick}
-      className={`flex w-full items-center gap-3 px-3.5 py-3 text-left ${
-        onClick ? "hover:bg-otto-surface-raise" : "opacity-70"
-      }`}
-    >
-      <Icon size={18} className="shrink-0 text-otto-text-dim" />
-      <span className="flex-1 text-[14px] font-medium">{label}</span>
-      {detail && <small className="text-[12px] text-otto-text-faint">{detail}</small>}
-      {trailing ?? (onClick ? <ChevronRight size={18} className="text-otto-text-faint" /> : null)}
-    </button>
-  );
-}
+import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 
 export function SettingsScreen({
   tagCount,
@@ -49,6 +19,8 @@ export function SettingsScreen({
   onDataTransfer,
   deletedCount,
   onRecentlyDeleted,
+  recentCount,
+  onClearRecents,
   onSecurity,
   autoLockMinutes,
 }: {
@@ -57,6 +29,8 @@ export function SettingsScreen({
   onDataTransfer: () => void;
   deletedCount: number;
   onRecentlyDeleted: () => void;
+  recentCount: number;
+  onClearRecents: () => void;
   onSecurity: () => void;
   autoLockMinutes: number;
 }) {
@@ -104,7 +78,21 @@ export function SettingsScreen({
           detail={`${deletedCount} ${deletedCount === 1 ? "item" : "items"}`}
           onClick={onRecentlyDeleted}
         />
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsRow
+          icon={Clock3}
+          label="Clear recently opened"
+          detail={
+            recentCount
+              ? `${recentCount} ${recentCount === 1 ? "entry" : "entries"}`
+              : "Empty"
+          }
+          onClick={recentCount ? onClearRecents : undefined}
+        />
       </div>
+      <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-otto-text-faint">
+        The recent list stays on this device and is never synced.
+      </p>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow icon={Sparkles} label="Suggest an idea" />

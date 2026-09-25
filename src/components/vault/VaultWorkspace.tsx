@@ -22,6 +22,11 @@ import {
   type VaultTag,
 } from "@/lib/vaultRepository";
 import { analyzeVaultSecurity } from "@/lib/vaultSecurity";
+import {
+  clearVaultRecents,
+  readVaultRecents,
+  rememberVaultRecent,
+} from "@/lib/vaultRecents";
 import { useEncryptedVault } from "@/hooks/useEncryptedVault";
 
 type Editor = { mode: "create" } | { mode: "edit"; item: VaultItem };
@@ -46,6 +51,7 @@ export function VaultWorkspace() {
   const [securitySettings, setSecuritySettings] = useState(false);
   const [toast, setToast] = useState("");
   const [dataError, setDataError] = useState("");
+  const [recentIds, setRecentIds] = useState<string[]>([]);
   const clipboardValueRef = useRef("");
 
   const loadVaultData = useCallback(async () => {
@@ -81,6 +87,10 @@ export function VaultWorkspace() {
   }, [repository, loadVaultData]);
 
   useEffect(() => {
+    setRecentIds(readVaultRecents());
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 1800);
     return () => window.clearTimeout(timer);
@@ -102,6 +112,17 @@ export function VaultWorkspace() {
       }),
     [items, query, filter, tagFilter]
   );
+
+  function openItem(item: VaultItem) {
+    setSelected(item);
+    setRecentIds(rememberVaultRecent(item.id));
+  }
+
+  function clearRecents() {
+    clearVaultRecents();
+    setRecentIds([]);
+    setToast("Recent list cleared");
+  }
 
   async function copy(value: string, label = "Copied") {
     if (!value) return;
@@ -178,13 +199,13 @@ export function VaultWorkspace() {
     return tag;
   }
 
-  async function removeTag(id: string) {
-    if (!repository) return;
+  async function removeTag(id: string): Promise<boolean> {
+    if (!repository) return false;
     try {
       await repository.removeTag(id);
     } catch {
       setDataError("The tag could not be deleted.");
-      return;
+      return false;
     }
     const orphaned = items.filter((item) => item.tags.includes(id));
     const cleaned = orphaned.map((item) => ({
@@ -196,7 +217,7 @@ export function VaultWorkspace() {
     } catch {
       setDataError("The tag was deleted, but some item links could not be updated.");
       await loadVaultData();
-      return;
+      return false;
     }
     setItems((current) =>
       current.map((item) => cleaned.find((candidate) => candidate.id === item.id) ?? item)
@@ -204,6 +225,7 @@ export function VaultWorkspace() {
     setTags((current) => current.filter((tag) => tag.id !== id));
     if (tagFilter === id) setTagFilter(null);
     setToast("Tag deleted");
+    return true;
   }
 
   async function importData(importedItems: VaultItem[], newTags: VaultTag[]) {
@@ -347,7 +369,9 @@ export function VaultWorkspace() {
           browsingTags={browsingTags}
           setBrowsingTags={setBrowsingTags}
           security={security}
-          onSelect={setSelected}
+          recentIds={recentIds}
+          onClearRecents={clearRecents}
+          onSelect={openItem}
           onCopy={copy}
           onAdd={() => setEditor({ mode: "create" })}
           onOpenHealth={() => setTab("security")}
@@ -363,6 +387,13 @@ export function VaultWorkspace() {
           onDataTransfer={() => setDataTransfer(true)}
           deletedCount={deletedItems.length}
           onRecentlyDeleted={() => setRecentlyDeleted(true)}
+          recentCount={recentIds.length}
+          onClearRecents={() => {
+            if (!recentIds.length) return;
+            if (window.confirm("Clear the list of recently opened entries on this device?")) {
+              clearRecents();
+            }
+          }}
           onSecurity={() => setSecuritySettings(true)}
           autoLockMinutes={vault.autoLockMinutes}
         />
@@ -405,7 +436,7 @@ export function VaultWorkspace() {
           tags={tags}
           items={items}
           onCreate={createTag}
-          onRemove={(id) => void removeTag(id)}
+          onRemove={removeTag}
           onClose={() => setTagManager(false)}
         />
       )}

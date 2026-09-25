@@ -16,6 +16,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { WorkspaceSwitcher } from "@/components/nav/WorkspaceSwitcher";
 import { WorkspacePlaceholder } from "@/components/nav/WorkspacePlaceholder";
 import { VaultWorkspace } from "@/components/vault/VaultWorkspace";
+import { BooksWorkspace } from "@/components/books/BooksWorkspace";
 import { PnlOverview } from "@/components/nav/PnlOverview";
 import { APP_WORKSPACE_META } from "@/lib/appWorkspace";
 import { useTrades } from "@/hooks/useTrades";
@@ -131,6 +132,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-[18px] pt-3.5">
             {workspace === "vault" ? (
               <VaultWorkspace />
+            ) : workspace === "books" ? (
+              <BooksWorkspace />
             ) : !trading ? (
               <WorkspacePlaceholder workspace={workspace} />
             ) : (

@@ -22,6 +22,9 @@ export type ScreenOptions = {
   portfolioReportLayout: "actions" | "board" | "detail";
   tradeScope: TradeScope;
   appWorkspace: AppWorkspace;
+  booksTab: "library" | "discover" | "add" | "stats" | "settings";
+  booksFilter: "reading" | "read" | "want_to_read";
+  booksOpenLibraryEnabled: boolean;
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -39,6 +42,9 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   portfolioReportLayout: "actions",
   tradeScope: "all",
   appWorkspace: "trader",
+  booksTab: "library",
+  booksFilter: "reading",
+  booksOpenLibraryEnabled: true,
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -122,6 +128,18 @@ export function readScreenOptions(): ScreenOptions {
       appWorkspace: isAppWorkspace(parsed.appWorkspace)
         ? parsed.appWorkspace
         : SCREEN_OPTION_DEFAULTS.appWorkspace,
+      booksTab:
+        parsed.booksTab === "discover" ||
+        parsed.booksTab === "add" ||
+        parsed.booksTab === "stats" ||
+        parsed.booksTab === "settings"
+          ? parsed.booksTab
+          : "library",
+      booksFilter:
+        parsed.booksFilter === "read" || parsed.booksFilter === "want_to_read"
+          ? parsed.booksFilter
+          : "reading",
+      booksOpenLibraryEnabled: parsed.booksOpenLibraryEnabled !== false,
     };
   } catch {
     return SCREEN_OPTION_DEFAULTS;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VaultItem, VaultTag } from "@/lib/vaultRepository";
-import { sortVaultTags } from "@/lib/vaultTagSort";
+import { sortVaultTags, tagUsageCount } from "@/lib/vaultTagSort";
 
 function tag(id: string, name: string): VaultTag {
   return { id, name, color: "#000" };
@@ -41,5 +41,14 @@ describe("sortVaultTags", () => {
       "c",
       "b",
     ]);
+  });
+});
+
+describe("tagUsageCount", () => {
+  it("counts zero, one, and multiple item assignments", () => {
+    const items = [item(["a"]), item(["a", "b"]), item(["c"])];
+    expect(tagUsageCount(items, "missing")).toBe(0);
+    expect(tagUsageCount(items, "b")).toBe(1);
+    expect(tagUsageCount(items, "a")).toBe(2);
   });
 });
