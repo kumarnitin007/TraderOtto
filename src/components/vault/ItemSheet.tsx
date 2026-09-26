@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SheetAction } from "@/components/ui/ActionSheet";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import {
   type VaultHistoryEntry,
@@ -333,29 +334,3 @@ function formatHistoryField(field: string): string {
   return field.replace(/([A-Z])/g, " $1").toLowerCase();
 }
 
-function SheetAction({
-  icon: Icon,
-  label,
-  onClick,
-  tone,
-  filled,
-}: {
-  icon: typeof Copy;
-  label: string;
-  onClick: () => void;
-  tone?: "danger";
-  filled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-4 rounded-xl px-3 py-3 text-left text-[16px] font-medium hover:bg-otto-surface ${
-        tone === "danger" ? "text-otto-red" : "text-otto-text"
-      }`}
-    >
-      <Icon size={22} fill={filled ? "currentColor" : "none"} className="shrink-0" />
-      {label}
-    </button>
-  );
-}

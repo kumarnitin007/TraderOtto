@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { CalendarHeart, Plus, Star, X } from "lucide-react";
+import { CalendarHeart, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { LifeBottomNav } from "@/components/life/LifeBottomNav";
+import { LifeListsScreen } from "@/components/life/LifeListsScreen";
 import { LifeSettingsScreen } from "@/components/life/LifeSettingsScreen";
 import { LifeTasksScreen } from "@/components/life/LifeTasksScreen";
+import { LifeTodayScreen } from "@/components/life/LifeTodayScreen";
 import { useLife } from "@/hooks/useLife";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import {
@@ -16,8 +19,8 @@ import {
   lifeIdentityKey,
   lifeOccasionLabel,
 } from "@/lib/life";
-import { lifeTaskKey, taskProgress } from "@/lib/lifeTasks";
-import type { LifeCategory, LifeInput, LifeItem, LifeTaskInput } from "@/types/life";
+import { lifeTaskKey } from "@/lib/lifeTasks";
+import type { LifeCategory, LifeInput, LifeItem, LifeListItemInput, LifeTaskInput } from "@/types/life";
 import { EMPTY_LIFE_INPUT, LIFE_CATEGORIES } from "@/types/life";
 
 const COLORS: Record<LifeCategory, string> = {
@@ -43,8 +46,27 @@ function sectionFor(days: number) {
 }
 
 export function LifeWorkspace() {
-  const { items, tasks, checks, loading, error, taskError, readonly, save, remove, saveTask, removeTask, toggleToday } =
-    useLife();
+  const {
+    items,
+    tasks,
+    checks,
+    lists,
+    listItems,
+    loading,
+    error,
+    taskError,
+    listError,
+    readonly,
+    save,
+    remove,
+    saveTask,
+    removeTask,
+    toggleToday,
+    saveList,
+    removeList,
+    saveListItem,
+    removeListItem,
+  } = useLife();
   const [tab, setTab] = useScreenOption("lifeTab");
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<LifeInput | null>(null);
@@ -130,6 +152,44 @@ export function LifeWorkspace() {
     }
   }
 
+  async function onSaveNamedList(name: string, id?: string) {
+    setNotice("");
+    try {
+      await saveList(name, id);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not save.");
+      throw err;
+    }
+  }
+
+  async function onSaveNamedItem(input: LifeListItemInput, id?: string) {
+    setNotice("");
+    try {
+      await saveListItem(input, id);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not save.");
+      throw err;
+    }
+  }
+
+  async function onToggleHabit(taskId: string) {
+    setNotice("");
+    try {
+      await toggleToday(taskId);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not update that habit.");
+    }
+  }
+
+  async function onToggleTodo(input: LifeListItemInput, id: string) {
+    setNotice("");
+    try {
+      await saveListItem(input, id);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not update that to-do.");
+    }
+  }
+
   if (editing) {
     return (
       <LifeEditor
@@ -145,14 +205,37 @@ export function LifeWorkspace() {
     );
   }
 
-  const openToday = tasks.filter((task) => {
-    const progress = taskProgress(task, checks);
-    return !progress.doneToday && progress.count < progress.target;
-  }).length;
-
   return (
     <div className="mx-auto max-w-[720px] pb-8">
-      {tab === "tasks" ? (
+      {tab === "today" ? (
+        <LifeTodayScreen
+          dates={items}
+          tasks={tasks}
+          checks={checks}
+          lists={lists}
+          listItems={listItems}
+          loading={loading}
+          errors={[error, taskError, listError].filter(Boolean)}
+          readonly={readonly}
+          notice={notice}
+          onDate={setSelected}
+          onToggleTask={onToggleHabit}
+          onToggleListItem={(item) =>
+            onToggleTodo(
+              {
+                listId: item.listId,
+                text: item.text,
+                done: true,
+                dueOn: item.dueOn,
+              },
+              item.id,
+            )
+          }
+          onOpenDates={() => setTab("dates")}
+          onOpenTasks={() => setTab("tasks")}
+          onOpenLists={() => setTab("lists")}
+        />
+      ) : tab === "tasks" ? (
         <LifeTasksScreen
           tasks={tasks}
           checks={checks}
@@ -161,10 +244,29 @@ export function LifeWorkspace() {
           readonly={readonly}
           busy={busy}
           notice={notice}
-          onToggle={toggleToday}
+          onToggle={onToggleHabit}
           onSave={onSaveTask}
           onRemove={removeTask}
           onEditingChange={setTaskEditing}
+        />
+      ) : tab === "lists" ? (
+        <LifeListsScreen
+          lists={lists}
+          items={listItems}
+          loading={loading}
+          error={listError}
+          readonly={readonly}
+          notice={notice}
+          onSaveList={onSaveNamedList}
+          onRemoveList={async (id) => {
+            setNotice("");
+            await removeList(id);
+          }}
+          onSaveItem={onSaveNamedItem}
+          onRemoveItem={async (id) => {
+            setNotice("");
+            await removeListItem(id);
+          }}
         />
       ) : tab === "settings" ? (
         <LifeSettingsScreen
@@ -204,19 +306,6 @@ export function LifeWorkspace() {
           <Plus size={18} />
         </button>
       </div>
-
-      {tasks.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setTab("tasks")}
-          className="mb-3 w-full rounded-2xl bg-otto-surface px-3 py-3 text-left"
-        >
-          <span className="block text-[14px] font-bold">Tracked today</span>
-          <span className="text-[12px] text-otto-text-dim">
-            {openToday ? `${openToday} still open` : "All done for today"}
-          </span>
-        </button>
-      )}
 
       <div className="mb-4 overflow-x-auto">
         <div className="flex w-max gap-2">
@@ -338,21 +427,31 @@ export function LifeWorkspace() {
       )}
 
       {selected && (
-        <ReviewSheet title={selected.name} onClose={() => setSelected(null)}>
-          <p className="mb-3 text-[13px] text-otto-text-dim">
-            {lifeCountdownLabel(lifeDaysUntil(selected))}
-            {lifeOccasionLabel(selected) ? ` · ${lifeOccasionLabel(selected)}` : ""}
-            {selected.notes ? ` · ${selected.notes}` : ""}
-          </p>
-          <SheetButton
-            label={selected.milestone ? "Unmark milestone" : "Mark as milestone"}
+        <ActionSheet
+          title={selected.name}
+          subtitle={[
+            lifeCountdownLabel(lifeDaysUntil(selected)),
+            lifeOccasionLabel(selected),
+            selected.notes,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          icon={CalendarHeart}
+          iconColor={COLORS[selected.category]}
+          onClose={() => setSelected(null)}
+        >
+          <SheetAction
+            icon={Star}
+            label={selected.milestone ? "Remove milestone" : "Mark as milestone"}
+            filled={selected.milestone}
             onClick={() => {
               void save({ ...toInput(selected), milestone: !selected.milestone }, selected.id)
                 .then((saved) => setSelected(saved))
                 .catch((err) => setNotice(err instanceof Error ? err.message : "Could not save."));
             }}
           />
-          <SheetButton
+          <SheetAction
+            icon={Pencil}
             label="Edit"
             onClick={() => {
               setEditingId(selected.id);
@@ -360,16 +459,17 @@ export function LifeWorkspace() {
               setSelected(null);
             }}
           />
-          <SheetButton
+          <SheetAction
+            icon={Trash2}
             label="Delete"
-            danger
+            tone="danger"
             onClick={() => {
               void remove(selected.id)
                 .then(() => setSelected(null))
                 .catch((err) => setNotice(err instanceof Error ? err.message : "Could not delete."));
             }}
           />
-        </ReviewSheet>
+        </ActionSheet>
       )}
     </div>
   );
@@ -551,24 +651,3 @@ function ReviewSheet({
   );
 }
 
-function SheetButton({
-  label,
-  onClick,
-  danger,
-}: {
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`mb-2 w-full rounded-2xl bg-otto-surface px-3 py-3 text-left text-sm font-bold ${
-        danger ? "text-otto-red" : ""
-      }`}
-    >
-      {label}
-    </button>
-  );
-}

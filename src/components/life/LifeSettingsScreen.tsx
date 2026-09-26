@@ -28,7 +28,7 @@ export function LifeSettingsScreen({
         <Upload size={18} className="text-otto-text-dim" />
         <span>
           <b className="block text-[14px]">Import</b>
-          <span className="text-[12px] text-otto-text-dim">Leo export of dates and tracked tasks</span>
+          <span className="text-[12px] text-otto-text-dim">Leo export of dates and habits</span>
         </span>
       </button>
       <input
@@ -45,7 +45,8 @@ export function LifeSettingsScreen({
       />
       {notice && <p className="mt-3 text-[13px] text-otto-text-dim">{notice}</p>}
       <p className="mt-4 text-[13px] text-otto-text-dim">
-        Birthdays and anniversaries stay on Dates. Daily habits and weekly counts land on Tasks.
+        Birthdays and anniversaries stay on Dates. Recurring items land on Habits. One-off items
+        belong in To-dos.
         Nothing is added until you confirm the list.
       </p>
     </div>

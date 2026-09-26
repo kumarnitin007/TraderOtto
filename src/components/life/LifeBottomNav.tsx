@@ -1,12 +1,21 @@
 "use client";
 
-import { CalendarHeart, CheckCheck, Settings, type LucideIcon } from "lucide-react";
+import {
+  CalendarHeart,
+  CheckCheck,
+  House,
+  ListTodo,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
-export type LifeTab = "dates" | "tasks" | "settings";
+export type LifeTab = "today" | "dates" | "tasks" | "lists" | "settings";
 
 const ITEMS: { id: LifeTab; label: string; icon: LucideIcon }[] = [
+  { id: "today", label: "Today", icon: House },
   { id: "dates", label: "Dates", icon: CalendarHeart },
-  { id: "tasks", label: "Tasks", icon: CheckCheck },
+  { id: "tasks", label: "Habits", icon: CheckCheck },
+  { id: "lists", label: "To-dos", icon: ListTodo },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

@@ -1,4 +1,5 @@
 import { createBookDiscoveryReport, type BookPromptEntry } from "@/lib/booksAiServer";
+import { selectDiscoveryBooks } from "@/lib/booksDiscovery";
 import type { BooksPreferences, RecommendationRequest } from "@/lib/booksPreferences";
 import { serverSupabaseForRequest } from "@/lib/serverSupabase";
 
@@ -11,6 +12,7 @@ type BookRow = {
   tags: unknown;
   series_title: string | null;
   notes: string | null;
+  updated_at: string;
 };
 
 export async function POST(request: Request) {
@@ -55,13 +57,18 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from("bk_books")
-    .select("id, title, author, status, rating, would_recommend, tags, series_title, notes")
+    .select(
+      "id, title, author, status, rating, would_recommend, tags, series_title, notes, updated_at"
+    )
     .is("deleted_at", null)
     .order("updated_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  const rows = ((data ?? []) as (BookRow & { id: string })[]).filter(
+  const chosen = ((data ?? []) as (BookRow & { id: string })[]).filter(
     (book) => !includeIds || includeIds.includes(book.id)
+  );
+  const rows = selectDiscoveryBooks(
+    chosen.map((book) => ({ ...book, rating: Number(book.rating), updatedAt: book.updated_at }))
   );
   if (!rows.length) {
     return Response.json(
@@ -84,7 +91,7 @@ export async function POST(request: Request) {
       ? book.tags.filter((tag): tag is string => typeof tag === "string")
       : [],
     seriesTitle: book.series_title,
-    notes: (book.notes ?? "").slice(0, 800),
+    notes: (book.notes ?? "").slice(0, 400),
   }));
 
   try {
@@ -96,6 +103,8 @@ export async function POST(request: Request) {
     return Response.json({
       report: { ...result.report, generatedAt: new Date().toISOString() },
       model: result.model,
+      prompt: result.prompt,
+      sent: books.map((book) => `${book.title} — ${book.author}`),
     });
   } catch (cause) {
     return Response.json(

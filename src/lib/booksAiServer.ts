@@ -52,38 +52,50 @@ export type BookPromptEntry = {
   notes: string;
 };
 
+/** Drops empty fields and long reviews so the prompt stays small. */
+function compactEntry(book: BookPromptEntry) {
+  const entry: Record<string, unknown> = {
+    title: book.title,
+    author: book.author,
+  };
+  if (book.rating > 0) entry.rating = book.rating;
+  if (book.status && book.status !== "read") entry.status = book.status;
+  if (book.wouldRecommend !== null) entry.wouldRecommend = book.wouldRecommend;
+  if (book.seriesTitle) entry.series = book.seriesTitle;
+  if (book.tags.length) entry.tags = book.tags.slice(0, 4);
+  const notes = book.notes.trim();
+  if (notes) entry.review = notes.length > 200 ? `${notes.slice(0, 200)}…` : notes;
+  return entry;
+}
+
 export function buildBookDiscoveryPrompt(
   books: BookPromptEntry[],
   preferences?: Partial<BooksPreferences>,
   request?: Partial<RecommendationRequest>
 ): string {
-  const readerContext = {
-    audience: preferences?.audience || "not specified",
-    likedGenres: preferences?.likedGenres?.trim() || "not specified",
-    avoid: preferences?.avoid?.trim() || "not specified",
-    notes: preferences?.readerNotes?.trim() || "not specified",
-    recommendationGoal: request?.goal?.trim() || "balanced suggestions",
-    currentRequest: request?.note?.trim() || "none",
+  const readerContext: Record<string, string> = {
+    goal: request?.goal?.trim() || "balanced suggestions",
   };
+  if (preferences?.audience) readerContext.audience = preferences.audience;
+  if (preferences?.likedGenres?.trim()) readerContext.likes = preferences.likedGenres.trim();
+  if (preferences?.avoid?.trim()) readerContext.avoid = preferences.avoid.trim();
+  if (preferences?.readerNotes?.trim()) readerContext.notes = preferences.readerNotes.trim();
+  if (request?.note?.trim()) readerContext.askedFor = request.note.trim();
+
   return `You are Otto Books, a careful personal reading recommender.
 
-Use the reader's actual library below to infer taste from ratings, tags, series, status, and notes.
-Honor the explicit reader context and current request before inferring from the library.
-The audience is a hard suitability constraint when specified. For example, do not recommend
-children's books to an adult unless their current request explicitly asks for them.
-Recommend 3-6 real books that are not already in the library. Use web search to verify each exact title and author.
-Write the profile as one or two short sentences. Do not quote private notes.
-Each reason is one sentence under 140 characters, tied to this reader's taste. Do not repeat the book title inside the reason.
-Each recommendation needs 2-4 short genre tags.
-Include "not for you" only when the library shows a clear dislike, and keep that list to at most 2 books.
-Do not invent books, authors, series, or claims.
-generatedAt must be the current ISO timestamp.
+The sample below is the reader's highest and lowest rated books. Infer taste from ratings, tags, series, and reviews.
+Reader context outranks the sample. Audience, when given, is a hard suitability limit: never suggest children's books to an adult unless asked.
+Recommend 3-6 real books that are not in the sample. Verify each exact title and author with web search.
+Profile: one or two short sentences, no quoting private reviews.
+Reason: one sentence under 140 characters tied to this reader, never repeating the title.
+Tags: 2-4 short genres per book.
+Add "not for you" only for a clear dislike, at most 2 books.
+Invent nothing. generatedAt is the current ISO timestamp.
 
-READER CONTEXT:
-${JSON.stringify(readerContext)}
+READER: ${JSON.stringify(readerContext)}
 
-LIBRARY:
-${JSON.stringify(books.slice(0, 100))}`;
+SAMPLE (${books.length} books): ${JSON.stringify(books.map(compactEntry))}`;
 }
 
 function outputText(payload: OpenAiPayload): string | null {
@@ -154,7 +166,7 @@ export async function createBookDiscoveryReport(
       }
       const text = outputText(payload);
       if (!text) throw new Error("AI returned no recommendation report.");
-      return { report: parseBookDiscoveryResponse(text), model: payload.model ?? model };
+      return { report: parseBookDiscoveryResponse(text), model: payload.model ?? model, prompt };
     } catch (cause) {
       lastError =
         cause instanceof Error && cause.name === "AbortError"

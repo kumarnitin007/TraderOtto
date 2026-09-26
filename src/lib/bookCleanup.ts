@@ -20,6 +20,11 @@ export function bookMatchKey(value: string) {
     .trim();
 }
 
+/** The key duplicate detection and import matching both group on. */
+export function bookGroupKey(title: string, author: string) {
+  return `${bookMatchKey(title)}|${bookMatchKey(author)}`;
+}
+
 export function coverIdFromStoredUrl(url: string) {
   const match = /\/b\/id\/(\d+)/.exec(url);
   return match ? Number(match[1]) : null;
@@ -184,7 +189,15 @@ export function planLibraryCleanup(books: Book[]): CleanupAction[] {
   return actions;
 }
 
-export function coverPatchFromSearch(book: Book, results: OpenLibraryBook[]): Partial<BookInput> | null {
+type CoverTarget = Pick<
+  BookInput,
+  "title" | "author" | "coverId" | "isbn" | "openLibraryId" | "pageCount" | "tags"
+>;
+
+export function coverPatchFromSearch(
+  book: CoverTarget,
+  results: OpenLibraryBook[]
+): Partial<BookInput> | null {
   const matches = results.filter(
     (result) => titlesMatch(book.title, result.title) && authorsMatch(book.author, result.author),
   );

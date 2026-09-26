@@ -109,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main className="min-w-0 flex-1 pb-24 desk:px-2 desk:pt-7">
-          <header className="sticky top-0 z-[5] bg-otto-bg px-[18px] pb-2.5 pt-4 desk:hidden">
+          <header className="sticky top-0 z-30 bg-otto-bg px-[18px] pb-2.5 pt-4 desk:hidden">
             <div className="flex items-center justify-between gap-2">
               <div className="truncate text-[17px] font-bold tracking-[-0.2px]">
                 {product.product}

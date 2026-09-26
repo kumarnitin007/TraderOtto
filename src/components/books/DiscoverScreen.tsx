@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { Check, ChevronDown, ExternalLink, Plus, RefreshCw, Sparkles } from "lucide-react";
 import { BookCover, StarRating } from "@/components/books/BookCover";
+import { PromptPreview } from "@/components/ai/PromptPreview";
 import { bookCoverColor } from "@/lib/books";
+import {
+  DISCOVERY_BEST_COUNT,
+  DISCOVERY_LIMIT,
+  DISCOVERY_WORST_COUNT,
+  selectDiscoveryBooks,
+} from "@/lib/booksDiscovery";
 import {
   catalogSearchUrl,
   type BooksPreferences,
@@ -30,6 +37,7 @@ export function DiscoverScreen({
   existingKeys,
   addingKey,
   onAddToWishlist,
+  lastPrompt,
 }: {
   books: Book[];
   preferences: BooksPreferences;
@@ -41,6 +49,7 @@ export function DiscoverScreen({
   existingKeys: Set<string>;
   addingKey: string | null;
   onAddToWishlist: (book: BookRecommendation) => Promise<void>;
+  lastPrompt: string;
 }) {
   const [reviewing, setReviewing] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
@@ -48,8 +57,11 @@ export function DiscoverScreen({
   const [goal, setGoal] = useState<(typeof RECOMMENDATION_GOALS)[number]>("Best match");
   const [requestNote, setRequestNote] = useState("");
 
+  const suggestedIds = selectDiscoveryBooks(books).map((book) => book.id);
+  const sendCount = Math.min(selected.length, DISCOVERY_LIMIT);
+
   function openReview() {
-    setSelected(books.map((book) => book.id));
+    setSelected(suggestedIds);
     setShowBooks(false);
     setReviewing(true);
   }
@@ -124,6 +136,28 @@ export function DiscoverScreen({
               className={`transition-transform ${showBooks ? "rotate-180" : ""}`}
             />
           </button>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-otto-text-faint">
+            Otto sends at most {DISCOVERY_LIMIT} books: your {DISCOVERY_BEST_COUNT} best rated and{" "}
+            {DISCOVERY_WORST_COUNT} lowest rated. A whole catalog makes the picks worse, not better.
+          </p>
+          {showBooks && (
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelected(suggestedIds)}
+                className="rounded-full bg-otto-surface px-3.5 py-2 text-[12px] font-bold text-otto-text-dim"
+              >
+                Best and worst {Math.min(DISCOVERY_LIMIT, books.length)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected([])}
+                className="rounded-full bg-otto-surface px-3.5 py-2 text-[12px] font-bold text-otto-text-dim"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           {showBooks && (
             <div className="mt-2 space-y-2">
@@ -182,7 +216,7 @@ export function DiscoverScreen({
               disabled={!selected.length || generating}
               className="rounded-xl bg-otto-green px-4 py-3 text-[13px] font-bold text-white disabled:opacity-40"
             >
-              {generating ? "Finding books…" : `Send ${selected.length} book${selected.length === 1 ? "" : "s"}`}
+              {generating ? "Finding books…" : `Send ${sendCount} book${sendCount === 1 ? "" : "s"}`}
             </button>
           </div>
         </div>
@@ -251,6 +285,11 @@ export function DiscoverScreen({
           <p className="mt-4 text-center text-[10.5px] text-otto-text-faint">
             AI-generated · verify book details before adding
           </p>
+          <PromptPreview
+            prompt={lastPrompt}
+            title="Prompt sent to Otto"
+            hint="The exact text and book sample behind these picks."
+          />
         </>
       )}
 

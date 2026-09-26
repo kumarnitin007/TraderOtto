@@ -55,6 +55,30 @@ export const EMPTY_LIFE_TASK: LifeTaskInput = {
   targetCount: 1,
 };
 
+export type LifeList = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LifeListItem = {
+  id: string;
+  listId: string;
+  text: string;
+  done: boolean;
+  dueOn: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LifeListItemInput = {
+  listId: string;
+  text: string;
+  done: boolean;
+  dueOn: string | null;
+};
+
 export const EMPTY_LIFE_INPUT: LifeInput = {
   name: "",
   category: "birthday",

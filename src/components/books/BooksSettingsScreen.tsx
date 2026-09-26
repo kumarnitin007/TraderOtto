@@ -20,6 +20,11 @@ import {
   type ReaderAudience,
 } from "@/lib/booksPreferences";
 import type { CleanupAction } from "@/lib/bookCleanup";
+import {
+  booksToExport,
+  DEFAULT_BOOK_EXPORT_OPTIONS,
+  type BookExportOptions,
+} from "@/lib/booksTransfer";
 import type { Book, BookShelf } from "@/types/book";
 
 export function BooksSettingsScreen({
@@ -43,7 +48,7 @@ export function BooksSettingsScreen({
   onOpenLibraryChange: (enabled: boolean) => void;
   onAddShelf: (name: string) => Promise<void>;
   onRemoveShelf: (shelf: BookShelf, destination?: string) => Promise<void>;
-  onExport: (format: "json" | "csv") => void;
+  onExport: (format: "json" | "csv", options: BookExportOptions) => void;
   onImport: (file: File) => Promise<void>;
   onApplyCleanup: (actions: CleanupAction[]) => Promise<void>;
 }) {
@@ -58,6 +63,19 @@ export function BooksSettingsScreen({
   const [catalogName, setCatalogName] = useState("");
   const [catalogShort, setCatalogShort] = useState("");
   const [catalogUrl, setCatalogUrl] = useState("");
+  const [exportOptions, setExportOptions] = useState<BookExportOptions>(
+    DEFAULT_BOOK_EXPORT_OPTIONS
+  );
+  const exportCount = booksToExport(books, exportOptions).length;
+
+  function toggleExportShelf(slug: string) {
+    setExportOptions((current) => ({
+      ...current,
+      shelves: current.shelves.includes(slug)
+        ? current.shelves.filter((item) => item !== slug)
+        : [...current.shelves, slug],
+    }));
+  }
 
   async function importFile(file: File) {
     setImporting(true);
@@ -435,18 +453,79 @@ export function BooksSettingsScreen({
           onClick={() => csvRef.current?.click()}
         />
         <div className="mx-3.5 border-t border-otto-divider" />
+        <div className="px-3.5 py-3">
+          <b className="block text-[13px]">What to export</b>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <ExportChip
+              label="All shelves"
+              active={!exportOptions.shelves.length}
+              onClick={() => setExportOptions((current) => ({ ...current, shelves: [] }))}
+            />
+            {shelves.map((shelf) => (
+              <ExportChip
+                key={shelf.slug}
+                label={shelf.name}
+                active={exportOptions.shelves.includes(shelf.slug)}
+                onClick={() => toggleExportShelf(shelf.slug)}
+              />
+            ))}
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <ExportChip
+              label="Favorites only"
+              active={exportOptions.favoritesOnly}
+              onClick={() =>
+                setExportOptions((current) => ({
+                  ...current,
+                  favoritesOnly: !current.favoritesOnly,
+                }))
+              }
+            />
+            <ExportChip
+              label="Reviews"
+              active={exportOptions.includeReviews}
+              onClick={() =>
+                setExportOptions((current) => ({
+                  ...current,
+                  includeReviews: !current.includeReviews,
+                }))
+              }
+            />
+            <ExportChip
+              label="Ratings and dates"
+              active={exportOptions.includeRatings}
+              onClick={() =>
+                setExportOptions((current) => ({
+                  ...current,
+                  includeRatings: !current.includeRatings,
+                }))
+              }
+            />
+            <ExportChip
+              label="Covers"
+              active={exportOptions.includeCovers}
+              onClick={() =>
+                setExportOptions((current) => ({
+                  ...current,
+                  includeCovers: !current.includeCovers,
+                }))
+              }
+            />
+          </div>
+        </div>
+        <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow
           icon={Download}
           label="Export JSON"
-          detail={`${books.length} books`}
-          onClick={() => onExport("json")}
+          detail={`${exportCount} book${exportCount === 1 ? "" : "s"}`}
+          onClick={() => onExport("json", exportOptions)}
         />
         <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow
           icon={Download}
           label="Export CSV"
-          detail={`${books.length} books`}
-          onClick={() => onExport("csv")}
+          detail={`${exportCount} book${exportCount === 1 ? "" : "s"}`}
+          onClick={() => onExport("csv", exportOptions)}
         />
         <input
           ref={jsonRef}
@@ -514,6 +593,29 @@ export function BooksSettingsScreen({
         checked. Open Library searches and cover requests stop completely when its setting is off.
       </p>
     </section>
+  );
+}
+
+function ExportChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full px-3.5 py-2 text-[12px] font-bold ${
+        active ? "bg-otto-text text-otto-bg" : "bg-otto-bg text-otto-text-dim"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

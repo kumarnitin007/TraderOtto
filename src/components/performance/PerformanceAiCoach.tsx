@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { FileText, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
-import { PromptPreview } from "@/components/positions/PositionsSummary";
+import { PromptPreview } from "@/components/ai/PromptPreview";
 import { AiPerformanceReportView } from "@/components/performance/AiPerformanceReportView";
 import { AiReportHistory } from "@/components/ai/AiReportHistory";
 import { useTrades } from "@/hooks/useTrades";

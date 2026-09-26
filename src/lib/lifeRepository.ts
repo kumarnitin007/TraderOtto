@@ -1,4 +1,13 @@
-import type { LifeInput, LifeItem, LifeTask, LifeTaskCheck, LifeTaskInput } from "@/types/life";
+import type {
+  LifeInput,
+  LifeItem,
+  LifeList,
+  LifeListItem,
+  LifeListItemInput,
+  LifeTask,
+  LifeTaskCheck,
+  LifeTaskInput,
+} from "@/types/life";
 
 export interface LifeRepository {
   list(): Promise<LifeItem[]>;
@@ -10,4 +19,10 @@ export interface LifeRepository {
   listChecks(fromDay: string): Promise<LifeTaskCheck[]>;
   addCheck(taskId: string, doneOn: string): Promise<LifeTaskCheck>;
   removeCheck(id: string): Promise<void>;
+  listLists(): Promise<LifeList[]>;
+  saveList(name: string, id?: string): Promise<LifeList>;
+  removeList(id: string): Promise<void>;
+  listListItems(): Promise<LifeListItem[]>;
+  saveListItem(input: LifeListItemInput, id?: string): Promise<LifeListItem>;
+  removeListItem(id: string): Promise<void>;
 }

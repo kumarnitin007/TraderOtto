@@ -7,7 +7,7 @@ import { useTickerTechnicals } from "@/hooks/useTickerTechnicals";
 import { getSupabaseClient } from "@/lib/supabase";
 import { todayISO } from "@/lib/pnl";
 import { watchlistPrompt } from "@/lib/watchlistPrompt";
-import { PromptPreview } from "@/components/positions/PositionsSummary";
+import { PromptPreview } from "@/components/ai/PromptPreview";
 import { AiReportHistory } from "@/components/ai/AiReportHistory";
 import type { AiWatchlistReport } from "@/types/positionsAi";
 import type { WatchGroup } from "@/types/watchGroup";

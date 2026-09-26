@@ -5,6 +5,9 @@ import type {
   LifeCategory,
   LifeInput,
   LifeItem,
+  LifeList,
+  LifeListItem,
+  LifeListItemInput,
   LifeRepeat,
   LifeTask,
   LifeTaskCadence,
@@ -159,6 +162,61 @@ export function createSupabaseLifeRepository(
         .eq("user_id", userId);
       if (error) throw new Error(error.message);
     },
+    async listLists() {
+      const { data, error } = await client
+        .from("lf_lists")
+        .select("*")
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .order("created_at");
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as ListRow[]).map(mapList);
+    },
+    async saveList(name, id) {
+      const trimmed = clean(name, 80);
+      if (!trimmed) throw new Error("Enter a list name.");
+      const query = id
+        ? client.from("lf_lists").update({ name: trimmed }).eq("id", id).eq("user_id", userId)
+        : client.from("lf_lists").insert({ name: trimmed, user_id: userId });
+      const { data, error } = await query.select("*").single();
+      if (error) throw new Error(error.message);
+      return mapList(data as ListRow);
+    },
+    async removeList(id) {
+      const { error } = await client
+        .from("lf_lists")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+    async listListItems() {
+      const { data, error } = await client
+        .from("lf_list_items")
+        .select("*")
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .order("created_at");
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as ListItemRow[]).map(mapListItem);
+    },
+    async saveListItem(input, id) {
+      const body = listItemPayload(input);
+      const query = id
+        ? client.from("lf_list_items").update(body).eq("id", id).eq("user_id", userId)
+        : client.from("lf_list_items").insert({ ...body, user_id: userId });
+      const { data, error } = await query.select("*").single();
+      if (error) throw new Error(error.message);
+      return mapListItem(data as ListItemRow);
+    },
+    async removeListItem(id) {
+      const { error } = await client
+        .from("lf_list_items")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
   };
 }
 
@@ -204,5 +262,55 @@ function taskPayload(input: LifeTaskInput) {
     notes: clean(input.notes, 2000),
     cadence,
     target_count: cadence === "daily" ? 1 : Math.min(7, Math.max(1, input.targetCount)),
+  };
+}
+
+type ListRow = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ListItemRow = {
+  id: string;
+  list_id: string;
+  text: string;
+  done: boolean;
+  due_on: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapList(row: ListRow): LifeList {
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapListItem(row: ListItemRow): LifeListItem {
+  return {
+    id: row.id,
+    listId: row.list_id,
+    text: row.text,
+    done: row.done,
+    dueOn: row.due_on ? row.due_on.slice(0, 10) : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function listItemPayload(input: LifeListItemInput) {
+  const text = clean(input.text, 240);
+  if (!text) throw new Error("Enter an item.");
+  if (!input.listId) throw new Error("Choose a list.");
+  return {
+    list_id: input.listId,
+    text,
+    done: input.done,
+    due_on: input.dueOn,
   };
 }

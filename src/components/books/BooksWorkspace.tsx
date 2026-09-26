@@ -4,10 +4,15 @@ import { useEffect, useState } from "react";
 import { BookCheck } from "lucide-react";
 import { BookDetail } from "@/components/books/BookDetail";
 import { BookEditor } from "@/components/books/BookEditor";
+import { BookReviewEditor } from "@/components/books/BookReviewEditor";
 import { BookSheet } from "@/components/books/BookSheet";
 import { BooksBottomNav, type BooksTab } from "@/components/books/BooksBottomNav";
 import { BooksSettingsScreen } from "@/components/books/BooksSettingsScreen";
-import type { CleanupAction } from "@/lib/bookCleanup";
+import {
+  bookGroupKey,
+  coverPatchFromSearch,
+  type CleanupAction,
+} from "@/lib/bookCleanup";
 import { BooksStatsScreen } from "@/components/books/BooksStatsScreen";
 import { BookshelfScreen } from "@/components/books/BookshelfScreen";
 import { DiscoverScreen } from "@/components/books/DiscoverScreen";
@@ -19,8 +24,10 @@ import {
   bookInputFromImport,
   bookshelfExportCsv,
   bookshelfExportJson,
+  mergeImportEntries,
   parseBookshelfFile,
   shelfNamesToCreate,
+  type BookExportOptions,
 } from "@/lib/booksTransfer";
 import {
   DEFAULT_BOOKS_PREFERENCES,
@@ -48,10 +55,12 @@ export function BooksWorkspace() {
   const [selected, setSelected] = useState<Book | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState<Book | "new" | null>(null);
+  const [reviewing, setReviewing] = useState<Book | null>(null);
   const [toast, setToast] = useState("");
   const [actionError, setActionError] = useState("");
   const [generating, setGenerating] = useState(false);
   const [addingRecommendation, setAddingRecommendation] = useState<string | null>(null);
+  const [lastPrompt, setLastPrompt] = useState("");
   const [preferences, setPreferences] = useState<BooksPreferences>(
     DEFAULT_BOOKS_PREFERENCES
   );
@@ -137,11 +146,11 @@ export function BooksWorkspace() {
     }
   }
 
-  function exportLibrary(format: "json" | "csv") {
+  function exportLibrary(format: "json" | "csv", options: BookExportOptions) {
     const text =
       format === "csv"
-        ? bookshelfExportCsv(booksState.books, booksState.shelves)
-        : bookshelfExportJson(booksState.books, booksState.shelves);
+        ? bookshelfExportCsv(booksState.books, booksState.shelves, options)
+        : bookshelfExportJson(booksState.books, booksState.shelves, options);
     const blob = new Blob([text], {
       type: format === "csv" ? "text/csv;charset=utf-8" : "application/json;charset=utf-8",
     });
@@ -154,29 +163,66 @@ export function BooksWorkspace() {
     URL.revokeObjectURL(url);
   }
 
+  /** Looks up a verified cover so imported books do not need a cleanup pass later. */
+  async function coverPatchForImport(input: BookInput): Promise<Partial<BookInput> | null> {
+    if (input.coverId || !openLibraryEnabled) return null;
+    const query = (input.isbn.trim() || `${input.title} ${input.author}`).trim();
+    if (query.length < 3) return null;
+    try {
+      const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`, {
+        headers: await authHeaders(),
+      });
+      if (!response.ok) return null;
+      const payload = (await response.json()) as { books?: OpenLibraryBook[] };
+      return coverPatchFromSearch(input, payload.books ?? []);
+    } catch {
+      return null;
+    }
+  }
+
+  async function findCover(book: Book): Promise<string> {
+    if (!openLibraryEnabled) {
+      return "Open Library covers are off. Turn them on in Books settings.";
+    }
+    const patch = await coverPatchForImport({ ...toInput(book), coverId: null });
+    if (!patch?.coverId) return "No Open Library match with a cover for this title and author.";
+    await updateBook(book, patch);
+    return "Cover updated.";
+  }
+
   async function importLibrary(file: File) {
-    const entries = parseBookshelfFile(await file.text());
-    if (!entries.length) throw new Error("No books found in that file.");
+    const parsed = parseBookshelfFile(await file.text());
+    if (!parsed.length) throw new Error("No books found in that file.");
+    const entries = mergeImportEntries(parsed);
     let shelves = booksState.shelves;
     for (const name of shelfNamesToCreate(entries, shelves)) {
       shelves = [...shelves, await booksState.addShelf(name)];
     }
+    const existingByKey = new Map(
+      booksState.books.map((book) => [bookGroupKey(book.title, book.author), book])
+    );
     let added = 0;
     let updated = 0;
+    let covers = 0;
+    let index = 0;
     for (const entry of entries) {
-      const input = bookInputFromImport(entry, shelves);
-      const existing = booksState.books.find(
-        (book) =>
-          bookIdentityKey(book.title, book.author) === bookIdentityKey(entry.title, entry.author)
-      );
+      index += 1;
+      setToast(`Importing ${index} of ${entries.length}…`);
+      const base = bookInputFromImport(entry, shelves);
+      const coverPatch = await coverPatchForImport(base);
+      if (coverPatch?.coverId) covers += 1;
+      const input = { ...base, ...coverPatch };
+      const existing = existingByKey.get(bookGroupKey(entry.title, entry.author));
       if (existing) {
         await booksState.saveBook(
           {
             ...input,
-            isbn: existing.isbn,
-            openLibraryId: existing.openLibraryId,
+            title: existing.title,
+            author: existing.author,
+            isbn: existing.isbn || input.isbn,
+            openLibraryId: existing.openLibraryId || input.openLibraryId,
             format: existing.format,
-            pageCount: existing.pageCount,
+            pageCount: existing.pageCount ?? input.pageCount,
             durationMinutes: existing.durationMinutes,
             seriesTitle: existing.seriesTitle,
             seriesIndex: existing.seriesIndex,
@@ -194,8 +240,17 @@ export function BooksWorkspace() {
         added += 1;
       }
     }
-    setToast(`Imported ${added} new, updated ${updated}`);
-    window.setTimeout(() => setToast(""), 2400);
+    const skipped = parsed.length - entries.length;
+    setToast(
+      [
+        `Imported ${added} new, updated ${updated}`,
+        covers ? `${covers} covers found` : "",
+        skipped ? `${skipped} duplicates merged` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    );
+    window.setTimeout(() => setToast(""), 3600);
   }
 
   async function generateRecommendations(
@@ -226,11 +281,13 @@ export function BooksWorkspace() {
       const payload = (await response.json()) as {
         report?: BookDiscoveryReport;
         model?: string;
+        prompt?: string;
         error?: string;
       };
       if (!response.ok || !payload.report) {
         throw new Error(payload.error ?? "Could not generate recommendations.");
       }
+      setLastPrompt(payload.prompt ?? "");
       await booksState.saveDiscovery(payload.report, payload.model ?? "unknown");
     } catch (cause) {
       setActionError(
@@ -352,6 +409,7 @@ export function BooksWorkspace() {
           }
           addingKey={addingRecommendation}
           onAddToWishlist={addRecommendationToWishlist}
+          lastPrompt={lastPrompt}
         />
       )}
       {visibleTab === "stats" && <BooksStatsScreen books={booksState.books} />}
@@ -384,6 +442,7 @@ export function BooksWorkspace() {
           onClose={() => setSelected(null)}
           onView={() => setDetailOpen(true)}
           onEdit={() => setEditing(selected)}
+          onReview={() => setReviewing(selected)}
           onDelete={() => void remove(selected)}
           onRate={(rating) => void updateBook(selected, { rating })}
           onMove={(status) => {
@@ -404,6 +463,21 @@ export function BooksWorkspace() {
           onEdit={() => setEditing(selected)}
           onDelete={() => remove(selected)}
           onRate={(rating) => void updateBook(selected, { rating })}
+          onFindCover={() => findCover(selected)}
+        />
+      )}
+      {reviewing && (
+        <BookReviewEditor
+          book={reviewing}
+          externalCovers={openLibraryEnabled}
+          onClose={() => setReviewing(null)}
+          onSave={async (patch) => {
+            const saved = await booksState.saveBook(toInput(reviewing, patch), reviewing.id);
+            setSelected(saved);
+            setReviewing(null);
+            setToast("Review saved");
+            window.setTimeout(() => setToast(""), 1800);
+          }}
         />
       )}
       {editing && (

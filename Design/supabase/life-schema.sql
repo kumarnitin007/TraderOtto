@@ -147,3 +147,86 @@ for insert with check (auth.uid() = user_id);
 drop policy if exists "lf_task_checks_delete_own" on lf_task_checks;
 create policy "lf_task_checks_delete_own" on lf_task_checks
 for delete using (auth.uid() = user_id);
+
+-- To-do lists. Re-run this script if Life dates and tasks already exist.
+
+create table if not exists lf_lists (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint lf_lists_name_len check (char_length(name) between 1 and 80)
+);
+
+create index if not exists lf_lists_user_idx
+  on lf_lists (user_id, created_at)
+  where deleted_at is null;
+
+drop trigger if exists lf_lists_set_updated_at on lf_lists;
+create trigger lf_lists_set_updated_at
+before update on lf_lists
+for each row execute function lf_set_updated_at();
+
+drop trigger if exists lf_lists_reject_user_id_change on lf_lists;
+create trigger lf_lists_reject_user_id_change
+before update on lf_lists
+for each row execute function lf_reject_user_id_change();
+
+alter table lf_lists enable row level security;
+
+drop policy if exists "lf_lists_select_own" on lf_lists;
+create policy "lf_lists_select_own" on lf_lists
+for select using (auth.uid() = user_id);
+drop policy if exists "lf_lists_insert_own" on lf_lists;
+create policy "lf_lists_insert_own" on lf_lists
+for insert with check (auth.uid() = user_id);
+drop policy if exists "lf_lists_update_own" on lf_lists;
+create policy "lf_lists_update_own" on lf_lists
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "lf_lists_delete_own" on lf_lists;
+create policy "lf_lists_delete_own" on lf_lists
+for delete using (auth.uid() = user_id);
+
+create table if not exists lf_list_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  list_id uuid not null references lf_lists(id) on delete cascade,
+  text text not null,
+  done boolean not null default false,
+  due_on date,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint lf_list_items_text_len check (char_length(text) between 1 and 240)
+);
+
+create index if not exists lf_list_items_user_idx
+  on lf_list_items (user_id, list_id, created_at)
+  where deleted_at is null;
+
+drop trigger if exists lf_list_items_set_updated_at on lf_list_items;
+create trigger lf_list_items_set_updated_at
+before update on lf_list_items
+for each row execute function lf_set_updated_at();
+
+drop trigger if exists lf_list_items_reject_user_id_change on lf_list_items;
+create trigger lf_list_items_reject_user_id_change
+before update on lf_list_items
+for each row execute function lf_reject_user_id_change();
+
+alter table lf_list_items enable row level security;
+
+drop policy if exists "lf_list_items_select_own" on lf_list_items;
+create policy "lf_list_items_select_own" on lf_list_items
+for select using (auth.uid() = user_id);
+drop policy if exists "lf_list_items_insert_own" on lf_list_items;
+create policy "lf_list_items_insert_own" on lf_list_items
+for insert with check (auth.uid() = user_id);
+drop policy if exists "lf_list_items_update_own" on lf_list_items;
+create policy "lf_list_items_update_own" on lf_list_items
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "lf_list_items_delete_own" on lf_list_items;
+create policy "lf_list_items_delete_own" on lf_list_items
+for delete using (auth.uid() = user_id);

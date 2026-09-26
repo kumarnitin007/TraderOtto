@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Plus } from "lucide-react";
+import { Check, CheckCheck, Pencil, Plus, Trash2 } from "lucide-react";
+import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { recentDayDots, taskProgress } from "@/lib/lifeTasks";
 import type { LifeTask, LifeTaskCheck, LifeTaskInput } from "@/types/life";
 import { EMPTY_LIFE_TASK } from "@/types/life";
@@ -68,7 +69,7 @@ export function LifeTasksScreen({
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-extrabold tracking-[-0.3px]">Tasks</h1>
+          <h1 className="text-[22px] font-extrabold tracking-[-0.3px]">Habits</h1>
           <p className="text-[13px] text-otto-text-dim">
             {tasks.length ? `${openCount} still open today` : "Habits you check off"}
           </p>
@@ -81,7 +82,7 @@ export function LifeTasksScreen({
             setEditing(EMPTY_LIFE_TASK);
           }}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-otto-text text-otto-bg disabled:opacity-40"
-          aria-label="Add a task"
+          aria-label="Add a habit"
         >
           <Plus size={18} />
         </button>
@@ -93,10 +94,10 @@ export function LifeTasksScreen({
       )}
       {notice && <p className="mb-3 text-[13px] text-otto-text-dim">{notice}</p>}
       {loading ? (
-        <p className="text-sm text-otto-text-dim">Loading tasks…</p>
+        <p className="text-sm text-otto-text-dim">Loading habits…</p>
       ) : tasks.length === 0 ? (
         <div className="rounded-2xl bg-otto-surface px-4 py-8 text-center">
-          <p className="text-sm font-semibold">No tracked tasks yet</p>
+          <p className="text-sm font-semibold">No habits yet</p>
           <p className="mt-1 text-[13px] text-otto-text-dim">
             Add a daily habit, or import them from Settings.
           </p>
@@ -150,40 +151,47 @@ export function LifeTasksScreen({
         </div>
       )}
       {selected && (
-        <div
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/55 desk:items-center"
-          onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}
+        <ActionSheet
+          title={selected.name}
+          subtitle={
+            selected.notes ||
+            (selected.cadence === "daily"
+              ? "Every day"
+              : `${selected.targetCount} a week`)
+          }
+          icon={CheckCheck}
+          onClose={() => setSelected(null)}
         >
-          <div className="w-full max-w-[720px] rounded-t-[28px] bg-otto-bg p-4 desk:rounded-[24px]">
-            <h2 className="mb-3 text-lg font-extrabold">{selected.name}</h2>
-            {selected.notes && <p className="mb-3 text-[13px] text-otto-text-dim">{selected.notes}</p>}
-            <button
-              type="button"
-              onClick={() => {
-                setEditingId(selected.id);
-                setEditing({
-                  name: selected.name,
-                  notes: selected.notes,
-                  cadence: selected.cadence,
-                  targetCount: selected.targetCount,
-                });
-                setSelected(null);
-              }}
-              className="mb-2 w-full rounded-2xl bg-otto-surface px-3 py-3 text-left text-sm font-bold"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void onRemove(selected.id).then(() => setSelected(null));
-              }}
-              className="mb-2 w-full rounded-2xl bg-otto-surface px-3 py-3 text-left text-sm font-bold text-otto-red"
-            >
-              Delete
-            </button>
-          </div>
-        </div>
+          <SheetAction
+            icon={Check}
+            label={taskProgress(selected, checks).doneToday ? "Undo today" : "Mark done today"}
+            onClick={() => {
+              void onToggle(selected.id).then(() => setSelected(null));
+            }}
+          />
+          <SheetAction
+            icon={Pencil}
+            label="Edit"
+            onClick={() => {
+              setEditingId(selected.id);
+              setEditing({
+                name: selected.name,
+                notes: selected.notes,
+                cadence: selected.cadence,
+                targetCount: selected.targetCount,
+              });
+              setSelected(null);
+            }}
+          />
+          <SheetAction
+            icon={Trash2}
+            label="Delete"
+            tone="danger"
+            onClick={() => {
+              void onRemove(selected.id).then(() => setSelected(null));
+            }}
+          />
+        </ActionSheet>
       )}
     </div>
   );
@@ -210,7 +218,7 @@ function TaskEditor({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-[22px] font-extrabold">Task</h1>
+        <h1 className="text-[22px] font-extrabold">Habit</h1>
         <button type="button" onClick={onCancel} className="text-sm font-semibold text-otto-text-dim">
           Cancel
         </button>

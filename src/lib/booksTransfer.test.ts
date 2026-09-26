@@ -1,49 +1,96 @@
 import { describe, expect, it } from "vitest";
-import { BUILTIN_SHELVES } from "@/lib/books";
-import { bookInputFromImport, parseBookshelfFile, shelfNamesToCreate } from "@/lib/booksTransfer";
+import {
+  bookshelfExportCsv,
+  booksToExport,
+  mergeImportEntries,
+  parseBookshelfFile,
+  type BookExportOptions,
+} from "@/lib/booksTransfer";
+import { EMPTY_BOOK_JOURNAL, type Book } from "@/types/book";
 
-const CSV = `Title,Author,Bookshelf,Bookshelf Type,Rating,Start Date,Finish Date,Description,Favorite Character,Scene Summary,Memorable Moments,Review,Least Favorite Part
-"Golden Gate","James Ponti","Kaashvis books con.","regular",4,,,"Full of adventure","Brooklyn","","","Good, but not mind-blowing",""
-"They Wish They Were Us","Jessica Goodman","Kaashvi's Books*","regular",4,,2025-12-17,"A mystery, ""The Players"".","","","When they find out.","Packed with drama",""
-"Space Case","Stuart Gibbs","Summer reading 2026","regular",4,,,"","","","Summer reading
-week","Fun book",""
-`;
+const options: BookExportOptions = {
+  shelves: [],
+  favoritesOnly: false,
+  includeReviews: true,
+  includeRatings: true,
+  includeCovers: true,
+};
 
-describe("bookshelf import", () => {
-  it("reads quoted commas, quotes, and line breaks from the CSV export", () => {
-    const books = parseBookshelfFile(CSV);
-    expect(books).toHaveLength(3);
-    expect(books[0]).toMatchObject({
-      title: "Golden Gate",
-      author: "James Ponti",
-      shelfName: "Kaashvis books con.",
-      rating: 4,
-      review: "Good, but not mind-blowing",
+function book(patch: Partial<Book> & Pick<Book, "id" | "title">): Book {
+  return {
+    userId: "user",
+    author: "Ada Author",
+    status: "read",
+    progressPercent: 100,
+    rating: 4,
+    wouldRecommend: null,
+    format: "print",
+    pageCount: null,
+    durationMinutes: null,
+    startedAt: null,
+    finishedAt: "2026-02-02",
+    notes: "A fine read",
+    tags: [],
+    seriesTitle: "",
+    seriesIndex: null,
+    isbn: "",
+    openLibraryId: "",
+    coverId: 12,
+    coverColor: "#333",
+    favorite: false,
+    journal: { ...EMPTY_BOOK_JOURNAL },
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    ...patch,
+  };
+}
+
+describe("export options", () => {
+  it("keeps only the chosen shelves and favorites", () => {
+    const books = [
+      book({ id: "a", title: "Kept", status: "read", favorite: true }),
+      book({ id: "b", title: "Other shelf", status: "want_to_read", favorite: true }),
+      book({ id: "c", title: "Not favorite", status: "read" }),
+    ];
+    const picked = booksToExport(books, {
+      ...options,
+      shelves: ["read"],
+      favoritesOnly: true,
     });
-    expect(books[1].journal.description).toContain('"The Players"');
-    expect(books[1].finishedAt).toBe("2025-12-17");
-    expect(books[2].journal.memorableMoments).toBe("Summer reading\nweek");
+    expect(picked.map((item) => item.title)).toEqual(["Kept"]);
   });
 
-  it("reads the JSON export, cover id, genre tags, and wishlist shelf", () => {
-    const books = parseBookshelfFile(
+  it("leaves reviews and ratings out when they are turned off", () => {
+    const csv = bookshelfExportCsv([book({ id: "a", title: "Quiet" })], [], {
+      ...options,
+      includeReviews: false,
+      includeRatings: false,
+    });
+    expect(csv).not.toContain("A fine read");
+    expect(csv).not.toContain("2026-02-02");
+  });
+});
+
+describe("import merging", () => {
+  it("folds a repeated book into one entry and keeps the best fields", () => {
+    const entries = parseBookshelfFile(
       JSON.stringify([
+        { title: "The Unwind", author: "Neal Shusterman", rating: 0, review: "" },
         {
-          title: "Gather the Daughters: A Novel",
-          author: "Jennie Melamed",
-          genre: "Fiction, dystopian",
-          coverUrl: "https://covers.openlibrary.org/b/id/8430935-L.jpg",
-          review: null,
-          rating: 0,
-          bookshelfName: "Books to read",
-          bookshelfType: "wishlist",
+          title: "Unwind",
+          author: "Neal Shusterman",
+          rating: 5,
+          review: "Tense all the way",
+          coverUrl: "https://covers.openlibrary.org/b/id/77-M.jpg",
         },
       ])
     );
-    expect(books[0].coverId).toBe(8430935);
-    expect(books[0].tags).toEqual(["fiction", "dystopian"]);
-    expect(books[0].journal.bookshelfType).toBe("wishlist");
-    expect(shelfNamesToCreate(books, BUILTIN_SHELVES)).toEqual(["Books to read"]);
-    expect(bookInputFromImport(books[0], BUILTIN_SHELVES).status).toBe("books-to-read");
+    const merged = mergeImportEntries(entries);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      rating: 5,
+      review: "Tense all the way",
+      coverId: 77,
+    });
   });
 });

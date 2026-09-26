@@ -2,6 +2,7 @@
 
 import { Maximize2, MessageSquareText, Pencil, Star, Trash2, X } from "lucide-react";
 import { BookCover, StarRating } from "@/components/books/BookCover";
+import { SheetAction } from "@/components/ui/ActionSheet";
 import type { Book, BookShelf } from "@/types/book";
 
 export function BookSheet({
@@ -11,6 +12,7 @@ export function BookSheet({
   onClose,
   onView,
   onEdit,
+  onReview,
   onDelete,
   onRate,
   onMove,
@@ -22,6 +24,7 @@ export function BookSheet({
   onClose: () => void;
   onView: () => void;
   onEdit: () => void;
+  onReview: () => void;
   onDelete: () => void;
   onRate: (rating: number) => void;
   onMove: (status: string) => void;
@@ -61,21 +64,23 @@ export function BookSheet({
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
             Move to
           </p>
-          <div className="mb-3 flex flex-wrap gap-2">
-            {shelves.map((shelf) => (
-              <button
-                key={shelf.slug}
-                type="button"
-                onClick={() => onMove(shelf.slug)}
-                className={`rounded-full px-3.5 py-2 text-[12px] font-bold ${
-                  book.status === shelf.slug
-                    ? "bg-otto-text text-otto-bg"
-                    : "bg-otto-surface text-otto-text-dim"
-                }`}
-              >
-                {shelf.name}
-              </button>
-            ))}
+          <div className="-mx-4 mb-3 overflow-x-auto px-4 pb-1">
+            <div className="flex w-max gap-2">
+              {shelves.map((shelf) => (
+                <button
+                  key={shelf.slug}
+                  type="button"
+                  onClick={() => onMove(shelf.slug)}
+                  className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-[12px] font-bold ${
+                    book.status === shelf.slug
+                      ? "bg-otto-text text-otto-bg"
+                      : "bg-otto-surface text-otto-text-dim"
+                  }`}
+                >
+                  {shelf.name}
+                </button>
+              ))}
+            </div>
           </div>
           <SheetAction
             icon={Star}
@@ -87,7 +92,7 @@ export function BookSheet({
           <SheetAction
             icon={MessageSquareText}
             label={book.notes.trim() ? "Edit review" : "Write a review"}
-            onClick={onEdit}
+            onClick={onReview}
           />
           <SheetAction icon={Pencil} label="Edit book details" onClick={onEdit} />
           <SheetAction
@@ -104,29 +109,3 @@ export function BookSheet({
   );
 }
 
-function SheetAction({
-  icon: Icon,
-  label,
-  onClick,
-  tone = "default",
-  filled = false,
-}: {
-  icon: typeof Pencil;
-  label: string;
-  onClick: () => void;
-  tone?: "default" | "danger";
-  filled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left text-[15px] font-semibold ${
-        tone === "danger" ? "text-otto-red" : ""
-      }`}
-    >
-      <Icon size={18} className={filled ? "fill-otto-amber text-otto-amber" : ""} />
-      {label}
-    </button>
-  );
-}

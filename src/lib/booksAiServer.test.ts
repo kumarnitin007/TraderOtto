@@ -25,10 +25,26 @@ describe("Books AI helpers", () => {
     );
     expect(prompt).toContain("Dune Messiah");
     expect(prompt).toContain("political intrigue");
-    expect(prompt).toContain("not already in the library");
+    expect(prompt).toContain("not in the sample");
     expect(prompt).toContain('"audience":"adult"');
     expect(prompt).toContain("children's books");
     expect(prompt).toContain("Something different");
+  });
+
+  it("leaves empty book fields out of the prompt", () => {
+    const prompt = buildBookDiscoveryPrompt([
+      {
+        title: "Unbound",
+        author: "Neal Shusterman",
+        status: "read",
+        rating: 0,
+        wouldRecommend: null,
+        tags: [],
+        seriesTitle: null,
+        notes: "",
+      },
+    ]);
+    expect(prompt).toContain('{"title":"Unbound","author":"Neal Shusterman"}');
   });
 
   it("parses plain and fenced structured reports", () => {

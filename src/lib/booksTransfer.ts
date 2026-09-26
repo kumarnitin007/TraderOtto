@@ -1,4 +1,5 @@
 import { bookCoverColor, BUILTIN_SHELVES, shelfSlug } from "@/lib/books";
+import { bookMatchKey } from "@/lib/bookCleanup";
 import type { Book, BookInput, BookJournal, BookShelf } from "@/types/book";
 import { EMPTY_BOOK_JOURNAL } from "@/types/book";
 
@@ -45,15 +46,117 @@ export function parseBookshelfFile(text: string): ParsedBookshelfEntry[] {
   return entries.filter((entry) => entry.title && entry.author);
 }
 
-export function bookshelfExportJson(books: Book[], shelves: BookShelf[]): string {
-  return JSON.stringify(books.map((book) => toExportRecord(book, shelves)), null, 2);
+/**
+ * Import files often list the same book twice, once per shelf or export run.
+ * Folding them together up front keeps duplicates out of the library instead of
+ * leaving them for the cleanup pass.
+ */
+export function mergeImportEntries(entries: ParsedBookshelfEntry[]): ParsedBookshelfEntry[] {
+  const merged = new Map<string, ParsedBookshelfEntry>();
+  for (const entry of entries) {
+    const key = `${bookMatchKey(entry.title)}|${bookMatchKey(entry.author)}`;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, { ...entry, journal: { ...entry.journal } });
+      continue;
+    }
+    merged.set(key, {
+      ...existing,
+      rating: existing.rating || entry.rating,
+      startedAt: earliest(existing.startedAt, entry.startedAt),
+      finishedAt: latest(existing.finishedAt, entry.finishedAt),
+      review: longer(existing.review, entry.review),
+      tags: [...new Set([...existing.tags, ...entry.tags])],
+      coverId:
+        existing.coverId ?? entry.coverId ?? coverIdFromUrl(entry.journal.coverUrl),
+      favorite: existing.favorite || entry.favorite,
+      favoriteSpecified: existing.favoriteSpecified || entry.favoriteSpecified,
+      journal: mergeJournals(existing.journal, entry.journal),
+    });
+  }
+  return [...merged.values()];
 }
 
-export function bookshelfExportCsv(books: Book[], shelves: BookShelf[]): string {
+function mergeJournals(keeper: BookJournal, other: BookJournal): BookJournal {
+  const journal = { ...keeper };
+  for (const key of [
+    "favoriteCharacter",
+    "sceneSummary",
+    "memorableMoments",
+    "leastFavoritePart",
+    "genre",
+    "coverUrl",
+  ] as const) {
+    if (!journal[key].trim() && other[key].trim()) journal[key] = other[key];
+  }
+  if (!journal.bookshelfType && other.bookshelfType) {
+    journal.bookshelfType = other.bookshelfType;
+  }
+  journal.description = longer(keeper.description, other.description);
+  return journal;
+}
+
+function earliest(left: string | null, right: string | null): string | null {
+  if (!left) return right;
+  if (!right) return left;
+  return left < right ? left : right;
+}
+
+function latest(left: string | null, right: string | null): string | null {
+  if (!left) return right;
+  if (!right) return left;
+  return left > right ? left : right;
+}
+
+function longer(left: string, right: string): string {
+  return right.trim().length > left.trim().length ? right : left;
+}
+
+export type BookExportOptions = {
+  /** Shelf slugs to include. Empty means every shelf. */
+  shelves: string[];
+  favoritesOnly: boolean;
+  includeReviews: boolean;
+  includeRatings: boolean;
+  includeCovers: boolean;
+};
+
+export const DEFAULT_BOOK_EXPORT_OPTIONS: BookExportOptions = {
+  shelves: [],
+  favoritesOnly: false,
+  includeReviews: true,
+  includeRatings: true,
+  includeCovers: true,
+};
+
+export function booksToExport(books: Book[], options: BookExportOptions): Book[] {
+  return books.filter((book) => {
+    if (options.favoritesOnly && !book.favorite) return false;
+    if (options.shelves.length && !options.shelves.includes(book.status)) return false;
+    return true;
+  });
+}
+
+export function bookshelfExportJson(
+  books: Book[],
+  shelves: BookShelf[],
+  options: BookExportOptions = DEFAULT_BOOK_EXPORT_OPTIONS
+): string {
+  const rows = booksToExport(books, options).map((book) =>
+    toExportRecord(book, shelves, options)
+  );
+  return JSON.stringify(rows, null, 2);
+}
+
+export function bookshelfExportCsv(
+  books: Book[],
+  shelves: BookShelf[],
+  options: BookExportOptions = DEFAULT_BOOK_EXPORT_OPTIONS
+): string {
   const lines = [
     CSV_HEADERS.join(","),
-    ...books.map((book) => {
-      const record = toExportRecord(book, shelves);
+    ...booksToExport(books, options).map((book) => {
+      const record = toExportRecord(book, shelves, options);
       return [
         record.title,
         record.author,
@@ -238,7 +341,11 @@ function fromFields(fields: {
   };
 }
 
-function toExportRecord(book: Book, shelves: BookShelf[]) {
+function toExportRecord(
+  book: Book,
+  shelves: BookShelf[],
+  options: BookExportOptions = DEFAULT_BOOK_EXPORT_OPTIONS
+) {
   const shelf = shelves.find((item) => item.slug === book.status);
   const coverUrl =
     book.journal.coverUrl ||
@@ -247,16 +354,16 @@ function toExportRecord(book: Book, shelves: BookShelf[]) {
     title: book.title,
     author: book.author,
     genre: book.journal.genre || book.tags.join(", "),
-    coverUrl,
-    description: book.journal.description || null,
-    favoriteCharacter: book.journal.favoriteCharacter || null,
-    sceneSummary: book.journal.sceneSummary || null,
-    memorableMoments: book.journal.memorableMoments || null,
-    review: book.notes || null,
-    leastFavoritePart: book.journal.leastFavoritePart || null,
-    rating: book.rating,
-    startDate: book.startedAt,
-    finishDate: book.finishedAt,
+    coverUrl: options.includeCovers ? coverUrl : "",
+    description: (options.includeReviews && book.journal.description) || null,
+    favoriteCharacter: (options.includeReviews && book.journal.favoriteCharacter) || null,
+    sceneSummary: (options.includeReviews && book.journal.sceneSummary) || null,
+    memorableMoments: (options.includeReviews && book.journal.memorableMoments) || null,
+    review: (options.includeReviews && book.notes) || null,
+    leastFavoritePart: (options.includeReviews && book.journal.leastFavoritePart) || null,
+    rating: options.includeRatings ? book.rating : 0,
+    startDate: options.includeRatings ? book.startedAt : null,
+    finishDate: options.includeRatings ? book.finishedAt : null,
     bookshelfName: shelf?.name ?? book.status,
     bookshelfType:
       book.journal.bookshelfType || (book.status === "want_to_read" ? "wishlist" : "regular"),

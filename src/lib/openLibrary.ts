@@ -53,6 +53,16 @@ export function openLibraryCoverUrl(
     : null;
 }
 
+export function openLibraryWorkUrl(openLibraryId: string): string | null {
+  const id = openLibraryId.trim();
+  return id ? `https://openlibrary.org/works/${id}` : null;
+}
+
+export function openLibrarySearchUrl(title: string, author: string): string {
+  const query = `${title} ${author}`.trim();
+  return `https://openlibrary.org/search?q=${encodeURIComponent(query)}`;
+}
+
 export function mapOpenLibraryDocument(document: OpenLibraryDocument): OpenLibraryBook | null {
   if (typeof document.title !== "string" || !document.title.trim()) return null;
   const authors = Array.isArray(document.author_name)

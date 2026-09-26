@@ -41,7 +41,7 @@ export function BookshelfScreen({
         </button>
       </div>
 
-      <div className="relative z-10 mt-3 overflow-x-auto pb-1">
+      <div className="relative mt-3 overflow-x-auto pb-1">
         <div className="flex w-max gap-2">
         <button
           type="button"
