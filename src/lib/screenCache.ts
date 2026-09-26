@@ -25,6 +25,7 @@ export type ScreenOptions = {
   booksTab: "library" | "discover" | "add" | "stats" | "settings";
   booksFilter: string;
   booksOpenLibraryEnabled: boolean;
+  lifeTab: "dates" | "tasks" | "settings";
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -45,6 +46,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   booksTab: "library",
   booksFilter: "reading",
   booksOpenLibraryEnabled: true,
+  lifeTab: "dates",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -143,6 +145,8 @@ export function readScreenOptions(): ScreenOptions {
           ? parsed.booksFilter
           : "reading",
       booksOpenLibraryEnabled: parsed.booksOpenLibraryEnabled !== false,
+      lifeTab:
+        parsed.lifeTab === "tasks" || parsed.lifeTab === "settings" ? parsed.lifeTab : "dates",
     };
   } catch {
     return SCREEN_OPTION_DEFAULTS;

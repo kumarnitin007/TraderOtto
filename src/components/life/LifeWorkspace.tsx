@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { CalendarHeart, Plus, Star, Upload, X } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { CalendarHeart, Plus, Star, X } from "lucide-react";
+import { LifeBottomNav } from "@/components/life/LifeBottomNav";
+import { LifeSettingsScreen } from "@/components/life/LifeSettingsScreen";
+import { LifeTasksScreen } from "@/components/life/LifeTasksScreen";
 import { useLife } from "@/hooks/useLife";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import {
   LIFE_CATEGORY_LABEL,
   applyLifeDate,
@@ -11,9 +15,9 @@ import {
   lifeDaysUntil,
   lifeIdentityKey,
   lifeOccasionLabel,
-  parseLeoEvents,
 } from "@/lib/life";
-import type { LifeCategory, LifeInput, LifeItem } from "@/types/life";
+import { lifeTaskKey, taskProgress } from "@/lib/lifeTasks";
+import type { LifeCategory, LifeInput, LifeItem, LifeTaskInput } from "@/types/life";
 import { EMPTY_LIFE_INPUT, LIFE_CATEGORIES } from "@/types/life";
 
 const COLORS: Record<LifeCategory, string> = {
@@ -39,15 +43,17 @@ function sectionFor(days: number) {
 }
 
 export function LifeWorkspace() {
-  const { items, loading, error, readonly, save, remove } = useLife();
+  const { items, tasks, checks, loading, error, taskError, readonly, save, remove, saveTask, removeTask, toggleToday } =
+    useLife();
+  const [tab, setTab] = useScreenOption("lifeTab");
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<LifeInput | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [taskEditing, setTaskEditing] = useState(false);
   const [selected, setSelected] = useState<LifeItem | null>(null);
-  const [incoming, setIncoming] = useState<LifeInput[] | null>(null);
+  const [incoming, setIncoming] = useState<{ dates: LifeInput[]; tasks: LifeTaskInput[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const visible = useMemo(() => {
     return items
@@ -89,17 +95,36 @@ export function LifeWorkspace() {
     setBusy(true);
     setNotice("");
     try {
-      const existing = new Set(items.map(lifeIdentityKey));
+      const existingDates = new Set(items.map(lifeIdentityKey));
+      const existingTasks = new Set(tasks.map(lifeTaskKey));
       let added = 0;
-      for (const item of incoming) {
-        if (existing.has(lifeIdentityKey(item))) continue;
+      for (const item of incoming.dates) {
+        if (existingDates.has(lifeIdentityKey(item))) continue;
         await save(item);
         added += 1;
       }
+      for (const task of incoming.tasks) {
+        if (existingTasks.has(lifeTaskKey(task))) continue;
+        await saveTask(task);
+        added += 1;
+      }
       setIncoming(null);
-      setNotice(added ? `Added ${added}.` : "Those dates are already here.");
+      setNotice(added ? `Added ${added}.` : "Those are already here.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Could not import.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSaveTask(input: LifeTaskInput, id?: string) {
+    setBusy(true);
+    setNotice("");
+    try {
+      await saveTask(input, id);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not save.");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -120,58 +145,78 @@ export function LifeWorkspace() {
     );
   }
 
+  const openToday = tasks.filter((task) => {
+    const progress = taskProgress(task, checks);
+    return !progress.doneToday && progress.count < progress.target;
+  }).length;
+
   return (
     <div className="mx-auto max-w-[720px] pb-8">
+      {tab === "tasks" ? (
+        <LifeTasksScreen
+          tasks={tasks}
+          checks={checks}
+          loading={loading}
+          error={taskError}
+          readonly={readonly}
+          busy={busy}
+          notice={notice}
+          onToggle={toggleToday}
+          onSave={onSaveTask}
+          onRemove={removeTask}
+          onEditingChange={setTaskEditing}
+        />
+      ) : tab === "settings" ? (
+        <LifeSettingsScreen
+          readonly={readonly}
+          notice={notice}
+          onFile={(dates, importedTasks) => {
+            setNotice(
+              dates.length || importedTasks.length
+                ? ""
+                : "No dates or tracked tasks in that file.",
+            );
+            setIncoming(dates.length || importedTasks.length ? { dates, tasks: importedTasks } : null);
+          }}
+        />
+      ) : (
+      <>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-extrabold tracking-[-0.3px]">Life</h1>
-          <p className="text-[13px] text-otto-text-dim">Dates that matter today</p>
+          <h1 className="text-[22px] font-extrabold tracking-[-0.3px]">Dates</h1>
+          <p className="text-[13px] text-otto-text-dim">Birthdays and the days around them</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={readonly}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-otto-surface text-otto-text-dim disabled:opacity-40"
-            aria-label="Import dates"
-          >
-            <Upload size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const today = new Date();
-              setEditingId(null);
-              setEditing({
-                ...EMPTY_LIFE_INPUT,
-                month: today.getMonth() + 1,
-                day: today.getDate(),
-              });
-            }}
-            disabled={readonly}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-otto-text text-otto-bg disabled:opacity-40"
-            aria-label="Add a date"
-          >
-            <Plus size={18} />
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              void file.text().then((text) => {
-                const parsed = parseLeoEvents(text);
-                setNotice(parsed.length ? "" : "No birthdays, anniversaries, holidays, or special dates in that file.");
-                setIncoming(parsed.length ? parsed : null);
-              });
-            }}
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const today = new Date();
+            setEditingId(null);
+            setEditing({
+              ...EMPTY_LIFE_INPUT,
+              month: today.getMonth() + 1,
+              day: today.getDate(),
+            });
+          }}
+          disabled={readonly}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-otto-text text-otto-bg disabled:opacity-40"
+          aria-label="Add a date"
+        >
+          <Plus size={18} />
+        </button>
       </div>
+
+      {tasks.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setTab("tasks")}
+          className="mb-3 w-full rounded-2xl bg-otto-surface px-3 py-3 text-left"
+        >
+          <span className="block text-[14px] font-bold">Tracked today</span>
+          <span className="text-[12px] text-otto-text-dim">
+            {openToday ? `${openToday} still open` : "All done for today"}
+          </span>
+        </button>
+      )}
 
       <div className="mb-4 overflow-x-auto">
         <div className="flex w-max gap-2">
@@ -213,7 +258,7 @@ export function LifeWorkspace() {
           <CalendarHeart className="mx-auto mb-2 text-otto-text-faint" size={28} />
           <p className="text-sm font-semibold">Nothing on this list yet</p>
           <p className="mt-1 text-[13px] text-otto-text-dim">
-            Add a birthday or import your dates. Daily habits come later.
+            Add a birthday here, or import dates from Settings.
           </p>
         </div>
       ) : (
@@ -257,21 +302,28 @@ export function LifeWorkspace() {
           </section>
         ))
       )}
+      </>
+      )}
+
+      {!editing && !taskEditing && <LifeBottomNav tab={tab} onTab={setTab} />}
 
       {incoming && (
         <ReviewSheet
-          title={`Add ${incoming.length} dates?`}
+          title={`Add ${[incoming.dates.length ? `${incoming.dates.length} dates` : "", incoming.tasks.length ? `${incoming.tasks.length} tasks` : ""].filter(Boolean).join(" and ")}?`}
           onClose={() => setIncoming(null)}
         >
           <ul className="mb-3 max-h-64 overflow-y-auto text-[13px]">
-            {incoming.slice(0, 12).map((item) => (
-              <li key={`${item.name}-${item.month}-${item.day}`} className="border-b border-otto-divider py-2">
-                {item.name}
-                <span className="text-otto-text-dim"> · {LIFE_CATEGORY_LABEL[item.category]}</span>
+            {[...incoming.dates.map((item) => item.name), ...incoming.tasks.map((task) => task.name)]
+              .slice(0, 12)
+              .map((name, index) => (
+                <li key={`${name}-${index}`} className="border-b border-otto-divider py-2">
+                  {name}
+                </li>
+              ))}
+            {incoming.dates.length + incoming.tasks.length > 12 && (
+              <li className="py-2 text-otto-text-dim">
+                and {incoming.dates.length + incoming.tasks.length - 12} more
               </li>
-            ))}
-            {incoming.length > 12 && (
-              <li className="py-2 text-otto-text-dim">and {incoming.length - 12} more</li>
             )}
           </ul>
           <button
@@ -280,7 +332,7 @@ export function LifeWorkspace() {
             onClick={() => void onImport()}
             className="w-full rounded-full bg-otto-text py-3 text-sm font-bold text-otto-bg disabled:opacity-40"
           >
-            {busy ? "Adding…" : "Add these dates"}
+            {busy ? "Adding…" : "Add these"}
           </button>
         </ReviewSheet>
       )}

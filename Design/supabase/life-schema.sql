@@ -77,3 +77,73 @@ for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "lf_items_delete_own" on lf_items;
 create policy "lf_items_delete_own" on lf_items
 for delete using (auth.uid() = user_id);
+
+-- Tracked habits. Re-run this script if Life dates already exist.
+
+create table if not exists lf_tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  notes text not null default '',
+  cadence text not null default 'daily',
+  target_count integer not null default 1,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint lf_tasks_name_len check (char_length(name) between 1 and 160),
+  constraint lf_tasks_cadence_ok check (cadence in ('daily', 'weekly')),
+  constraint lf_tasks_target_ok check (target_count between 1 and 14)
+);
+
+create index if not exists lf_tasks_user_idx
+  on lf_tasks (user_id, created_at)
+  where deleted_at is null;
+
+drop trigger if exists lf_tasks_set_updated_at on lf_tasks;
+create trigger lf_tasks_set_updated_at
+before update on lf_tasks
+for each row execute function lf_set_updated_at();
+
+drop trigger if exists lf_tasks_reject_user_id_change on lf_tasks;
+create trigger lf_tasks_reject_user_id_change
+before update on lf_tasks
+for each row execute function lf_reject_user_id_change();
+
+alter table lf_tasks enable row level security;
+
+drop policy if exists "lf_tasks_select_own" on lf_tasks;
+create policy "lf_tasks_select_own" on lf_tasks
+for select using (auth.uid() = user_id);
+drop policy if exists "lf_tasks_insert_own" on lf_tasks;
+create policy "lf_tasks_insert_own" on lf_tasks
+for insert with check (auth.uid() = user_id);
+drop policy if exists "lf_tasks_update_own" on lf_tasks;
+create policy "lf_tasks_update_own" on lf_tasks
+for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "lf_tasks_delete_own" on lf_tasks;
+create policy "lf_tasks_delete_own" on lf_tasks
+for delete using (auth.uid() = user_id);
+
+create table if not exists lf_task_checks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  task_id uuid not null references lf_tasks(id) on delete cascade,
+  done_on date not null,
+  created_at timestamptz not null default now(),
+  unique (task_id, done_on)
+);
+
+create index if not exists lf_task_checks_user_day_idx
+  on lf_task_checks (user_id, done_on desc);
+
+alter table lf_task_checks enable row level security;
+
+drop policy if exists "lf_task_checks_select_own" on lf_task_checks;
+create policy "lf_task_checks_select_own" on lf_task_checks
+for select using (auth.uid() = user_id);
+drop policy if exists "lf_task_checks_insert_own" on lf_task_checks;
+create policy "lf_task_checks_insert_own" on lf_task_checks
+for insert with check (auth.uid() = user_id);
+drop policy if exists "lf_task_checks_delete_own" on lf_task_checks;
+create policy "lf_task_checks_delete_own" on lf_task_checks
+for delete using (auth.uid() = user_id);

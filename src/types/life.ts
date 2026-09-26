@@ -28,6 +28,33 @@ export type LifeItem = {
 
 export type LifeInput = Omit<LifeItem, "id" | "createdAt" | "updatedAt">;
 
+export type LifeTaskCadence = "daily" | "weekly";
+
+export type LifeTask = {
+  id: string;
+  name: string;
+  notes: string;
+  cadence: LifeTaskCadence;
+  targetCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LifeTaskInput = Omit<LifeTask, "id" | "createdAt" | "updatedAt">;
+
+export type LifeTaskCheck = {
+  id: string;
+  taskId: string;
+  doneOn: string;
+};
+
+export const EMPTY_LIFE_TASK: LifeTaskInput = {
+  name: "",
+  notes: "",
+  cadence: "daily",
+  targetCount: 1,
+};
+
 export const EMPTY_LIFE_INPUT: LifeInput = {
   name: "",
   category: "birthday",

@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LifeRepository } from "@/lib/lifeRepository";
 import { isLifeCategory } from "@/lib/life";
-import type { LifeCategory, LifeInput, LifeItem, LifeRepeat } from "@/types/life";
+import type {
+  LifeCategory,
+  LifeInput,
+  LifeItem,
+  LifeRepeat,
+  LifeTask,
+  LifeTaskCadence,
+  LifeTaskCheck,
+  LifeTaskInput,
+} from "@/types/life";
 
 type LifeRow = {
   id: string;
@@ -97,5 +106,103 @@ export function createSupabaseLifeRepository(
         .eq("user_id", userId);
       if (error) throw new Error(error.message);
     },
+    async listTasks() {
+      const { data, error } = await client
+        .from("lf_tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .order("created_at");
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as TaskRow[]).map(mapTask);
+    },
+    async saveTask(input, id) {
+      const body = taskPayload(input);
+      const query = id
+        ? client.from("lf_tasks").update(body).eq("id", id).eq("user_id", userId)
+        : client.from("lf_tasks").insert({ ...body, user_id: userId });
+      const { data, error } = await query.select("*").single();
+      if (error) throw new Error(error.message);
+      return mapTask(data as TaskRow);
+    },
+    async removeTask(id) {
+      const { error } = await client
+        .from("lf_tasks")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+    async listChecks(fromDay) {
+      const { data, error } = await client
+        .from("lf_task_checks")
+        .select("id, task_id, done_on")
+        .eq("user_id", userId)
+        .gte("done_on", fromDay);
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as CheckRow[]).map(mapCheck);
+    },
+    async addCheck(taskId, doneOn) {
+      const { data, error } = await client
+        .from("lf_task_checks")
+        .insert({ user_id: userId, task_id: taskId, done_on: doneOn })
+        .select("id, task_id, done_on")
+        .single();
+      if (error) throw new Error(error.message);
+      return mapCheck(data as CheckRow);
+    },
+    async removeCheck(id) {
+      const { error } = await client
+        .from("lf_task_checks")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+  };
+}
+
+type TaskRow = {
+  id: string;
+  name: string;
+  notes: string | null;
+  cadence: string;
+  target_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type CheckRow = {
+  id: string;
+  task_id: string;
+  done_on: string;
+};
+
+function mapTask(row: TaskRow): LifeTask {
+  const cadence: LifeTaskCadence = row.cadence === "weekly" ? "weekly" : "daily";
+  return {
+    id: row.id,
+    name: row.name,
+    notes: row.notes ?? "",
+    cadence,
+    targetCount: row.target_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapCheck(row: CheckRow): LifeTaskCheck {
+  return { id: row.id, taskId: row.task_id, doneOn: row.done_on.slice(0, 10) };
+}
+
+function taskPayload(input: LifeTaskInput) {
+  const name = clean(input.name, 160);
+  if (!name) throw new Error("Enter a name.");
+  const cadence: LifeTaskCadence = input.cadence === "weekly" ? "weekly" : "daily";
+  return {
+    name,
+    notes: clean(input.notes, 2000),
+    cadence,
+    target_count: cadence === "daily" ? 1 : Math.min(7, Math.max(1, input.targetCount)),
   };
 }
