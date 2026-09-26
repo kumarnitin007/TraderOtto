@@ -39,7 +39,7 @@ export function BooksSettingsScreen({
   openLibraryEnabled: boolean;
   onOpenLibraryChange: (enabled: boolean) => void;
   onAddShelf: (name: string) => Promise<void>;
-  onRemoveShelf: (shelf: BookShelf, destination: string) => Promise<void>;
+  onRemoveShelf: (shelf: BookShelf, destination?: string) => Promise<void>;
   onExport: (format: "json" | "csv") => void;
   onImport: (file: File) => Promise<void>;
 }) {
@@ -52,6 +52,7 @@ export function BooksSettingsScreen({
   const jsonRef = useRef<HTMLInputElement>(null);
   const csvRef = useRef<HTMLInputElement>(null);
   const [catalogName, setCatalogName] = useState("");
+  const [catalogShort, setCatalogShort] = useState("");
   const [catalogUrl, setCatalogUrl] = useState("");
 
   async function importFile(file: File) {
@@ -98,15 +99,19 @@ export function BooksSettingsScreen({
   function addCustomCatalog(event: FormEvent) {
     event.preventDefault();
     const name = catalogName.trim();
+    const shortName = (catalogShort.trim() || name).slice(0, 16);
     const searchUrl = catalogUrl.trim();
-    if (!name || !/^https?:\/\//i.test(searchUrl) || preferences.catalogs.length >= 3) return;
+    if (!name || !shortName || !/^https?:\/\//i.test(searchUrl) || preferences.catalogs.length >= 3) {
+      return;
+    }
     patchPreferences({
       catalogs: [
         ...preferences.catalogs,
-        { id: `custom-${Date.now()}`, name, searchUrl },
+        { id: `custom-${Date.now()}`, name, shortName, searchUrl },
       ],
     });
     setCatalogName("");
+    setCatalogShort("");
     setCatalogUrl("");
   }
 
@@ -201,14 +206,28 @@ export function BooksSettingsScreen({
                   disabled={added || preferences.catalogs.length >= 3}
                   className="rounded-full border border-otto-divider px-3 py-2 text-[11.5px] font-semibold disabled:opacity-45"
                 >
-                  {added ? "Added" : "Add"} {catalog.name}
+                  {added ? "Added" : "Add"} {catalog.shortName}
                 </button>
               );
             })}
           </div>
           {preferences.catalogs.map((catalog) => (
-            <div key={catalog.id} className="mt-2 flex items-center justify-between rounded-xl bg-otto-bg px-3 py-2.5">
-              <span className="min-w-0 truncate text-[13px] font-semibold">{catalog.name}</span>
+            <div key={catalog.id} className="mt-2 flex items-center gap-2 rounded-xl bg-otto-bg px-3 py-2.5">
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{catalog.name}</span>
+              <input
+                value={catalog.shortName}
+                onChange={(event) =>
+                  patchPreferences({
+                    catalogs: preferences.catalogs.map((item) =>
+                      item.id === catalog.id
+                        ? { ...item, shortName: event.target.value.slice(0, 16) }
+                        : item
+                    ),
+                  })
+                }
+                aria-label={`Short name for ${catalog.name}`}
+                className="w-20 shrink-0 rounded-lg border border-otto-divider bg-otto-surface px-2 py-1 text-center text-[12px] font-bold"
+              />
               <button
                 type="button"
                 onClick={() =>
@@ -227,8 +246,16 @@ export function BooksSettingsScreen({
             <input
               value={catalogName}
               onChange={(event) => setCatalogName(event.target.value)}
-              placeholder="Custom library name"
+              placeholder="Library name"
               maxLength={80}
+              disabled={preferences.catalogs.length >= 3}
+              className="w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[13px]"
+            />
+            <input
+              value={catalogShort}
+              onChange={(event) => setCatalogShort(event.target.value)}
+              placeholder="Short name, such as KCLS"
+              maxLength={16}
               disabled={preferences.catalogs.length >= 3}
               className="w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[13px]"
             />
@@ -255,14 +282,18 @@ export function BooksSettingsScreen({
         </div>
       </details>
 
-      <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
-        <div className="flex items-center gap-3 px-3.5 py-3">
+      <details className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
           <Library size={18} className="text-otto-text-dim" />
-          <div>
+          <span>
             <b className="block text-[14px]">Shelves</b>
-            <span className="text-[12px] text-otto-text-dim">Reading, Read, and Want to read stay</span>
-          </div>
-        </div>
+            <span className="text-[12px] text-otto-text-dim">
+              {shelves.filter((shelf) => !shelf.builtin).length
+                ? `${shelves.filter((shelf) => !shelf.builtin).length} custom`
+                : "Reading, Read, and Want to read"}
+            </span>
+          </span>
+        </summary>
         <div className="mx-3.5 border-t border-otto-divider" />
         {shelves
           .filter((shelf) => !shelf.builtin)
@@ -297,22 +328,27 @@ export function BooksSettingsScreen({
                         : `${bookCount} book${bookCount === 1 ? "" : "s"} will move.`}
                     </p>
                     {bookCount > 0 && (
-                      <label className="mt-2 block">
+                      <div className="mt-2">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-otto-text-faint">
                           Move books to
                         </span>
-                        <select
-                          value={moveTo}
-                          onChange={(event) => setMoveTo(event.target.value)}
-                          className="mt-1.5 w-full rounded-xl border border-otto-divider bg-otto-surface px-3 py-2.5 text-[14px]"
-                        >
+                        <div className="mt-2 flex flex-wrap gap-2">
                           {destinations.map((item) => (
-                            <option key={item.slug} value={item.slug}>
+                            <button
+                              key={item.slug}
+                              type="button"
+                              onClick={() => setMoveTo(item.slug)}
+                              className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${
+                                moveTo === item.slug
+                                  ? "bg-otto-text text-otto-bg"
+                                  : "bg-otto-surface text-otto-text-dim"
+                              }`}
+                            >
                               {item.name}
-                            </option>
+                            </button>
                           ))}
-                        </select>
-                      </label>
+                        </div>
+                      </div>
                     )}
                     <div className="mt-3 flex gap-2">
                       <button
@@ -325,7 +361,7 @@ export function BooksSettingsScreen({
                       <button
                         type="button"
                         onClick={() => {
-                          void onRemoveShelf(shelf, bookCount > 0 ? moveTo : "want_to_read")
+                          void onRemoveShelf(shelf, bookCount > 0 ? moveTo : undefined)
                             .then(() => setRemovingShelf(null))
                             .catch((cause: unknown) =>
                               setShelfError(
@@ -364,9 +400,17 @@ export function BooksSettingsScreen({
         {shelfError && (
           <p className="px-3.5 pb-3 text-[12px] text-otto-red">{shelfError}</p>
         )}
-      </div>
+      </details>
 
-      <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+      <details className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
+          <Download size={18} className="text-otto-text-dim" />
+          <span>
+            <b className="block text-[14px]">Import / export</b>
+            <span className="text-[12px] text-otto-text-dim">{books.length} books</span>
+          </span>
+        </summary>
+        <div className="border-t border-otto-divider">
         <SettingsRow
           icon={Upload}
           label="Import JSON"
@@ -417,7 +461,8 @@ export function BooksSettingsScreen({
           }}
         />
         {importError && <p className="px-3.5 pb-3 text-[12px] text-otto-red">{importError}</p>}
-      </div>
+        </div>
+      </details>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow

@@ -137,7 +137,7 @@ export function readScreenOptions(): ScreenOptions {
           : "library",
       booksFilter:
         typeof parsed.booksFilter === "string" &&
-        /^[a-z0-9-]{1,48}$/.test(parsed.booksFilter)
+        /^[a-z0-9_-]{1,48}$/.test(parsed.booksFilter)
           ? parsed.booksFilter
           : "reading",
       booksOpenLibraryEnabled: parsed.booksOpenLibraryEnabled !== false,

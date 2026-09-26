@@ -132,7 +132,7 @@ export function DiscoverScreen({
                 return (
                   <label
                     key={book.id}
-                    className="flex cursor-pointer items-start gap-3 rounded-2xl bg-otto-surface px-3.5 py-3"
+                    className="flex cursor-pointer items-start gap-3 overflow-hidden rounded-2xl bg-otto-surface px-3.5 py-3"
                   >
                     <input
                       type="checkbox"
@@ -144,7 +144,7 @@ export function DiscoverScreen({
                             : [...current, book.id]
                         )
                       }
-                      className="mt-1"
+                      className="mt-1 h-5 w-5 shrink-0"
                     />
                     <span className="min-w-0 flex-1">
                       <b className="block truncate text-[14px]">{book.title}</b>
@@ -305,7 +305,7 @@ function RecommendationCard({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 rounded-full border border-otto-divider px-2 py-1 text-[10.5px] font-semibold text-otto-text-dim"
               >
-                {catalog.name}
+                {catalog.shortName || catalog.name}
                 <ExternalLink size={10} />
               </a>
             ))}

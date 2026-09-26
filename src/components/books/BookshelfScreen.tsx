@@ -41,11 +41,12 @@ export function BookshelfScreen({
         </button>
       </div>
 
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="relative z-10 mt-3 overflow-x-auto pb-1">
+        <div className="flex w-max gap-2">
         <button
           type="button"
           onClick={() => onFilter(FAVORITES_FILTER)}
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-bold ${
+          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-bold ${
             filter === FAVORITES_FILTER
               ? "bg-otto-text text-otto-bg"
               : "bg-otto-surface text-otto-text-dim"
@@ -59,7 +60,7 @@ export function BookshelfScreen({
             key={item.slug}
             type="button"
             onClick={() => onFilter(item.slug)}
-            className={`shrink-0 rounded-full px-4 py-2 text-[12.5px] font-bold ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-bold ${
               filter === item.slug
                 ? "bg-otto-text text-otto-bg"
                 : "bg-otto-surface text-otto-text-dim"
@@ -68,6 +69,7 @@ export function BookshelfScreen({
             {item.name}
           </button>
         ))}
+        </div>
       </div>
 
       <div className="mt-4 space-y-2.5">

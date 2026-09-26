@@ -101,8 +101,11 @@ export function parseRobinhoodScreenshot(
     .map((line) => line.trim())
     .filter(Boolean);
   const header = lines.slice(0, 4).join(" ");
+  const spreadTitle = header.match(
+    /\b([A-Z]{1,6})\s+((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\/((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s+(Call|Put)\s+(Credit|Debit)\s+Spread\b/i
+  );
   const tickerMatch = header.match(/\b([A-Z]{1,5})\s*\$(\d+(?:\.\d+)?)/);
-  const ticker = tickerMatch?.[1];
+  const ticker = tickerMatch?.[1] ?? spreadTitle?.[1]?.toUpperCase();
 
   const headerAfterTicker = tickerMatch
     ? header.slice((tickerMatch.index ?? 0) + tickerMatch[0].indexOf("$"))
@@ -110,7 +113,13 @@ export function parseRobinhoodScreenshot(
   const headerAmounts = Array.from(headerAfterTicker.matchAll(/\$(\d+(?:\.\d+)?)/g))
     .map((match) => Number(match[1]))
     .filter((value) => value >= 5);
-  const strikes = Array.from(new Set(headerAmounts)).slice(0, 4);
+  const spreadStrikes = spreadTitle
+    ? [Number(spreadTitle[2].replace(/,/g, "")), Number(spreadTitle[3].replace(/,/g, ""))]
+    : [];
+  const strikes = (spreadStrikes.length ? spreadStrikes : Array.from(new Set(headerAmounts))).slice(
+    0,
+    4
+  );
 
   // Robinhood labels this row "Contracts" on options and "Quantity" on shares.
   const quantityMatch =

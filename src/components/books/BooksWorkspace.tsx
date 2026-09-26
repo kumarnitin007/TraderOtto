@@ -348,7 +348,7 @@ export function BooksWorkspace() {
           onAddShelf={(name) => booksState.addShelf(name).then(() => undefined)}
           onRemoveShelf={async (shelf, destination) => {
             await booksState.removeShelf(shelf, destination);
-            if (filter === shelf.slug) setFilter(destination);
+            if (filter === shelf.slug) setFilter(destination || "reading");
           }}
           onExport={exportLibrary}
           onImport={importLibrary}

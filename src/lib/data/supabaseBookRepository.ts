@@ -183,8 +183,8 @@ export function createSupabaseBookRepository(
     },
 
     async removeShelf(id, destination) {
-      const nextStatus = destination.trim();
-      if (!/^[a-z0-9-]{1,48}$/.test(nextStatus)) {
+      const nextStatus = destination?.trim() ?? "";
+      if (nextStatus && !/^[a-z0-9_-]{1,48}$/.test(nextStatus)) {
         throw new Error("Choose a shelf for these books.");
       }
       const { data, error: lookupError } = await supabase
@@ -195,7 +195,7 @@ export function createSupabaseBookRepository(
         .maybeSingle();
       if (lookupError) throw new Error(lookupError.message);
       const slug = (data as { slug?: string } | null)?.slug;
-      if (slug && slug !== nextStatus) {
+      if (slug && nextStatus && slug !== nextStatus) {
         const { error: moveError } = await supabase
           .from("bk_books")
           .update(

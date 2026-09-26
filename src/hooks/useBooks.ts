@@ -105,10 +105,11 @@ export function useBooks() {
   );
 
   const removeShelf = useCallback(
-    async (shelf: BookShelf, destination = "want_to_read") => {
+    async (shelf: BookShelf, destination?: string) => {
       if (!repository || shelf.builtin || destination === shelf.slug) return;
       await repository.removeShelf(shelf.id, destination);
       setCustomShelves((current) => current.filter((item) => item.id !== shelf.id));
+      if (!destination) return;
       setBooks((current) =>
         current.map((book) =>
           book.status === shelf.slug

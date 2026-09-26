@@ -3,6 +3,7 @@ export type ReaderAudience = "" | "adult" | "young_adult" | "teen" | "child";
 export type BookCatalog = {
   id: string;
   name: string;
+  shortName: string;
   searchUrl: string;
 };
 
@@ -33,11 +34,13 @@ export const KNOWN_BOOK_CATALOGS: BookCatalog[] = [
   {
     id: "king-county",
     name: "King County Library System",
+    shortName: "KCLS",
     searchUrl: "https://kcls.bibliocommons.com/v2/search?query={query}&searchType=smart",
   },
   {
     id: "sno-isle",
     name: "Sno-Isle Libraries",
+    shortName: "Sno-Isle",
     searchUrl: "https://sno-isle.bibliocommons.com/v2/search?query={query}&searchType=smart",
   },
 ];
@@ -57,11 +60,17 @@ export function readBooksPreferences(): BooksPreferences {
         ? parsed.catalogs
             .filter(isCatalog)
             .slice(0, 3)
-            .map((catalog) => ({
-              id: catalog.id.slice(0, 80),
-              name: catalog.name.slice(0, 80),
-              searchUrl: catalog.searchUrl.slice(0, 500),
-            }))
+            .map((catalog) => {
+              const known = KNOWN_BOOK_CATALOGS.find((item) => item.id === catalog.id);
+              return {
+                id: catalog.id.slice(0, 80),
+                name: catalog.name.slice(0, 80),
+                shortName: (catalog.shortName || known?.shortName || catalog.name)
+                  .trim()
+                  .slice(0, 16),
+                searchUrl: catalog.searchUrl.slice(0, 500),
+              };
+            })
         : [],
     };
   } catch {
@@ -96,6 +105,7 @@ function isCatalog(value: unknown): value is BookCatalog {
   return (
     typeof catalog.id === "string" &&
     typeof catalog.name === "string" &&
+    (catalog.shortName == null || typeof catalog.shortName === "string") &&
     typeof catalog.searchUrl === "string" &&
     /^https?:\/\//i.test(catalog.searchUrl)
   );
