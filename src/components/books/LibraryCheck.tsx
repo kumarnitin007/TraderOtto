@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
+import { authHeaders } from "@/lib/authHeaders";
 import {
   coverPatchFromSearch,
   planLibraryCleanup,
@@ -9,10 +10,14 @@ import {
 } from "@/lib/bookCleanup";
 import type { Book, BookInput, OpenLibraryBook } from "@/types/book";
 
+/** Same signed-in Open Library match used by Find cover on a book. */
 async function lookupCover(book: Book): Promise<Partial<BookInput> | null> {
   const query = (book.isbn || `${book.title} ${book.author}`).trim().slice(0, 180);
   if (query.length < 2) return null;
-  const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`);
+  const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`, {
+    headers: await authHeaders(),
+  });
+  if (response.status === 401) throw new Error("Sign in to look up covers.");
   if (!response.ok) return null;
   const data = (await response.json()) as { books?: OpenLibraryBook[] };
   return coverPatchFromSearch(book, data.books ?? []);
@@ -42,7 +47,7 @@ export function LibraryCheck({
         next.filter((action) => action.patch?.coverId).map((action) => action.bookId),
       );
       const missing = books.filter((book) => !book.coverId && !covered.has(book.id));
-      const batch = openLibraryEnabled ? missing.slice(0, 20) : [];
+      const batch = openLibraryEnabled ? missing : [];
       for (const book of batch) {
         const patch = await lookupCover(book);
         if (!patch) continue;
@@ -63,11 +68,11 @@ export function LibraryCheck({
       }
       setActions(next);
       setPicked(Object.fromEntries(next.map((action) => [action.id, true])));
-      const leftover = missing.length - batch.length;
+      const found = next.filter((action) => action.patch?.coverId).length;
       setNote(
         next.length
-          ? leftover > 0
-            ? `Checked ${batch.length} books still missing a cover. ${leftover} are left for the next check.`
+          ? found
+            ? `Found ${found} cover${found === 1 ? "" : "s"} to fill. Nothing is saved until you apply.`
             : ""
           : "No duplicates or missing covers to fix.",
       );

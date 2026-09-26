@@ -20,6 +20,7 @@ import {
   lifeOccasionLabel,
 } from "@/lib/life";
 import { lifeTaskKey } from "@/lib/lifeTasks";
+import { lifeExportJson, type LifeExportOptions } from "@/lib/lifeTransfer";
 import type { LifeCategory, LifeInput, LifeItem, LifeListItemInput, LifeTaskInput } from "@/types/life";
 import { EMPTY_LIFE_INPUT, LIFE_CATEGORIES } from "@/types/life";
 
@@ -172,13 +173,27 @@ export function LifeWorkspace() {
     }
   }
 
-  async function onToggleHabit(taskId: string) {
+  async function onToggleHabit(taskId: string, doneOn?: string) {
     setNotice("");
     try {
-      await toggleToday(taskId);
+      await toggleToday(taskId, doneOn);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Could not update that habit.");
     }
+  }
+
+  function exportLife(options: LifeExportOptions) {
+    const text = lifeExportJson(
+      { dates: items, habits: tasks, checks, lists, listItems },
+      options
+    );
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `otto-life-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   async function onToggleTodo(input: LifeListItemInput, id: string) {
@@ -219,7 +234,7 @@ export function LifeWorkspace() {
           readonly={readonly}
           notice={notice}
           onDate={setSelected}
-          onToggleTask={onToggleHabit}
+          onToggleTask={(taskId, doneOn) => onToggleHabit(taskId, doneOn)}
           onToggleListItem={(item) =>
             onToggleTodo(
               {
@@ -280,6 +295,7 @@ export function LifeWorkspace() {
             );
             setIncoming(dates.length || importedTasks.length ? { dates, tasks: importedTasks } : null);
           }}
+          onExport={(options) => exportLife(options)}
         />
       ) : (
       <>

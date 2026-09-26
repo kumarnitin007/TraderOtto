@@ -127,9 +127,9 @@ export function useLife() {
   );
 
   const toggleToday = useCallback(
-    async (taskId: string) => {
+    async (taskId: string, doneOn?: string) => {
       if (!repository) throw new Error("Sign in to save.");
-      const today = isoDay(new Date());
+      const today = doneOn ?? isoDay(new Date());
       const existing = checks.find((check) => check.taskId === taskId && check.doneOn === today);
       if (existing) {
         await repository.removeCheck(existing.id);

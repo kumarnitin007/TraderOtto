@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck, Check, ListTodo, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calendar, CalendarCheck, Check, ListTodo, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import type { LifeList, LifeListItem, LifeListItemInput } from "@/types/life";
 
@@ -30,7 +30,7 @@ export function LifeListsScreen({
 }) {
   const [adding, setAdding] = useState(false);
   const [listName, setListName] = useState("");
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, { text: string; dueOn: string }>>({});
   const [selectedList, setSelectedList] = useState<LifeList | null>(null);
   const [rename, setRename] = useState("");
   const [selectedItem, setSelectedItem] = useState<LifeListItem | null>(null);
@@ -139,9 +139,21 @@ export function LifeListsScreen({
                       <span className={`block truncate text-[15px] ${item.done ? "text-otto-text-dim line-through" : "font-semibold"}`}>
                         {item.text}
                       </span>
-                      {item.dueOn && !item.done && (
-                        <span className="block text-[12px] text-otto-text-dim">Due {item.dueOn}</span>
-                      )}
+                      <span className="block text-[12px] text-otto-text-dim">
+                        {item.dueOn ? `Due ${item.dueOn}` : "No date"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedItem(item);
+                        setDueOn(item.dueOn ?? "");
+                      }}
+                      className="flex shrink-0 items-center gap-1 rounded-full bg-otto-bg px-2.5 py-1.5 text-[11px] font-bold text-otto-text-dim"
+                      aria-label={`Set a date for ${item.text}`}
+                    >
+                      <Calendar size={13} />
+                      Date
                     </button>
                   </div>
                 ))}
@@ -149,18 +161,47 @@ export function LifeListsScreen({
                   className="flex gap-2 px-3 py-2"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    const text = (drafts[list.id] ?? "").trim();
+                    const draft = drafts[list.id] ?? { text: "", dueOn: "" };
+                    const text = draft.text.trim();
                     if (!text) return;
-                    void onSaveItem({ listId: list.id, text, done: false, dueOn: null }).then(() => {
-                      setDrafts((current) => ({ ...current, [list.id]: "" }));
+                    void onSaveItem({
+                      listId: list.id,
+                      text,
+                      done: false,
+                      dueOn: draft.dueOn || null,
+                    }).then(() => {
+                      setDrafts((current) => ({ ...current, [list.id]: { text: "", dueOn: "" } }));
                     });
                   }}
                 >
                   <input
-                    value={drafts[list.id] ?? ""}
-                    onChange={(event) => setDrafts((current) => ({ ...current, [list.id]: event.target.value }))}
+                    value={drafts[list.id]?.text ?? ""}
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [list.id]: {
+                          text: event.target.value,
+                          dueOn: current[list.id]?.dueOn ?? "",
+                        },
+                      }))
+                    }
                     placeholder="Add an item"
                     className="w-0 min-w-0 flex-1 bg-transparent py-2 text-base"
+                  />
+                  <input
+                    type="date"
+                    value={drafts[list.id]?.dueOn ?? ""}
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [list.id]: {
+                          text: current[list.id]?.text ?? "",
+                          dueOn: event.target.value,
+                        },
+                      }))
+                    }
+                    aria-label={`Due date for a new ${list.name} item`}
+                    className="w-[132px] shrink-0 bg-transparent py-2 text-[13px] text-otto-text-dim"
                   />
                   <button type="submit" className="text-[13px] font-bold text-otto-text-dim" aria-label={`Add item to ${list.name}`}>
                     Add

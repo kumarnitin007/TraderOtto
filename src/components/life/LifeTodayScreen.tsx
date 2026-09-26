@@ -1,12 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Check, ChevronRight, CircleCheckBig, Star } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Check, ChevronLeft, ChevronRight, CircleCheckBig, Star } from "lucide-react";
 import {
   LIFE_CATEGORY_LABEL,
   lifeCountdownLabel,
   lifeDaysUntil,
   lifeOccasionLabel,
+  startOfDay,
 } from "@/lib/life";
 import { dueListItems } from "@/lib/lifeLists";
 import { isoDay, recentDayDots, taskProgress } from "@/lib/lifeTasks";
@@ -45,13 +46,15 @@ export function LifeTodayScreen({
   readonly: boolean;
   notice: string;
   onDate: (item: LifeItem) => void;
-  onToggleTask: (taskId: string) => Promise<void>;
+  onToggleTask: (taskId: string, doneOn: string) => Promise<void>;
   onToggleListItem: (item: LifeListItem) => Promise<void>;
   onOpenDates: () => void;
   onOpenTasks: () => void;
   onOpenLists: () => void;
 }) {
-  const now = new Date();
+  const [day, setDay] = useState(() => startOfDay(new Date()));
+  const now = day;
+  const viewingToday = isoDay(day) === isoDay(new Date());
   const dateRows = dates
     .map((item) => ({ item, days: lifeDaysUntil(item, now) }))
     .filter(({ item, days }) => days >= 0 && days <= item.remindDays)
@@ -83,10 +86,51 @@ export function LifeTodayScreen({
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="text-[22px] font-extrabold tracking-[-0.3px]">Today</h1>
-        <p className="text-[13px] text-otto-text-dim">{dateLabel}</p>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setDay((current) => shiftDay(current, -1))}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-otto-surface"
+          aria-label="Previous day"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="min-w-0 text-center">
+          <h1 className="text-[22px] font-extrabold tracking-[-0.3px]">
+            {viewingToday ? "Today" : dateLabel}
+          </h1>
+          <input
+            type="date"
+            value={isoDay(day)}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+                const [year, month, date] = next.split("-").map(Number);
+                setDay(new Date(year, month - 1, date));
+              }
+            }}
+            aria-label="Choose a day"
+            className="bg-transparent text-center text-[13px] text-otto-text-dim"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setDay((current) => shiftDay(current, 1))}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-otto-surface"
+          aria-label="Next day"
+        >
+          <ChevronRight size={18} />
+        </button>
       </div>
+      {!viewingToday && (
+        <button
+          type="button"
+          onClick={() => setDay(startOfDay(new Date()))}
+          className="mb-4 text-[13px] font-bold text-otto-text-dim"
+        >
+          Back to today
+        </button>
+      )}
 
       {errors.map((message) => (
         <p
@@ -111,7 +155,9 @@ export function LifeTodayScreen({
                 <p className="mt-0.5 text-[15px] font-extrabold">
                   {totalActions
                     ? `${completedActions} of ${totalActions} checked`
-                    : "Nothing waiting today"}
+                    : viewingToday
+                      ? "Nothing waiting today"
+                      : "Nothing waiting"}
                 </p>
               </div>
               <span className="text-xl font-extrabold text-otto-green">{percent}%</span>
@@ -170,7 +216,7 @@ export function LifeTodayScreen({
                 </button>
               ))
             ) : (
-              <EmptyRow text="No date reminders today" />
+              <EmptyRow text={viewingToday ? "No date reminders today" : "No date reminders"} />
             )}
           </TodaySection>
 
@@ -186,7 +232,7 @@ export function LifeTodayScreen({
                     <button
                       type="button"
                       disabled={readonly}
-                      onClick={() => void onToggleTask(task.id)}
+                      onClick={() => void onToggleTask(task.id, isoDay(day))}
                       aria-label={progress.doneToday ? `Undo ${task.name}` : `Mark ${task.name} done`}
                       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
                         progress.doneToday
@@ -204,7 +250,13 @@ export function LifeTodayScreen({
                       >
                         {task.name}
                       </span>
-                      <span className="block text-[12px] text-otto-text-dim">{progress.label}</span>
+                      <span className="block text-[12px] text-otto-text-dim">
+                        {viewingToday || task.cadence === "weekly"
+                          ? progress.label
+                          : progress.doneToday
+                            ? "Done"
+                            : "Not done"}
+                      </span>
                       {task.cadence === "daily" && (
                         <span className="mt-1 flex gap-1">
                           {recentDayDots(task.id, checks, now).map((dot) => (
@@ -258,6 +310,12 @@ export function LifeTodayScreen({
       )}
     </div>
   );
+}
+
+function shiftDay(date: Date, count: number) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + count);
+  return next;
 }
 
 function TodaySection({
