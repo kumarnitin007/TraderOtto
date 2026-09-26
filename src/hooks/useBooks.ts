@@ -105,13 +105,19 @@ export function useBooks() {
   );
 
   const removeShelf = useCallback(
-    async (shelf: BookShelf) => {
-      if (!repository || shelf.builtin) return;
-      await repository.removeShelf(shelf.id);
+    async (shelf: BookShelf, destination = "want_to_read") => {
+      if (!repository || shelf.builtin || destination === shelf.slug) return;
+      await repository.removeShelf(shelf.id, destination);
       setCustomShelves((current) => current.filter((item) => item.id !== shelf.id));
       setBooks((current) =>
         current.map((book) =>
-          book.status === shelf.slug ? { ...book, status: "want_to_read" } : book
+          book.status === shelf.slug
+            ? {
+                ...book,
+                status: destination,
+                progressPercent: destination === "read" ? 100 : book.progressPercent,
+              }
+            : book
         )
       );
     },

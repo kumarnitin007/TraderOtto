@@ -39,12 +39,14 @@ export function BooksSettingsScreen({
   openLibraryEnabled: boolean;
   onOpenLibraryChange: (enabled: boolean) => void;
   onAddShelf: (name: string) => Promise<void>;
-  onRemoveShelf: (shelf: BookShelf) => Promise<void>;
+  onRemoveShelf: (shelf: BookShelf, destination: string) => Promise<void>;
   onExport: (format: "json" | "csv") => void;
   onImport: (file: File) => Promise<void>;
 }) {
   const [shelfName, setShelfName] = useState("");
   const [shelfError, setShelfError] = useState("");
+  const [removingShelf, setRemovingShelf] = useState<BookShelf | null>(null);
+  const [moveTo, setMoveTo] = useState("want_to_read");
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
   const jsonRef = useRef<HTMLInputElement>(null);
@@ -264,27 +266,85 @@ export function BooksSettingsScreen({
         <div className="mx-3.5 border-t border-otto-divider" />
         {shelves
           .filter((shelf) => !shelf.builtin)
-          .map((shelf) => (
-            <div key={shelf.id} className="flex items-center justify-between px-3.5 py-2.5">
-              <span className="text-[14px] font-semibold">{shelf.name}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Remove “${shelf.name}”? Books on it move to Want to read.`
-                    )
-                  ) {
-                    void onRemoveShelf(shelf);
-                  }
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim"
-                aria-label={`Remove ${shelf.name}`}
+          .map((shelf, index) => {
+            const bookCount = books.filter((book) => book.status === shelf.slug).length;
+            const destinations = shelves.filter((item) => item.slug !== shelf.slug);
+            return (
+              <div
+                key={shelf.id}
+                className={`px-3.5 py-2.5 ${index > 0 ? "border-t border-otto-divider" : ""}`}
               >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center justify-between">
+                  <span className="text-[14px] font-semibold">{shelf.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShelfError("");
+                      setRemovingShelf(shelf);
+                      setMoveTo("want_to_read");
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim"
+                    aria-label={`Remove ${shelf.name}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                {removingShelf?.id === shelf.id && (
+                  <div className="mt-2 rounded-xl bg-otto-bg px-3 py-3">
+                    <p className="text-[12.5px] leading-snug text-otto-text-dim">
+                      {bookCount === 0
+                        ? "This shelf is empty."
+                        : `${bookCount} book${bookCount === 1 ? "" : "s"} will move.`}
+                    </p>
+                    {bookCount > 0 && (
+                      <label className="mt-2 block">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-otto-text-faint">
+                          Move books to
+                        </span>
+                        <select
+                          value={moveTo}
+                          onChange={(event) => setMoveTo(event.target.value)}
+                          className="mt-1.5 w-full rounded-xl border border-otto-divider bg-otto-surface px-3 py-2.5 text-[14px]"
+                        >
+                          {destinations.map((item) => (
+                            <option key={item.slug} value={item.slug}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRemovingShelf(null)}
+                        className="rounded-xl bg-otto-surface px-3 py-2 text-[12.5px] font-bold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void onRemoveShelf(shelf, bookCount > 0 ? moveTo : "want_to_read")
+                            .then(() => setRemovingShelf(null))
+                            .catch((cause: unknown) =>
+                              setShelfError(
+                                cause instanceof Error
+                                  ? cause.message
+                                  : "Could not remove this shelf."
+                              )
+                            );
+                        }}
+                        className="rounded-xl bg-otto-red-soft px-3 py-2 text-[12.5px] font-bold text-otto-red"
+                      >
+                        Remove shelf
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         <form onSubmit={(event) => void addShelf(event)} className="flex gap-2 px-3.5 pb-3.5 pt-2">
           <input
             value={shelfName}

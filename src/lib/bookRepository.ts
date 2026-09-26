@@ -10,7 +10,7 @@ export type BookRepository = {
   list(): Promise<Book[]>;
   listShelves(): Promise<BookShelf[]>;
   saveShelf(name: string): Promise<BookShelf>;
-  removeShelf(id: string): Promise<void>;
+  removeShelf(id: string, destination: string): Promise<void>;
   save(input: BookInput, id?: string): Promise<Book>;
   remove(id: string): Promise<void>;
   latestDiscovery(): Promise<StoredBookDiscoveryReport | null>;
