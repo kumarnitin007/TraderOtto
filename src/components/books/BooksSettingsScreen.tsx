@@ -186,7 +186,7 @@ export function BooksSettingsScreen({
         <div className="border-t border-otto-divider px-3.5 py-3.5">
           <p className="text-[12px] leading-relaxed text-otto-text-dim">
             Catalog buttons open a search for each recommended title. Availability remains on the
-            library's site.
+            library site.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {KNOWN_BOOK_CATALOGS.map((catalog) => {
