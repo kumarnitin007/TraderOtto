@@ -344,7 +344,6 @@ export function VaultScreen({
             <VaultRow
               key={item.id}
               item={item}
-              tags={tags}
               onSelect={onSelect}
               onCopy={onCopy}
             />

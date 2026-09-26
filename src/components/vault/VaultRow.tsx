@@ -2,21 +2,18 @@
 
 import { Copy, Star } from "lucide-react";
 import { kindMeta } from "@/lib/vaultItemTypes";
-import type { VaultItem, VaultTag } from "@/lib/vaultRepository";
+import type { VaultItem } from "@/lib/vaultRepository";
 
 export function VaultRow({
   item,
-  tags,
   onSelect,
   onCopy,
 }: {
   item: VaultItem;
-  tags: VaultTag[];
   onSelect: (item: VaultItem) => void;
   onCopy: (value: string, label?: string) => void;
 }) {
   const Icon = kindMeta(item.kind).icon;
-  const itemTags = tags.filter((tag) => item.tags.includes(tag.id));
 
   return (
     <article
@@ -42,18 +39,6 @@ export function VaultRow({
         <span className="block truncate text-[12.5px] text-otto-text-dim">
           {item.username || item.note || "—"}
         </span>
-        {itemTags.length > 0 && (
-          <div className="mt-1.5 flex gap-1">
-            {itemTags.map((tag) => (
-              <i
-                key={tag.id}
-                title={tag.name}
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: tag.color }}
-              />
-            ))}
-          </div>
-        )}
       </div>
       {item.favorite && (
         <Star size={15} className="shrink-0 text-otto-amber" fill="currentColor" />
