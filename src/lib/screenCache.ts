@@ -23,7 +23,7 @@ export type ScreenOptions = {
   tradeScope: TradeScope;
   appWorkspace: AppWorkspace;
   booksTab: "library" | "discover" | "add" | "stats" | "settings";
-  booksFilter: "reading" | "read" | "want_to_read";
+  booksFilter: string;
   booksOpenLibraryEnabled: boolean;
 };
 
@@ -136,7 +136,8 @@ export function readScreenOptions(): ScreenOptions {
           ? parsed.booksTab
           : "library",
       booksFilter:
-        parsed.booksFilter === "read" || parsed.booksFilter === "want_to_read"
+        typeof parsed.booksFilter === "string" &&
+        /^[a-z0-9-]{1,48}$/.test(parsed.booksFilter)
           ? parsed.booksFilter
           : "reading",
       booksOpenLibraryEnabled: parsed.booksOpenLibraryEnabled !== false,

@@ -8,7 +8,41 @@ type OpenLibraryDocument = {
   isbn?: unknown;
   first_publish_year?: unknown;
   number_of_pages_median?: unknown;
+  subject?: unknown;
 };
+
+const SUBJECT_NOISE = /accessible book|protected daisy|in library|lending library|open library staff/i;
+
+export function normalizeIsbn(value: string): string {
+  return value.replace(/[^0-9Xx]/g, "").toUpperCase();
+}
+
+export function isIsbn(value: string): boolean {
+  const isbn = normalizeIsbn(value);
+  return /^\d{9}[\dX]$/.test(isbn) || /^\d{13}$/.test(isbn);
+}
+
+export function bookSubjects(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const subjects: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const subject = entry.trim().toLowerCase();
+    if (
+      subject.length < 3 ||
+      subject.length > 28 ||
+      SUBJECT_NOISE.test(subject) ||
+      seen.has(subject)
+    ) {
+      continue;
+    }
+    seen.add(subject);
+    subjects.push(subject);
+    if (subjects.length === 6) break;
+  }
+  return subjects;
+}
 
 export function openLibraryCoverUrl(
   coverId: number | null,
@@ -40,5 +74,6 @@ export function mapOpenLibraryDocument(document: OpenLibraryDocument): OpenLibra
         : null,
     firstPublishYear:
       typeof document.first_publish_year === "number" ? document.first_publish_year : null,
+    subjects: bookSubjects(document.subject),
   };
 }

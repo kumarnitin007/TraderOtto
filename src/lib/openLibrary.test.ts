@@ -19,6 +19,7 @@ describe("Open Library helpers", () => {
         isbn: ["0441172695", "9780441172696"],
         first_publish_year: 1969,
         number_of_pages_median: 256,
+        subject: ["Science fiction", "Political", "Accessible book", "Science fiction"],
       })
     ).toEqual({
       title: "Dune Messiah",
@@ -28,6 +29,7 @@ describe("Open Library helpers", () => {
       coverId: 9255566,
       pageCount: 256,
       firstPublishYear: 1969,
+      subjects: ["science fiction", "political"],
     });
   });
 

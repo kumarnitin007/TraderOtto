@@ -16,16 +16,20 @@ function dateLabel(value: string | null) {
 
 export function BookDetail({
   book,
+  shelfLabel,
   externalCovers,
   onClose,
   onEdit,
   onDelete,
+  onRate,
 }: {
   book: Book;
+  shelfLabel: string;
   externalCovers: boolean;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => Promise<void>;
+  onRate: (rating: number) => void;
 }) {
   return (
     <div className="fixed inset-0 z-40 overflow-y-auto bg-otto-bg">
@@ -61,7 +65,9 @@ export function BookDetail({
           <div className="min-w-0">
             <h1 className="text-[22px] font-extrabold leading-tight">{book.title}</h1>
             <p className="mt-1 text-[13.5px] text-otto-text-dim">{book.author}</p>
-            <div className="mt-1"><StarRating value={book.rating} /></div>
+            <div className="mt-1">
+              <StarRating value={book.rating} onChange={onRate} />
+            </div>
           </div>
         </div>
 
@@ -70,10 +76,10 @@ export function BookDetail({
             label="Status"
             value={
               book.status === "read"
-                ? `Read${book.finishedAt ? ` · ${dateLabel(book.finishedAt)}` : ""}`
+                ? `${shelfLabel}${book.finishedAt ? ` · ${dateLabel(book.finishedAt)}` : ""}`
                 : book.status === "reading"
-                  ? `Reading · ${book.progressPercent}%`
-                  : "Want to read"
+                  ? `${shelfLabel} · ${book.progressPercent}%`
+                  : shelfLabel
             }
           />
           <Divider />
@@ -114,15 +120,55 @@ export function BookDetail({
           </section>
         )}
 
+        {book.journal.description && (
+          <section className="mt-5">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
+              Description
+            </p>
+            <p className="rounded-2xl bg-otto-surface px-4 py-4 text-[13px] leading-relaxed text-otto-text-dim">
+              {book.journal.description}
+            </p>
+          </section>
+        )}
+
         {book.notes && (
           <section className="mt-5">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-              Notes
+              Review
             </p>
             <p className="rounded-2xl bg-otto-surface px-4 py-4 text-[13px] leading-relaxed text-otto-text-dim">
               {book.notes}
             </p>
           </section>
+        )}
+
+        {(book.journal.favoriteCharacter ||
+          book.journal.sceneSummary ||
+          book.journal.memorableMoments ||
+          book.journal.leastFavoritePart) && (
+          <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+            {book.journal.favoriteCharacter && (
+              <DetailRow label="Favorite character" value={book.journal.favoriteCharacter} />
+            )}
+            {book.journal.sceneSummary && (
+              <>
+                <Divider />
+                <DetailRow label="Scene" value={book.journal.sceneSummary} />
+              </>
+            )}
+            {book.journal.memorableMoments && (
+              <>
+                <Divider />
+                <DetailRow label="Memorable moments" value={book.journal.memorableMoments} />
+              </>
+            )}
+            {book.journal.leastFavoritePart && (
+              <>
+                <Divider />
+                <DetailRow label="Least favorite part" value={book.journal.leastFavoritePart} />
+              </>
+            )}
+          </div>
         )}
 
         {book.wouldRecommend != null && (

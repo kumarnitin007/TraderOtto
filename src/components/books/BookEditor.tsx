@@ -1,17 +1,13 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
-import { BookCover } from "@/components/books/BookCover";
+import { FormEvent, useMemo, useRef, useState } from "react";
+import { Camera, Search, X } from "lucide-react";
+import { BookCover, StarRating } from "@/components/books/BookCover";
 import { authHeaders } from "@/lib/authHeaders";
 import { bookCoverColor, validateBook } from "@/lib/books";
-import type {
-  Book,
-  BookFormat,
-  BookInput,
-  BookStatus,
-  OpenLibraryBook,
-} from "@/types/book";
+import { isIsbn } from "@/lib/openLibrary";
+import type { Book, BookFormat, BookInput, BookShelf, OpenLibraryBook } from "@/types/book";
+import { EMPTY_BOOK_JOURNAL } from "@/types/book";
 
 const inputClass =
   "w-full rounded-[10px] border border-otto-divider bg-otto-surface px-3 py-2.5 text-[14px]";
@@ -38,6 +34,8 @@ function initialValue(book?: Book): BookInput {
         openLibraryId: book.openLibraryId,
         coverId: book.coverId,
         coverColor: book.coverColor,
+        favorite: book.favorite,
+        journal: book.journal,
       }
     : {
         title: "",
@@ -59,16 +57,20 @@ function initialValue(book?: Book): BookInput {
         openLibraryId: "",
         coverId: null,
         coverColor: "#4d8069",
+        favorite: false,
+        journal: EMPTY_BOOK_JOURNAL,
       };
 }
 
 export function BookEditor({
   book,
+  shelves,
   openLibraryEnabled,
   onClose,
   onSave,
 }: {
   book?: Book;
+  shelves: BookShelf[];
   openLibraryEnabled: boolean;
   onClose: () => void;
   onSave: (input: BookInput) => Promise<void>;
@@ -78,7 +80,9 @@ export function BookEditor({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
   const [searchResults, setSearchResults] = useState<OpenLibraryBook[]>([]);
+  const photoRef = useRef<HTMLInputElement>(null);
   const title = book ? "Edit book" : "Add book";
   const prepared = useMemo(
     () => ({
@@ -96,8 +100,10 @@ export function BookEditor({
     setValue((current) => ({ ...current, [key]: next }));
   }
 
-  async function searchOpenLibrary() {
-    const query = `${value.title} ${value.author}`.trim();
+  async function searchOpenLibrary(queryOverride?: string) {
+    const isbn = value.isbn.trim();
+    const query =
+      queryOverride?.trim() || (isIsbn(isbn) ? isbn : `${value.title} ${value.author}`.trim());
     if (!openLibraryEnabled || query.length < 2 || searching) return;
     setSearching(true);
     setError("");
@@ -129,8 +135,51 @@ export function BookEditor({
       coverId: result.coverId,
       pageCount: current.pageCount ?? result.pageCount,
       coverColor: bookCoverColor(result.title),
+      tags: result.subjects.length ? result.subjects : current.tags,
     }));
+    if (result.subjects.length) setTagsText(result.subjects.join(", "));
     setSearchResults([]);
+  }
+
+  async function identifyCover(file: File) {
+    if (file.size > 4_000_000) {
+      setError("Choose a cover image under 4 MB.");
+      return;
+    }
+    setIdentifying(true);
+    setError("");
+    try {
+      const image = await fileToDataUrl(file);
+      const response = await fetch("/api/books/identify", {
+        method: "POST",
+        headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      });
+      const payload = (await response.json()) as {
+        title?: string;
+        author?: string;
+        isbn?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.title) {
+        throw new Error(payload.error ?? "Could not read this cover.");
+      }
+      setValue((current) => ({
+        ...current,
+        title: payload.title ?? current.title,
+        author: payload.author || current.author,
+        isbn: payload.isbn || current.isbn,
+      }));
+      if (openLibraryEnabled) {
+        await searchOpenLibrary(
+          payload.isbn || `${payload.title} ${payload.author ?? ""}`.trim()
+        );
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not read this cover.");
+    } finally {
+      setIdentifying(false);
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -192,17 +241,56 @@ export function BookEditor({
             placeholder="Author"
             className={`${inputClass} mt-2`}
           />
-          {openLibraryEnabled && (
+          <input
+            value={value.isbn}
+            onChange={(event) => patch("isbn", event.target.value)}
+            placeholder="ISBN"
+            inputMode="numeric"
+            className={`${inputClass} mt-2`}
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {openLibraryEnabled && (
+              <button
+                type="button"
+                onClick={() => void searchOpenLibrary()}
+                disabled={
+                  searching ||
+                  identifying ||
+                  (value.isbn.trim().length < 10 && !`${value.title} ${value.author}`.trim())
+                }
+                className="inline-flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-2 text-[11.5px] font-semibold normal-case tracking-normal text-otto-text-dim disabled:opacity-40"
+              >
+                <Search size={14} />
+                {searching
+                  ? "Searching…"
+                  : isIsbn(value.isbn)
+                    ? "Search ISBN"
+                    : value.coverId
+                      ? "Change cover"
+                      : "Find book & cover"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => void searchOpenLibrary()}
-              disabled={searching || !`${value.title} ${value.author}`.trim()}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-2 text-[11.5px] font-semibold normal-case tracking-normal text-otto-text-dim disabled:opacity-40"
+              onClick={() => photoRef.current?.click()}
+              disabled={identifying || searching}
+              className="inline-flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-2 text-[11.5px] font-semibold normal-case tracking-normal text-otto-text-dim disabled:opacity-40"
             >
-              <Search size={14} />
-              {searching ? "Searching…" : value.coverId ? "Change cover" : "Find book & cover"}
+              <Camera size={14} />
+              {identifying ? "Reading cover…" : "Use a photo"}
             </button>
-          )}
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void identifyCover(file);
+              }}
+            />
+          </div>
         </Field>
 
         {openLibraryEnabled && searchResults.length > 0 && (
@@ -230,6 +318,11 @@ export function BookEditor({
                       {result.author}
                       {result.firstPublishYear ? ` · ${result.firstPublishYear}` : ""}
                     </span>
+                    {result.subjects.length > 0 && (
+                      <span className="mt-1 block truncate text-[11px] text-otto-text-faint">
+                        {result.subjects.join(" · ")}
+                      </span>
+                    )}
                   </span>
                 </button>
               ))}
@@ -239,27 +332,21 @@ export function BookEditor({
 
         <Field label="Shelf">
           <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["reading", "Reading"],
-                ["read", "Read"],
-                ["want_to_read", "Want to read"],
-              ] as [BookStatus, string][]
-            ).map(([status, label]) => (
+            {shelves.map((shelf) => (
               <button
-                key={status}
+                key={shelf.slug}
                 type="button"
                 onClick={() => {
-                  patch("status", status);
-                  if (status === "read") patch("progressPercent", 100);
+                  patch("status", shelf.slug);
+                  if (shelf.slug === "read") patch("progressPercent", 100);
                 }}
                 className={`rounded-full px-4 py-2 text-[12px] font-bold ${
-                  value.status === status
+                  value.status === shelf.slug
                     ? "bg-otto-text text-otto-bg"
                     : "bg-otto-surface text-otto-text-dim"
                 }`}
               >
-                {label}
+                {shelf.name}
               </button>
             ))}
           </div>
@@ -280,17 +367,25 @@ export function BookEditor({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Rating">
-            <select
-              value={value.rating}
-              onChange={(event) => patch("rating", Number(event.target.value))}
-              className={inputClass}
-            >
-              {Array.from({ length: 11 }, (_, index) => index / 2).map((rating) => (
-                <option key={rating} value={rating}>
-                  {rating ? `${rating} / 5` : "Not rated"}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 pt-1">
+              <StarRating value={value.rating} onChange={(rating) => patch("rating", rating)} />
+              <button
+                type="button"
+                onClick={() => patch("favorite", !value.favorite)}
+                className={`text-[12px] font-bold ${value.favorite ? "text-otto-amber" : "text-otto-text-faint"}`}
+              >
+                {value.favorite ? "★ Favorite" : "☆ Favorite"}
+              </button>
+              {value.rating > 0 && (
+                <button
+                  type="button"
+                  onClick={() => patch("rating", 0)}
+                  className="text-[11px] font-semibold text-otto-text-faint"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </Field>
           <Field label="Format">
             <select
@@ -382,12 +477,12 @@ export function BookEditor({
           </Field>
         </div>
 
-        <Field label="Notes">
+        <Field label="Your review">
           <textarea
             value={value.notes}
             onChange={(event) => patch("notes", event.target.value)}
-            placeholder="What stood out?"
-            rows={4}
+            placeholder="What did you like or dislike? What stood out?"
+            rows={5}
             className="w-full rounded-xl bg-otto-surface px-3 py-3 text-[14px]"
           />
         </Field>
@@ -425,6 +520,18 @@ export function BookEditor({
       </form>
     </div>
   );
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not read this image."));
+    };
+    reader.onerror = () => reject(new Error("Could not read this image."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

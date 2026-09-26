@@ -1,4 +1,4 @@
-import { mapOpenLibraryDocument } from "@/lib/openLibrary";
+import { isIsbn, mapOpenLibraryDocument, normalizeIsbn } from "@/lib/openLibrary";
 import { serverSupabaseForRequest } from "@/lib/serverSupabase";
 
 type OpenLibraryResponse = {
@@ -15,14 +15,15 @@ export async function GET(request: Request) {
 
   const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (query.length < 2 || query.length > 200) {
-    return Response.json({ error: "Enter a title or author." }, { status: 400 });
+    return Response.json({ error: "Enter a title, author, or ISBN." }, { status: 400 });
   }
 
   const url = new URL("https://openlibrary.org/search.json");
-  url.searchParams.set("q", query);
+  if (isIsbn(query)) url.searchParams.set("isbn", normalizeIsbn(query));
+  else url.searchParams.set("q", query);
   url.searchParams.set(
     "fields",
-    "key,title,author_name,cover_i,isbn,first_publish_year,number_of_pages_median"
+    "key,title,author_name,cover_i,isbn,first_publish_year,number_of_pages_median,subject"
   );
   url.searchParams.set("limit", "8");
 

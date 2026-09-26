@@ -3,21 +3,32 @@ import { buildBookDiscoveryPrompt, parseBookDiscoveryResponse } from "@/lib/book
 
 describe("Books AI helpers", () => {
   it("includes library evidence in the prompt", () => {
-    const prompt = buildBookDiscoveryPrompt([
+    const prompt = buildBookDiscoveryPrompt(
+      [
+        {
+          title: "Dune Messiah",
+          author: "Frank Herbert",
+          status: "read",
+          rating: 4,
+          wouldRecommend: true,
+          tags: ["sci-fi"],
+          seriesTitle: "Dune",
+          notes: "Loved the political intrigue.",
+        },
+      ],
       {
-        title: "Dune Messiah",
-        author: "Frank Herbert",
-        status: "read",
-        rating: 4,
-        wouldRecommend: true,
-        tags: ["sci-fi"],
-        seriesTitle: "Dune",
-        notes: "Loved the political intrigue.",
+        audience: "adult",
+        likedGenres: "science fiction",
+        avoid: "children's books",
       },
-    ]);
+      { goal: "Something different", note: "No graphic violence" }
+    );
     expect(prompt).toContain("Dune Messiah");
     expect(prompt).toContain("political intrigue");
     expect(prompt).toContain("not already in the library");
+    expect(prompt).toContain('"audience":"adult"');
+    expect(prompt).toContain("children's books");
+    expect(prompt).toContain("Something different");
   });
 
   it("parses plain and fenced structured reports", () => {

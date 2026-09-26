@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bookInitials, bookStats, filterBooks, validateBook } from "@/lib/books";
-import type { Book, BookInput } from "@/types/book";
+import { EMPTY_BOOK_JOURNAL, type Book, type BookInput } from "@/types/book";
 
 const input: BookInput = {
   title: "Dune Messiah",
@@ -22,6 +22,8 @@ const input: BookInput = {
   openLibraryId: "OL27258W",
   coverId: 9255566,
   coverColor: "#75507a",
+  favorite: false,
+  journal: EMPTY_BOOK_JOURNAL,
 };
 
 function book(id: string, patch: Partial<Book> = {}): Book {

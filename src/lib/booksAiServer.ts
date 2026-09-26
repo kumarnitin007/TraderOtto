@@ -1,4 +1,5 @@
 import type { BookDiscoveryReport } from "@/types/book";
+import type { BooksPreferences, RecommendationRequest } from "@/lib/booksPreferences";
 
 const recommendationSchema = {
   type: "object",
@@ -51,15 +52,35 @@ export type BookPromptEntry = {
   notes: string;
 };
 
-export function buildBookDiscoveryPrompt(books: BookPromptEntry[]): string {
+export function buildBookDiscoveryPrompt(
+  books: BookPromptEntry[],
+  preferences?: Partial<BooksPreferences>,
+  request?: Partial<RecommendationRequest>
+): string {
+  const readerContext = {
+    audience: preferences?.audience || "not specified",
+    likedGenres: preferences?.likedGenres?.trim() || "not specified",
+    avoid: preferences?.avoid?.trim() || "not specified",
+    notes: preferences?.readerNotes?.trim() || "not specified",
+    recommendationGoal: request?.goal?.trim() || "balanced suggestions",
+    currentRequest: request?.note?.trim() || "none",
+  };
   return `You are Otto Books, a careful personal reading recommender.
 
-Use the reader's actual library below to infer taste from ratings, recommendation flags, tags, series, status, and notes.
+Use the reader's actual library below to infer taste from ratings, tags, series, status, and notes.
+Honor the explicit reader context and current request before inferring from the library.
+The audience is a hard suitability constraint when specified. For example, do not recommend
+children's books to an adult unless their current request explicitly asks for them.
 Recommend 3-6 real books that are not already in the library. Use web search to verify each exact title and author.
-Give a concise, specific reason tied to evidence in this reader's library. Do not invent books, authors, series, or claims.
-Also provide up to 3 real "not for you" examples only when the library shows a clear negative preference.
-The profile must summarize preferences without exposing or quoting private notes verbatim.
+Write the profile as one or two short sentences. Do not quote private notes.
+Each reason is one sentence under 140 characters, tied to this reader's taste. Do not repeat the book title inside the reason.
+Each recommendation needs 2-4 short genre tags.
+Include "not for you" only when the library shows a clear dislike, and keep that list to at most 2 books.
+Do not invent books, authors, series, or claims.
 generatedAt must be the current ISO timestamp.
+
+READER CONTEXT:
+${JSON.stringify(readerContext)}
 
 LIBRARY:
 ${JSON.stringify(books.slice(0, 100))}`;
@@ -91,11 +112,15 @@ export function parseBookDiscoveryResponse(text: string): BookDiscoveryReport {
   return parsed;
 }
 
-export async function createBookDiscoveryReport(books: BookPromptEntry[]) {
+export async function createBookDiscoveryReport(
+  books: BookPromptEntry[],
+  preferences?: Partial<BooksPreferences>,
+  request?: Partial<RecommendationRequest>
+) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new Error("Add OPENAI_API_KEY to .env, then restart the server.");
   const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
-  const prompt = buildBookDiscoveryPrompt(books);
+  const prompt = buildBookDiscoveryPrompt(books, preferences, request);
   const base = {
     input: prompt,
     text: {

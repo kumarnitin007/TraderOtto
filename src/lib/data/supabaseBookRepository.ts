@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { shelfSlug } from "@/lib/books";
 import type { BookRepository } from "@/lib/bookRepository";
 import type {
   Book,
   BookDiscoveryReport,
   BookFormat,
   BookInput,
-  BookStatus,
+  BookJournal,
+  BookShelf,
   StoredBookDiscoveryReport,
 } from "@/types/book";
 
@@ -14,7 +16,7 @@ type BookRow = {
   user_id: string;
   title: string;
   author: string;
-  status: BookStatus;
+  status: string;
   progress_percent: number;
   rating: number;
   would_recommend: boolean | null;
@@ -31,6 +33,7 @@ type BookRow = {
   open_library_id: string | null;
   cover_id: number | null;
   cover_color: string;
+  meta?: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -71,6 +74,8 @@ export function mapBookRow(row: BookRow): Book {
     openLibraryId: row.open_library_id ?? "",
     coverId: row.cover_id == null ? null : Number(row.cover_id),
     coverColor: row.cover_color,
+    favorite: readBookMeta(row.meta).favorite,
+    journal: readBookMeta(row.meta).journal,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -97,7 +102,39 @@ function bookPayload(input: BookInput) {
     open_library_id: input.openLibraryId.trim() || null,
     cover_id: input.coverId,
     cover_color: input.coverColor,
+    meta: {
+      favorite: input.favorite,
+      journal: input.journal,
+    },
   };
+}
+
+function readBookMeta(value: unknown): { favorite: boolean; journal: BookJournal } {
+  const meta = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const journal =
+    meta.journal && typeof meta.journal === "object"
+      ? (meta.journal as Record<string, unknown>)
+      : {};
+  const bookshelfType = journal.bookshelfType === "wishlist" || journal.bookshelfType === "regular"
+    ? journal.bookshelfType
+    : "";
+  return {
+    favorite: meta.favorite === true,
+    journal: {
+      description: text(journal.description),
+      favoriteCharacter: text(journal.favoriteCharacter),
+      sceneSummary: text(journal.sceneSummary),
+      memorableMoments: text(journal.memorableMoments),
+      leastFavoritePart: text(journal.leastFavoritePart),
+      genre: text(journal.genre),
+      bookshelfType,
+      coverUrl: text(journal.coverUrl),
+    },
+  };
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 function mapDiscoveryRow(row: DiscoveryRow): StoredBookDiscoveryReport {
@@ -118,6 +155,59 @@ export function createSupabaseBookRepository(
   userId: string
 ): BookRepository {
   return {
+    async listShelves() {
+      const { data, error } = await supabase
+        .from("bk_shelves")
+        .select("id, name, slug")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as { id: string; name: string; slug: string }[]).map(
+        (shelf): BookShelf => ({ ...shelf, builtin: false })
+      );
+    },
+
+    async saveShelf(name) {
+      const trimmed = name.trim();
+      const slug = shelfSlug(trimmed);
+      const { data, error } = await supabase
+        .from("bk_shelves")
+        .insert({ user_id: userId, name: trimmed, slug })
+        .select("id, name, slug")
+        .single();
+      if (error) {
+        throw new Error(error.code === "23505" ? "That shelf already exists." : error.message);
+      }
+      const shelf = data as { id: string; name: string; slug: string };
+      return { ...shelf, builtin: false };
+    },
+
+    async removeShelf(id) {
+      const { data, error: lookupError } = await supabase
+        .from("bk_shelves")
+        .select("slug")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (lookupError) throw new Error(lookupError.message);
+      const slug = (data as { slug?: string } | null)?.slug;
+      if (slug) {
+        const { error: moveError } = await supabase
+          .from("bk_books")
+          .update({ status: "want_to_read" })
+          .eq("user_id", userId)
+          .eq("status", slug)
+          .is("deleted_at", null);
+        if (moveError) throw new Error(moveError.message);
+      }
+      const { error } = await supabase
+        .from("bk_shelves")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+
     async list() {
       const { data, error } = await supabase
         .from("bk_books")

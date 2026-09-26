@@ -1,28 +1,111 @@
 "use client";
 
-import { BookImage, Download, ShieldCheck, Sparkles } from "lucide-react";
+import { FormEvent, useRef, useState } from "react";
+import {
+  BookImage,
+  Download,
+  Library,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Upload,
+  UserRound,
+} from "lucide-react";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
-import type { Book } from "@/types/book";
+import {
+  KNOWN_BOOK_CATALOGS,
+  type BooksPreferences,
+  type ReaderAudience,
+} from "@/lib/booksPreferences";
+import type { Book, BookShelf } from "@/types/book";
 
 export function BooksSettingsScreen({
   books,
+  shelves,
+  preferences,
+  onPreferencesChange,
   openLibraryEnabled,
   onOpenLibraryChange,
+  onAddShelf,
+  onRemoveShelf,
+  onExport,
+  onImport,
 }: {
   books: Book[];
+  shelves: BookShelf[];
+  preferences: BooksPreferences;
+  onPreferencesChange: (preferences: BooksPreferences) => void;
   openLibraryEnabled: boolean;
   onOpenLibraryChange: (enabled: boolean) => void;
+  onAddShelf: (name: string) => Promise<void>;
+  onRemoveShelf: (shelf: BookShelf) => Promise<void>;
+  onExport: (format: "json" | "csv") => void;
+  onImport: (file: File) => Promise<void>;
 }) {
-  function exportBooks() {
-    const blob = new Blob([JSON.stringify(books, null, 2)], {
-      type: "application/json;charset=utf-8",
+  const [shelfName, setShelfName] = useState("");
+  const [shelfError, setShelfError] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const jsonRef = useRef<HTMLInputElement>(null);
+  const csvRef = useRef<HTMLInputElement>(null);
+  const [catalogName, setCatalogName] = useState("");
+  const [catalogUrl, setCatalogUrl] = useState("");
+
+  async function importFile(file: File) {
+    setImporting(true);
+    setImportError("");
+    try {
+      await onImport(file);
+    } catch (cause) {
+      setImportError(cause instanceof Error ? cause.message : "Could not import that file.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function addShelf(event: FormEvent) {
+    event.preventDefault();
+    const name = shelfName.trim();
+    if (!name) return;
+    setShelfError("");
+    try {
+      await onAddShelf(name);
+      setShelfName("");
+    } catch (cause) {
+      setShelfError(cause instanceof Error ? cause.message : "Could not add this shelf.");
+    }
+  }
+
+  function patchPreferences(patch: Partial<BooksPreferences>) {
+    onPreferencesChange({ ...preferences, ...patch });
+  }
+
+  function addKnownCatalog(id: string) {
+    const catalog = KNOWN_BOOK_CATALOGS.find((item) => item.id === id);
+    if (
+      !catalog ||
+      preferences.catalogs.length >= 3 ||
+      preferences.catalogs.some((item) => item.id === id)
+    ) {
+      return;
+    }
+    patchPreferences({ catalogs: [...preferences.catalogs, catalog] });
+  }
+
+  function addCustomCatalog(event: FormEvent) {
+    event.preventDefault();
+    const name = catalogName.trim();
+    const searchUrl = catalogUrl.trim();
+    if (!name || !/^https?:\/\//i.test(searchUrl) || preferences.catalogs.length >= 3) return;
+    patchPreferences({
+      catalogs: [
+        ...preferences.catalogs,
+        { id: `custom-${Date.now()}`, name, searchUrl },
+      ],
     });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `otto-books-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    setCatalogName("");
+    setCatalogUrl("");
   }
 
   return (
@@ -32,13 +115,248 @@ export function BooksSettingsScreen({
       </p>
       <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
 
-      <div className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
+      <details className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
+          <UserRound size={18} className="text-otto-text-dim" />
+          <span>
+            <b className="block text-[14px]">Reader profile</b>
+            <span className="text-[12px] text-otto-text-dim">
+              Optional context for better AI suggestions
+            </span>
+          </span>
+        </summary>
+        <div className="space-y-3 border-t border-otto-divider px-3.5 py-3.5">
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-otto-text-faint">
+              Audience
+            </span>
+            <select
+              value={preferences.audience}
+              onChange={(event) =>
+                patchPreferences({ audience: event.target.value as ReaderAudience })
+              }
+              className="mt-1.5 w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[14px]"
+            >
+              <option value="">Not specified</option>
+              <option value="adult">Adult</option>
+              <option value="young_adult">Young adult</option>
+              <option value="teen">Teen</option>
+              <option value="child">Child</option>
+            </select>
+          </label>
+          <SettingsInput
+            label="Genres I enjoy"
+            value={preferences.likedGenres}
+            placeholder="Mystery, history, literary fiction"
+            onChange={(likedGenres) => patchPreferences({ likedGenres })}
+          />
+          <SettingsInput
+            label="Avoid"
+            value={preferences.avoid}
+            placeholder="Children's books, graphic violence"
+            onChange={(avoid) => patchPreferences({ avoid })}
+          />
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-otto-text-faint">
+              Anything else
+            </span>
+            <textarea
+              value={preferences.readerNotes}
+              onChange={(event) =>
+                patchPreferences({ readerNotes: event.target.value.slice(0, 500) })
+              }
+              placeholder="Optional reading preferences"
+              rows={3}
+              className="mt-1.5 w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[14px]"
+            />
+          </label>
+        </div>
+      </details>
+
+      <details className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
+          <MapPin size={18} className="text-otto-text-dim" />
+          <span>
+            <b className="block text-[14px]">Local libraries</b>
+            <span className="text-[12px] text-otto-text-dim">
+              {preferences.catalogs.length ? `${preferences.catalogs.length} connected` : "Optional · up to 3"}
+            </span>
+          </span>
+        </summary>
+        <div className="border-t border-otto-divider px-3.5 py-3.5">
+          <p className="text-[12px] leading-relaxed text-otto-text-dim">
+            Catalog buttons open a search for each recommended title. Availability remains on the
+            library's site.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {KNOWN_BOOK_CATALOGS.map((catalog) => {
+              const added = preferences.catalogs.some((item) => item.id === catalog.id);
+              return (
+                <button
+                  key={catalog.id}
+                  type="button"
+                  onClick={() => addKnownCatalog(catalog.id)}
+                  disabled={added || preferences.catalogs.length >= 3}
+                  className="rounded-full border border-otto-divider px-3 py-2 text-[11.5px] font-semibold disabled:opacity-45"
+                >
+                  {added ? "Added" : "Add"} {catalog.name}
+                </button>
+              );
+            })}
+          </div>
+          {preferences.catalogs.map((catalog) => (
+            <div key={catalog.id} className="mt-2 flex items-center justify-between rounded-xl bg-otto-bg px-3 py-2.5">
+              <span className="min-w-0 truncate text-[13px] font-semibold">{catalog.name}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  patchPreferences({
+                    catalogs: preferences.catalogs.filter((item) => item.id !== catalog.id),
+                  })
+                }
+                className="flex h-8 w-8 shrink-0 items-center justify-center text-otto-text-dim"
+                aria-label={`Remove ${catalog.name}`}
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+          <form onSubmit={addCustomCatalog} className="mt-3 space-y-2">
+            <input
+              value={catalogName}
+              onChange={(event) => setCatalogName(event.target.value)}
+              placeholder="Custom library name"
+              maxLength={80}
+              disabled={preferences.catalogs.length >= 3}
+              className="w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[13px]"
+            />
+            <input
+              value={catalogUrl}
+              onChange={(event) => setCatalogUrl(event.target.value)}
+              placeholder="Search URL with {query}"
+              maxLength={500}
+              disabled={preferences.catalogs.length >= 3}
+              className="w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[13px]"
+            />
+            <button
+              type="submit"
+              disabled={
+                preferences.catalogs.length >= 3 ||
+                !catalogName.trim() ||
+                !/^https?:\/\//i.test(catalogUrl.trim())
+              }
+              className="rounded-xl bg-otto-green px-3.5 py-2.5 text-[12px] font-bold text-white disabled:opacity-40"
+            >
+              Add custom library
+            </button>
+          </form>
+        </div>
+      </details>
+
+      <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <div className="flex items-center gap-3 px-3.5 py-3">
+          <Library size={18} className="text-otto-text-dim" />
+          <div>
+            <b className="block text-[14px]">Shelves</b>
+            <span className="text-[12px] text-otto-text-dim">Reading, Read, and Want to read stay</span>
+          </div>
+        </div>
+        <div className="mx-3.5 border-t border-otto-divider" />
+        {shelves
+          .filter((shelf) => !shelf.builtin)
+          .map((shelf) => (
+            <div key={shelf.id} className="flex items-center justify-between px-3.5 py-2.5">
+              <span className="text-[14px] font-semibold">{shelf.name}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Remove “${shelf.name}”? Books on it move to Want to read.`
+                    )
+                  ) {
+                    void onRemoveShelf(shelf);
+                  }
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim"
+                aria-label={`Remove ${shelf.name}`}
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        <form onSubmit={(event) => void addShelf(event)} className="flex gap-2 px-3.5 pb-3.5 pt-2">
+          <input
+            value={shelfName}
+            onChange={(event) => setShelfName(event.target.value)}
+            placeholder="New shelf"
+            maxLength={40}
+            className="min-w-0 flex-1 rounded-[10px] border border-otto-divider bg-otto-bg px-3 py-2 text-[14px]"
+          />
+          <button
+            type="submit"
+            disabled={!shelfName.trim()}
+            className="rounded-xl bg-otto-green px-3 py-2 text-[12.5px] font-bold text-white disabled:opacity-40"
+          >
+            Add
+          </button>
+        </form>
+        {shelfError && (
+          <p className="px-3.5 pb-3 text-[12px] text-otto-red">{shelfError}</p>
+        )}
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <SettingsRow
+          icon={Upload}
+          label="Import JSON"
+          detail={importing ? "Importing…" : "Bookshelf export"}
+          onClick={() => jsonRef.current?.click()}
+        />
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsRow
+          icon={Upload}
+          label="Import CSV"
+          detail={importing ? "Importing…" : "Bookshelf export"}
+          onClick={() => csvRef.current?.click()}
+        />
+        <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow
           icon={Download}
-          label="Export library"
+          label="Export JSON"
           detail={`${books.length} books`}
-          onClick={exportBooks}
+          onClick={() => onExport("json")}
         />
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsRow
+          icon={Download}
+          label="Export CSV"
+          detail={`${books.length} books`}
+          onClick={() => onExport("csv")}
+        />
+        <input
+          ref={jsonRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void importFile(file);
+          }}
+        />
+        <input
+          ref={csvRef}
+          type="file"
+          accept="text/csv,.csv"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void importFile(file);
+          }}
+        />
+        {importError && <p className="px-3.5 pb-3 text-[12px] text-otto-red">{importError}</p>}
       </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
@@ -77,10 +395,35 @@ export function BooksSettingsScreen({
       </div>
 
       <p className="mt-5 rounded-xl bg-otto-surface px-4 py-3 text-[12px] leading-relaxed text-otto-text-dim">
-        Discover sends your saved book titles, ratings, tags, and notes to the configured AI
-        provider only when you request new recommendations. Open Library searches and cover
-        requests stop completely when its setting is off.
+        Discover shows the books and reviews it will send, and only includes the ones you leave
+        checked. Open Library searches and cover requests stop completely when its setting is off.
       </p>
     </section>
+  );
+}
+
+function SettingsInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-otto-text-faint">
+        {label}
+      </span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value.slice(0, 300))}
+        placeholder={placeholder}
+        className="mt-1.5 w-full rounded-xl border border-otto-divider bg-otto-bg px-3 py-2.5 text-[14px]"
+      />
+    </label>
   );
 }

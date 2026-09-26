@@ -53,7 +53,7 @@ create table if not exists bk_books (
   updated_at timestamptz not null default now(),
   constraint bk_books_title_len check (char_length(btrim(title)) between 1 and 240),
   constraint bk_books_author_len check (char_length(btrim(author)) between 1 and 180),
-  constraint bk_books_status_ok check (status in ('reading', 'read', 'want_to_read')),
+  constraint bk_books_status_len check (char_length(btrim(status)) between 1 and 48),
   constraint bk_books_progress_ok check (progress_percent between 0 and 100),
   constraint bk_books_rating_ok check (rating between 0 and 5 and mod(rating * 2, 1) = 0),
   constraint bk_books_format_ok check (format in ('print', 'ebook', 'audiobook', 'other')),
@@ -68,6 +68,30 @@ create table if not exists bk_books (
 alter table bk_books add column if not exists isbn text;
 alter table bk_books add column if not exists open_library_id text;
 alter table bk_books add column if not exists cover_id integer;
+alter table bk_books drop constraint if exists bk_books_status_ok;
+alter table bk_books drop constraint if exists bk_books_status_len;
+alter table bk_books add constraint bk_books_status_len check (char_length(btrim(status)) between 1 and 48);
+
+create table if not exists bk_shelves (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  slug text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, slug),
+  constraint bk_shelves_name_len check (char_length(btrim(name)) between 1 and 40)
+);
+
+alter table bk_shelves enable row level security;
+drop policy if exists "bk_shelves_select_own" on bk_shelves;
+create policy "bk_shelves_select_own" on bk_shelves
+for select using (auth.uid() = user_id);
+drop policy if exists "bk_shelves_insert_own" on bk_shelves;
+create policy "bk_shelves_insert_own" on bk_shelves
+for insert with check (auth.uid() = user_id);
+drop policy if exists "bk_shelves_delete_own" on bk_shelves;
+create policy "bk_shelves_delete_own" on bk_shelves
+for delete using (auth.uid() = user_id);
 
 create index if not exists bk_books_user_status_idx
   on bk_books (user_id, status, updated_at desc)

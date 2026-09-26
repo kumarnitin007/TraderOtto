@@ -1,19 +1,13 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, Star } from "lucide-react";
 import { BookCover, StarRating } from "@/components/books/BookCover";
-import { filterBooks } from "@/lib/books";
-import type { ScreenOptions } from "@/lib/screenCache";
-import type { Book, BookStatus } from "@/types/book";
-
-const FILTERS: { id: BookStatus; label: string }[] = [
-  { id: "reading", label: "Reading" },
-  { id: "read", label: "Read" },
-  { id: "want_to_read", label: "Want to read" },
-];
+import { FAVORITES_FILTER, filterBooks } from "@/lib/books";
+import type { Book, BookShelf } from "@/types/book";
 
 export function BookshelfScreen({
   books,
+  shelves,
   filter,
   onFilter,
   onSelect,
@@ -22,8 +16,9 @@ export function BookshelfScreen({
   externalCovers,
 }: {
   books: Book[];
-  filter: ScreenOptions["booksFilter"];
-  onFilter: (filter: ScreenOptions["booksFilter"]) => void;
+  shelves: BookShelf[];
+  filter: string;
+  onFilter: (filter: string) => void;
   onSelect: (book: Book) => void;
   onAdd: () => void;
   loading: boolean;
@@ -47,18 +42,30 @@ export function BookshelfScreen({
       </div>
 
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-        {FILTERS.map((item) => (
+        <button
+          type="button"
+          onClick={() => onFilter(FAVORITES_FILTER)}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-bold ${
+            filter === FAVORITES_FILTER
+              ? "bg-otto-text text-otto-bg"
+              : "bg-otto-surface text-otto-text-dim"
+          }`}
+        >
+          <Star size={13} className={filter === FAVORITES_FILTER ? "fill-current" : ""} />
+          Favorites
+        </button>
+        {shelves.map((item) => (
           <button
-            key={item.id}
+            key={item.slug}
             type="button"
-            onClick={() => onFilter(item.id)}
+            onClick={() => onFilter(item.slug)}
             className={`shrink-0 rounded-full px-4 py-2 text-[12.5px] font-bold ${
-              filter === item.id
+              filter === item.slug
                 ? "bg-otto-text text-otto-bg"
                 : "bg-otto-surface text-otto-text-dim"
             }`}
           >
-            {item.label}
+            {item.name}
           </button>
         ))}
       </div>
@@ -79,7 +86,9 @@ export function BookshelfScreen({
           <BookCover title="Book" color="#4d8069" size="sm" />
           <h2 className="mt-3 font-extrabold">No books here yet</h2>
           <p className="mt-1 text-[13px] text-otto-text-dim">
-            Add a title and choose this shelf to get started.
+            {filter === FAVORITES_FILTER
+              ? "Star a book from its menu to keep it in Favorites."
+              : "Add a title and choose this shelf to get started."}
           </p>
           <button
             type="button"
@@ -138,7 +147,10 @@ function BookRow({
         size="sm"
       />
       <span className="min-w-0 flex-1">
-        <b className="block truncate text-[15px]">{book.title}</b>
+        <b className="flex items-center gap-1 truncate text-[15px]">
+          <span className="truncate">{book.title}</span>
+          {book.favorite && <Star size={13} className="shrink-0 fill-otto-amber text-otto-amber" />}
+        </b>
         <span className="block truncate text-[12.5px] text-otto-text-dim">{book.author}</span>
         {compact || book.status === "read" ? (
           <StarRating value={book.rating} />

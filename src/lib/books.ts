@@ -20,9 +20,30 @@ export function bookCoverColor(title: string): string {
   return COVER_COLORS[hash % COVER_COLORS.length];
 }
 
-export function filterBooks(books: Book[], status: BookStatus): Book[] {
+export const BUILTIN_SHELVES: { id: string; name: string; slug: BookStatus; builtin: true }[] = [
+  { id: "reading", name: "Reading", slug: "reading", builtin: true },
+  { id: "read", name: "Read", slug: "read", builtin: true },
+  { id: "want_to_read", name: "Want to read", slug: "want_to_read", builtin: true },
+];
+
+export function shelfSlug(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  if (!slug || BUILTIN_SHELVES.some((shelf) => shelf.slug === slug)) {
+    return `shelf-${slug || "custom"}`.slice(0, 48);
+  }
+  return slug;
+}
+
+export const FAVORITES_FILTER = "favorites";
+
+export function filterBooks(books: Book[], status: string): Book[] {
   return books
-    .filter((book) => book.status === status)
+    .filter((book) => (status === FAVORITES_FILTER ? book.favorite : book.status === status))
     .sort((a, b) => {
       if (status === "read") {
         return (b.finishedAt ?? b.updatedAt).localeCompare(a.finishedAt ?? a.updatedAt);
