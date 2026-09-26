@@ -12,12 +12,14 @@ import {
   Upload,
   UserRound,
 } from "lucide-react";
+import { LibraryCheck } from "@/components/books/LibraryCheck";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 import {
   KNOWN_BOOK_CATALOGS,
   type BooksPreferences,
   type ReaderAudience,
 } from "@/lib/booksPreferences";
+import type { CleanupAction } from "@/lib/bookCleanup";
 import type { Book, BookShelf } from "@/types/book";
 
 export function BooksSettingsScreen({
@@ -31,6 +33,7 @@ export function BooksSettingsScreen({
   onRemoveShelf,
   onExport,
   onImport,
+  onApplyCleanup,
 }: {
   books: Book[];
   shelves: BookShelf[];
@@ -42,6 +45,7 @@ export function BooksSettingsScreen({
   onRemoveShelf: (shelf: BookShelf, destination?: string) => Promise<void>;
   onExport: (format: "json" | "csv") => void;
   onImport: (file: File) => Promise<void>;
+  onApplyCleanup: (actions: CleanupAction[]) => Promise<void>;
 }) {
   const [shelfName, setShelfName] = useState("");
   const [shelfError, setShelfError] = useState("");
@@ -401,6 +405,12 @@ export function BooksSettingsScreen({
           <p className="px-3.5 pb-3 text-[12px] text-otto-red">{shelfError}</p>
         )}
       </details>
+
+      <LibraryCheck
+        books={books}
+        openLibraryEnabled={openLibraryEnabled}
+        onApply={onApplyCleanup}
+      />
 
       <details className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">

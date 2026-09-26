@@ -7,6 +7,7 @@ import { BookEditor } from "@/components/books/BookEditor";
 import { BookSheet } from "@/components/books/BookSheet";
 import { BooksBottomNav, type BooksTab } from "@/components/books/BooksBottomNav";
 import { BooksSettingsScreen } from "@/components/books/BooksSettingsScreen";
+import type { CleanupAction } from "@/lib/bookCleanup";
 import { BooksStatsScreen } from "@/components/books/BooksStatsScreen";
 import { BookshelfScreen } from "@/components/books/BookshelfScreen";
 import { DiscoverScreen } from "@/components/books/DiscoverScreen";
@@ -101,6 +102,23 @@ export function BooksWorkspace() {
     const { id: _id, userId: _userId, createdAt: _createdAt, updatedAt: _updatedAt, ...input } =
       book;
     return { ...input, ...patch };
+  }
+
+  async function applyCleanup(actions: CleanupAction[]) {
+    const byId = new Map(booksState.books.map((book) => [book.id, book]));
+    for (const action of actions) {
+      if (action.kind !== "update" || !action.patch) continue;
+      const book = byId.get(action.bookId);
+      if (!book) continue;
+      await booksState.saveBook(toInput(book, action.patch), book.id);
+    }
+    for (const action of actions) {
+      if (action.kind === "remove") await booksState.deleteBook(action.bookId);
+    }
+    setSelected(null);
+    setDetailOpen(false);
+    setToast("Library updated");
+    window.setTimeout(() => setToast(""), 1800);
   }
 
   async function updateBook(book: Book, patch: Partial<BookInput>) {
@@ -352,6 +370,7 @@ export function BooksWorkspace() {
           }}
           onExport={exportLibrary}
           onImport={importLibrary}
+          onApplyCleanup={applyCleanup}
         />
       )}
 

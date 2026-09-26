@@ -1,12 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, KeyRound, NotebookPen, ListTodo, LineChart } from "lucide-react";
+import { BookOpen, CalendarHeart, KeyRound, LineChart, NotebookPen } from "lucide-react";
 
 export const APP_WORKSPACES = [
   "trader",
   "vault",
   "books",
   "journal",
-  "tasks",
+  "life",
 ] as const;
 
 export type AppWorkspace = (typeof APP_WORKSPACES)[number];
@@ -48,12 +48,12 @@ export const APP_WORKSPACE_META: Record<AppWorkspace, AppWorkspaceMeta> = {
     tagline: "Private writing",
     icon: NotebookPen,
   },
-  tasks: {
-    id: "tasks",
-    label: "Tasks",
-    product: "Otto Tasks",
-    tagline: "Personal task manager",
-    icon: ListTodo,
+  life: {
+    id: "life",
+    label: "Life",
+    product: "Otto Life",
+    tagline: "Dates that matter",
+    icon: CalendarHeart,
   },
 };
 
@@ -63,6 +63,6 @@ export function isAppWorkspace(value: unknown): value is AppWorkspace {
     value === "vault" ||
     value === "books" ||
     value === "journal" ||
-    value === "tasks"
+    value === "life"
   );
 }

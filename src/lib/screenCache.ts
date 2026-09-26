@@ -127,7 +127,9 @@ export function readScreenOptions(): ScreenOptions {
         parsed.tradeScope === "credit_spreads" ? "credit_spreads" : "all",
       appWorkspace: isAppWorkspace(parsed.appWorkspace)
         ? parsed.appWorkspace
-        : SCREEN_OPTION_DEFAULTS.appWorkspace,
+        : parsed.appWorkspace === "tasks"
+          ? "life"
+          : SCREEN_OPTION_DEFAULTS.appWorkspace,
       booksTab:
         parsed.booksTab === "discover" ||
         parsed.booksTab === "add" ||
