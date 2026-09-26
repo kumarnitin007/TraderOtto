@@ -182,6 +182,21 @@ export function createSupabaseBookRepository(
       return { ...shelf, builtin: false };
     },
 
+    async renameShelf(id, name) {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed.length > 40) throw new Error("Enter a shelf name up to 40 characters.");
+      const { data, error } = await supabase
+        .from("bk_shelves")
+        .update({ name: trimmed })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select("id, name, slug")
+        .single();
+      if (error) throw new Error(error.message);
+      const shelf = data as { id: string; name: string; slug: string };
+      return { ...shelf, builtin: false as const };
+    },
+
     async removeShelf(id, destination) {
       const nextStatus = destination?.trim() ?? "";
       if (nextStatus && !/^[a-z0-9_-]{1,48}$/.test(nextStatus)) {

@@ -422,6 +422,9 @@ export function BooksWorkspace() {
           openLibraryEnabled={openLibraryEnabled}
           onOpenLibraryChange={setOpenLibraryEnabled}
           onAddShelf={(name) => booksState.addShelf(name).then(() => undefined)}
+          onRenameShelf={(shelf, name) =>
+            booksState.renameShelf(shelf, name).then(() => undefined)
+          }
           onRemoveShelf={async (shelf, destination) => {
             await booksState.removeShelf(shelf, destination);
             if (filter === shelf.slug) setFilter(destination || "reading");

@@ -20,7 +20,7 @@ import {
   lifeOccasionLabel,
 } from "@/lib/life";
 import { lifeTaskKey } from "@/lib/lifeTasks";
-import { lifeExportJson, type LifeExportOptions } from "@/lib/lifeTransfer";
+import { lifeExportCsv, lifeExportJson, type LifeExportOptions } from "@/lib/lifeTransfer";
 import type { LifeCategory, LifeInput, LifeItem, LifeListItemInput, LifeTaskInput } from "@/types/life";
 import { EMPTY_LIFE_INPUT, LIFE_CATEGORIES } from "@/types/life";
 
@@ -182,16 +182,17 @@ export function LifeWorkspace() {
     }
   }
 
-  function exportLife(options: LifeExportOptions) {
-    const text = lifeExportJson(
-      { dates: items, habits: tasks, checks, lists, listItems },
-      options
-    );
-    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+  function exportLife(format: "json" | "csv", options: LifeExportOptions) {
+    const payload = { dates: items, habits: tasks, checks, lists, listItems };
+    const text =
+      format === "csv" ? lifeExportCsv(payload, options) : lifeExportJson(payload, options);
+    const blob = new Blob([text], {
+      type: format === "csv" ? "text/csv;charset=utf-8" : "application/json;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `otto-life-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `otto-life-${new Date().toISOString().slice(0, 10)}.${format}`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -295,7 +296,7 @@ export function LifeWorkspace() {
             );
             setIncoming(dates.length || importedTasks.length ? { dates, tasks: importedTasks } : null);
           }}
-          onExport={(options) => exportLife(options)}
+          onExport={(format, options) => exportLife(format, options)}
         />
       ) : (
       <>

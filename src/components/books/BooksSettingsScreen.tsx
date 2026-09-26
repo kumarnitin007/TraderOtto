@@ -6,6 +6,7 @@ import {
   Download,
   Library,
   MapPin,
+  Pencil,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -35,6 +36,7 @@ export function BooksSettingsScreen({
   openLibraryEnabled,
   onOpenLibraryChange,
   onAddShelf,
+  onRenameShelf,
   onRemoveShelf,
   onExport,
   onImport,
@@ -47,6 +49,7 @@ export function BooksSettingsScreen({
   openLibraryEnabled: boolean;
   onOpenLibraryChange: (enabled: boolean) => void;
   onAddShelf: (name: string) => Promise<void>;
+  onRenameShelf: (shelf: BookShelf, name: string) => Promise<void>;
   onRemoveShelf: (shelf: BookShelf, destination?: string) => Promise<void>;
   onExport: (format: "json" | "csv", options: BookExportOptions) => void;
   onImport: (file: File) => Promise<void>;
@@ -54,6 +57,8 @@ export function BooksSettingsScreen({
 }) {
   const [shelfName, setShelfName] = useState("");
   const [shelfError, setShelfError] = useState("");
+  const [renamingShelf, setRenamingShelf] = useState<BookShelf | null>(null);
+  const [renameText, setRenameText] = useState("");
   const [removingShelf, setRemovingShelf] = useState<BookShelf | null>(null);
   const [moveTo, setMoveTo] = useState("want_to_read");
   const [importError, setImportError] = useState("");
@@ -317,31 +322,88 @@ export function BooksSettingsScreen({
           </span>
         </summary>
         <div className="mx-3.5 border-t border-otto-divider" />
-        {shelves
-          .filter((shelf) => !shelf.builtin)
-          .map((shelf, index) => {
+        {shelves.map((shelf, index) => {
             const bookCount = books.filter((book) => book.status === shelf.slug).length;
             const destinations = shelves.filter((item) => item.slug !== shelf.slug);
+            const renaming = renamingShelf?.id === shelf.id;
             return (
               <div
                 key={shelf.id}
                 className={`px-3.5 py-2.5 ${index > 0 ? "border-t border-otto-divider" : ""}`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-[14px] font-semibold">{shelf.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShelfError("");
-                      setRemovingShelf(shelf);
-                      setMoveTo("want_to_read");
-                    }}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim"
-                    aria-label={`Remove ${shelf.name}`}
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-semibold">{shelf.name}</span>
+                    <span className="block text-[12px] text-otto-text-dim">
+                      {bookCount} book{bookCount === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  {!shelf.builtin && (
+                    <span className="flex shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShelfError("");
+                          setRemovingShelf(null);
+                          setRenamingShelf(shelf);
+                          setRenameText(shelf.name);
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim"
+                        aria-label={`Rename ${shelf.name}`}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShelfError("");
+                          setRenamingShelf(null);
+                          setRemovingShelf(shelf);
+                          setMoveTo("want_to_read");
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-dim"
+                        aria-label={`Remove ${shelf.name}`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </span>
+                  )}
                 </div>
+                {renaming && (
+                  <form
+                    className="mt-2 flex gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const next = renameText.trim();
+                      if (!next || next === shelf.name) {
+                        setRenamingShelf(null);
+                        return;
+                      }
+                      void onRenameShelf(shelf, next)
+                        .then(() => setRenamingShelf(null))
+                        .catch((cause: unknown) =>
+                          setShelfError(
+                            cause instanceof Error ? cause.message : "Could not rename this shelf."
+                          )
+                        );
+                    }}
+                  >
+                    <input
+                      value={renameText}
+                      onChange={(event) => setRenameText(event.target.value)}
+                      maxLength={40}
+                      aria-label={`New name for ${shelf.name}`}
+                      className="min-w-0 flex-1 rounded-[10px] border border-otto-divider bg-otto-bg px-3 py-2 text-[14px]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!renameText.trim()}
+                      className="rounded-xl bg-otto-green px-3 py-2 text-[12.5px] font-bold text-white disabled:opacity-40"
+                    >
+                      Save
+                    </button>
+                  </form>
+                )}
                 {removingShelf?.id === shelf.id && (
                   <div className="mt-2 rounded-xl bg-otto-bg px-3 py-3">
                     <p className="text-[12.5px] leading-snug text-otto-text-dim">

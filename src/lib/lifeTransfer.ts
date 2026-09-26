@@ -68,3 +68,142 @@ export function lifeExportJson(
   }
   return JSON.stringify(payload, null, 2);
 }
+
+const CSV_HEADERS = [
+  "section",
+  "name",
+  "list",
+  "category",
+  "notes",
+  "month",
+  "day",
+  "year",
+  "occurs_on",
+  "repeats",
+  "remind_days",
+  "milestone",
+  "cadence",
+  "target_count",
+  "done_on",
+  "text",
+  "done",
+  "due_on",
+] as const;
+
+/** One spreadsheet: each row is a date, habit, check, or to-do. */
+export function lifeExportCsv(
+  data: {
+    dates: LifeItem[];
+    habits: LifeTask[];
+    checks: LifeTaskCheck[];
+    lists: LifeList[];
+    listItems: LifeListItem[];
+  },
+  options: LifeExportOptions
+): string {
+  const rows: string[][] = [];
+  if (options.dates) {
+    for (const item of data.dates) {
+      rows.push([
+        "date",
+        item.name,
+        "",
+        item.category,
+        item.notes,
+        String(item.month),
+        String(item.day),
+        item.year == null ? "" : String(item.year),
+        item.occursOn ?? "",
+        item.repeats,
+        String(item.remindDays),
+        item.milestone ? "true" : "false",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ]);
+    }
+  }
+  if (options.habits) {
+    for (const task of data.habits) {
+      rows.push([
+        "habit",
+        task.name,
+        "",
+        "",
+        task.notes,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        task.cadence,
+        String(task.targetCount),
+        "",
+        "",
+        "",
+        "",
+      ]);
+    }
+  }
+  if (options.habitHistory) {
+    const names = new Map(data.habits.map((task) => [task.id, task.name]));
+    for (const check of data.checks) {
+      rows.push([
+        "habit_check",
+        names.get(check.taskId) ?? "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        check.doneOn,
+        "",
+        "",
+        "",
+      ]);
+    }
+  }
+  if (options.todos) {
+    const lists = new Map(data.lists.map((list) => [list.id, list.name]));
+    for (const item of data.listItems) {
+      rows.push([
+        "todo",
+        "",
+        lists.get(item.listId) ?? "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        item.text,
+        item.done ? "true" : "false",
+        item.dueOn ?? "",
+      ]);
+    }
+  }
+  return [CSV_HEADERS.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\n");
+}
+
+function csvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}

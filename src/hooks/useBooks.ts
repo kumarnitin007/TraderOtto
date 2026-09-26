@@ -104,6 +104,18 @@ export function useBooks() {
     [repository]
   );
 
+  const renameShelf = useCallback(
+    async (shelf: BookShelf, name: string) => {
+      if (!repository || shelf.builtin) return shelf;
+      const saved = await repository.renameShelf(shelf.id, name);
+      setCustomShelves((current) =>
+        current.map((item) => (item.id === shelf.id ? saved : item))
+      );
+      return saved;
+    },
+    [repository]
+  );
+
   const removeShelf = useCallback(
     async (shelf: BookShelf, destination?: string) => {
       if (!repository || shelf.builtin || destination === shelf.slug) return;
@@ -142,6 +154,7 @@ export function useBooks() {
     deleteBook,
     saveDiscovery,
     addShelf,
+    renameShelf,
     removeShelf,
   };
 }

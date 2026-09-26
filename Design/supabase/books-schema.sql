@@ -92,6 +92,10 @@ for insert with check (auth.uid() = user_id);
 drop policy if exists "bk_shelves_delete_own" on bk_shelves;
 create policy "bk_shelves_delete_own" on bk_shelves
 for delete using (auth.uid() = user_id);
+drop policy if exists "bk_shelves_update_own" on bk_shelves;
+create policy "bk_shelves_update_own" on bk_shelves
+for update using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
 
 create index if not exists bk_books_user_status_idx
   on bk_books (user_id, status, updated_at desc)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lifeExportJson } from "@/lib/lifeTransfer";
+import { lifeExportCsv, lifeExportJson } from "@/lib/lifeTransfer";
 import type { LifeItem, LifeList, LifeListItem, LifeTask, LifeTaskCheck } from "@/types/life";
 
 const date: LifeItem = {
@@ -61,5 +61,31 @@ describe("life export", () => {
     expect(parsed.dates).toHaveLength(1);
     expect(parsed.habits).toBeUndefined();
     expect(parsed.todos[0].name).toBe("Errands");
+  });
+
+  it("writes a csv row for each chosen section", () => {
+    const text = lifeExportCsv(
+      {
+        dates: [date],
+        habits: [],
+        checks: [],
+        lists: [],
+        listItems: [
+          {
+            id: "i1",
+            listId: "l1",
+            text: "Call, school",
+            done: false,
+            dueOn: "2026-09-26",
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      },
+      { dates: true, habits: false, habitHistory: false, todos: true }
+    );
+    expect(text.split("\n")[0]).toContain("section,name");
+    expect(text).toContain("date,Ada,");
+    expect(text).toContain('"Call, school"');
   });
 });

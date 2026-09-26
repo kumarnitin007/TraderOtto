@@ -19,7 +19,7 @@ export function LifeSettingsScreen({
   readonly: boolean;
   notice: string;
   onFile: (dates: LifeInput[], tasks: LifeTaskInput[]) => void;
-  onExport: (options: LifeExportOptions) => void;
+  onExport: (format: "json" | "csv", options: LifeExportOptions) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [exportOptions, setExportOptions] = useState<LifeExportOptions>(
@@ -75,15 +75,26 @@ export function LifeSettingsScreen({
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            disabled={!selected}
-            onClick={() => onExport(exportOptions)}
-            className="mt-3 flex items-center gap-2 rounded-full bg-otto-bg px-4 py-2 text-[13px] font-bold disabled:opacity-40"
-          >
-            <Download size={15} />
-            Export JSON
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() => onExport("json", exportOptions)}
+              className="flex items-center gap-2 rounded-full bg-otto-bg px-4 py-2 text-[13px] font-bold disabled:opacity-40"
+            >
+              <Download size={15} />
+              Export JSON
+            </button>
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() => onExport("csv", exportOptions)}
+              className="flex items-center gap-2 rounded-full bg-otto-bg px-4 py-2 text-[13px] font-bold disabled:opacity-40"
+            >
+              <Download size={15} />
+              Export CSV
+            </button>
+          </div>
         </div>
       </div>
       <input
