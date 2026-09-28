@@ -139,15 +139,21 @@ export async function openAiObject(prompt: string, webSearch = true) {
       model: env("OPENAI_MODEL", "gpt-4o-mini"),
       input: prompt,
       ...(webSearch ? { tools: [{ type: "web_search_preview" }] } : {}),
-      text: { format: { type: "json_object" } },
+      // The Responses API rejects web_search combined with json_object mode.
+      // Prompts using this helper already explicitly require JSON-only output.
+      ...(!webSearch ? { text: { format: { type: "json_object" } } } : {}),
     }),
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload?.error?.message ?? "OpenAI request failed.");
   const text = openAiOutput(payload);
   if (!text) throw new Error("OpenAI returned no report.");
+  const jsonText = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
   return {
-    value: JSON.parse(text),
+    value: JSON.parse(jsonText),
     model: payload.model ?? env("OPENAI_MODEL", "gpt-4o-mini"),
     tokensIn: payload.usage?.input_tokens ?? null,
     tokensOut: payload.usage?.output_tokens ?? null,
