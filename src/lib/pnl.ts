@@ -164,7 +164,7 @@ export const PNL_RANGE_OPTIONS: {
   label: string;
   heading: string;
 }[] = [
-  { id: "week", label: "Last 7 days", heading: "7-day P/L" },
+  { id: "week", label: "This week", heading: "This week P/L" },
   { id: "month", label: "This month", heading: "This month P/L" },
   { id: "3m", label: "Last 3 months", heading: "3-month P/L" },
   { id: "ytd", label: "YTD", heading: "YTD P/L" },
@@ -179,10 +179,7 @@ export function rangeStart(range: PnlRange, now = new Date()): Date | null {
   if (range === "ytd") return new Date(now.getFullYear(), 0, 1);
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
-  if (range === "week") {
-    start.setDate(start.getDate() - 6);
-    return start;
-  }
+  if (range === "week") return startOfWeek(now);
   if (range === "3m") {
     start.setMonth(start.getMonth() - 3);
     return start;
