@@ -4,14 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import {
   readScreenOptions,
   SCREEN_OPTION_DEFAULTS,
-  writeScreenOptions,
+  SCREEN_OPTIONS_EVENT,
+  updateScreenOptions,
   type ScreenOptions,
 } from "@/lib/screenCache";
 
-const SCREEN_OPTIONS_EVENT = "trader-otto:screen-options-changed";
-
 export function useScreenOption<K extends keyof ScreenOptions>(key: K) {
-  const [value, setValue] = useState<ScreenOptions[K]>(SCREEN_OPTION_DEFAULTS[key]);
+  const [value, setValue] = useState<ScreenOptions[K]>(() =>
+    typeof window === "undefined" ? SCREEN_OPTION_DEFAULTS[key] : readScreenOptions()[key]
+  );
 
   useEffect(() => {
     const sync = () => setValue(readScreenOptions()[key]);
@@ -28,9 +29,8 @@ export function useScreenOption<K extends keyof ScreenOptions>(key: K) {
     (next: ScreenOptions[K] | ((current: ScreenOptions[K]) => ScreenOptions[K])) => {
       const current = readScreenOptions()[key];
       const resolved = typeof next === "function" ? next(current) : next;
-      writeScreenOptions({ ...readScreenOptions(), [key]: resolved });
+      updateScreenOptions({ [key]: resolved });
       setValue(resolved);
-      window.dispatchEvent(new Event(SCREEN_OPTIONS_EVENT));
     },
     [key]
   );

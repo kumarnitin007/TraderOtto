@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, Clock3, EyeOff, ShieldAlert } from "lucide-react";
+import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 import type { TraderSettingsSection } from "@/components/settings/NotificationSettings";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -24,7 +25,11 @@ export function TraderSettingsScreen({
         Tune alerts, timing, and position risk in focused sections.
       </p>
 
-      <div className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
+      <div className="mt-5">
+        <SectionPreferences />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow
           icon={Bell}
           label="Alerts & channels"

@@ -106,7 +106,7 @@ export function LoginScreen() {
               O
             </div>
             <h1 className="text-[15px] font-semibold leading-snug tracking-[-0.2px] text-otto-text">
-              Trader Otto
+              Otto's World
             </h1>
           </div>
         )}
@@ -380,7 +380,7 @@ export function LoginScreen() {
 
         <div className="flex-1" />
         <p className="mt-8 text-center text-[11.5px] leading-relaxed text-otto-text-faint">
-          By continuing, you agree to Trader Otto’s Terms and Privacy Policy.
+          By continuing, you agree to the Otto's World Terms and Privacy Policy.
         </p>
       </div>
     </div>

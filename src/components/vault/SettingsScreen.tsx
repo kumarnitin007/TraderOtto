@@ -11,6 +11,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
+import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 
 export function SettingsScreen({
@@ -41,7 +42,11 @@ export function SettingsScreen({
       </p>
       <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
 
-      <div className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
+      <div className="mt-5">
+        <SectionPreferences />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow icon={Tag} label="Tags" detail={`${tagCount} tags`} onClick={onManageTags} />
         <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow

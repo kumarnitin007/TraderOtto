@@ -20,16 +20,21 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+function readSavedTheme(): Theme {
+  if (typeof document === "undefined") return "warm-paper";
+  const saved = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${COOKIE_KEY}=`))
+    ?.split("=")[1];
+  return saved === "dark" ? "dark" : "warm-paper";
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>(readSavedTheme);
 
   useEffect(() => {
-    const saved = document.cookie
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(`${COOKIE_KEY}=`))
-      ?.split("=")[1];
-    const next: Theme = saved === "warm-paper" ? "warm-paper" : "dark";
+    const next = readSavedTheme();
     setTheme(next);
     document.documentElement.dataset.theme = next;
   }, []);

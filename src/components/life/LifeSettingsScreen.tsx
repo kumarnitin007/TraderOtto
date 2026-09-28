@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
+import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { parseLeoEvents } from "@/lib/life";
 import { parseLeoTasks } from "@/lib/lifeTasks";
 import {
@@ -36,6 +37,7 @@ export function LifeSettingsScreen({
   return (
     <div>
       <h1 className="mb-3 text-[22px] font-extrabold tracking-[-0.3px]">Settings</h1>
+      <SectionPreferences />
       <div className="overflow-hidden rounded-2xl bg-otto-surface">
         <button
           type="button"

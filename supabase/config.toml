@@ -1,0 +1,23 @@
+[functions.quotes]
+verify_jwt = false
+
+[functions.ticker]
+verify_jwt = false
+
+[functions.option-spreads]
+verify_jwt = false
+
+[functions.books-search]
+verify_jwt = false
+
+[functions.books-identify]
+verify_jwt = false
+
+[functions.books-discover]
+verify_jwt = false
+
+[functions.notifications-deliver]
+verify_jwt = false
+
+[functions.notifications-telegram]
+verify_jwt = false

@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { APP_WORKSPACE_META, type AppWorkspace } from "@/lib/appWorkspace";
 
 export function WorkspacePlaceholder({ workspace }: { workspace: AppWorkspace }) {
@@ -14,8 +15,11 @@ export function WorkspacePlaceholder({ workspace }: { workspace: AppWorkspace })
         <h2 className="mt-4 text-xl font-extrabold">{meta.product}</h2>
         <p className="mt-2 text-sm leading-relaxed text-otto-text-dim">
           {meta.tagline}. Theme, type, and icon style stay with Otto. This
-          workspace is a shell until its screens are wired in.
+          section is a shell until its screens are wired in.
         </p>
+      </div>
+      <div className="mt-6 text-left">
+        <SectionPreferences />
       </div>
     </div>
   );

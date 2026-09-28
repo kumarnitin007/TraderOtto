@@ -10,6 +10,10 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
+import { applyDefaultSection, LAND_ON_DEFAULT_KEY } from "@/lib/screenCache";
 import {
   getSupabaseClient,
   isServiceRoleKey,
@@ -87,6 +91,12 @@ function missingConfigMessage() {
   return "Supabase is not configured.";
 }
 
+function authRedirectUrl() {
+  return Capacitor.isNativePlatform()
+    ? "com.traderotto.app://auth/callback"
+    : `${window.location.origin}/auth/callback`;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,6 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
+        if (
+          _event === "SIGNED_IN" &&
+          sessionStorage.getItem(LAND_ON_DEFAULT_KEY) === "1"
+        ) {
+          sessionStorage.removeItem(LAND_ON_DEFAULT_KEY);
+          applyDefaultSection();
+        }
         setBypassCookie(false);
         setUser(mapUser(session.user));
         return;
@@ -126,6 +143,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = App.addListener("appUrlOpen", async ({ url }) => {
+      if (!url.startsWith("com.traderotto.app://auth/callback")) return;
+      const callback = new URL(url);
+      const code = callback.searchParams.get("code");
+      const supabase = getSupabaseClient();
+      if (code && supabase) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (!exchangeError) {
+          sessionStorage.removeItem(LAND_ON_DEFAULT_KEY);
+          applyDefaultSection();
+        }
+      }
+      await Browser.close().catch(() => undefined);
+    });
+    return () => {
+      void listener.then((handle) => handle.remove());
     };
   }, []);
 
@@ -144,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(messageFrom(signInError));
       return false;
     }
+    applyDefaultSection();
     return true;
   }, []);
 
@@ -158,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: authRedirectUrl(),
       },
     });
     if (signUpError) {
@@ -203,6 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(messageFrom(verifyError));
       return false;
     }
+    applyDefaultSection();
     return true;
   }, []);
 
@@ -213,15 +253,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(missingConfigMessage());
       return false;
     }
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+    sessionStorage.setItem(LAND_ON_DEFAULT_KEY, "1");
+    const redirectTo = authRedirectUrl();
+    const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo,
+        skipBrowserRedirect: Capacitor.isNativePlatform(),
       },
     });
     if (oauthError) {
+      sessionStorage.removeItem(LAND_ON_DEFAULT_KEY);
       setError(messageFrom(oauthError));
       return false;
+    }
+    if (Capacitor.isNativePlatform() && data.url) {
+      await Browser.open({ url: data.url });
     }
     return true;
   }, []);
@@ -234,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback`,
+      redirectTo: authRedirectUrl(),
     });
     if (resetError) {
       setError(messageFrom(resetError));
@@ -245,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const skipLogin = useCallback(() => {
     setError("");
+    applyDefaultSection();
     setBypassCookie(true);
     setUser(BYPASS_USER);
   }, []);

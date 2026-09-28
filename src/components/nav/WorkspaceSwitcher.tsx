@@ -11,6 +11,7 @@ import {
 
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   const [workspace, setWorkspace] = useScreenOption("appWorkspace");
+  const [enabledSections] = useScreenOption("enabledSections");
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = APP_WORKSPACE_META[workspace];
@@ -58,7 +59,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
           role="menu"
           className="absolute right-0 top-full z-40 mt-1.5 w-[220px] overflow-hidden rounded-xl border border-otto-divider bg-otto-bg py-1 shadow-2xl"
         >
-          {APP_WORKSPACES.map((id) => {
+          {APP_WORKSPACES.filter((id) => enabledSections.includes(id)).map((id) => {
             const item = APP_WORKSPACE_META[id];
             const Icon = item.icon;
             const active = id === workspace;

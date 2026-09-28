@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AppFrame } from "@/components/auth/AppFrame";
+import { ApiBridge } from "@/components/app/ApiBridge";
+import { AndroidBridge } from "@/components/app/AndroidBridge";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,33 +14,35 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Trader Otto",
-  description: "Personal options trade journal",
+  title: "Otto's World",
+  description: "Trader, vault, books, journal, and life",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <script
-          nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html:
-              "try{var m=document.cookie.match(/(?:^|; )trader-otto-theme=([^;]*)/);document.documentElement.dataset.theme=m&&m[1]==='warm-paper'?'warm-paper':'dark'}catch(e){}",
+              "try{var m=document.cookie.match(/(?:^|; )trader-otto-theme=([^;]*)/);document.documentElement.dataset.theme=m&&m[1]==='dark'?'dark':'warm-paper'}catch(e){}",
           }}
         />
       </head>
       <body className={`${inter.variable} font-sans`}>
         <ThemeProvider>
-          <AuthProvider>
-            <AppFrame>{children}</AppFrame>
-          </AuthProvider>
+          <ApiBridge>
+            <AndroidBridge>
+              <AuthProvider>
+                <AppFrame>{children}</AppFrame>
+              </AuthProvider>
+            </AndroidBridge>
+          </ApiBridge>
         </ThemeProvider>
       </body>
     </html>

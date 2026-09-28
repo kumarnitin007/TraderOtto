@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Otto's World</string>
+    <string name="title_activity_main">TraderOtto</string>
+    <string name="package_name">com.traderotto.app</string>
+    <string name="custom_url_scheme">com.traderotto.app</string>
+</resources>

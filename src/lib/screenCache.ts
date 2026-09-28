@@ -1,11 +1,17 @@
 /** Browser cache for UI screen options only — not trades or groups. */
 
-import { isAppWorkspace, type AppWorkspace } from "@/lib/appWorkspace";
+import { APP_WORKSPACES, isAppWorkspace, type AppWorkspace } from "@/lib/appWorkspace";
+import {
+  normalizeDefaultSection,
+  normalizeEnabledSections,
+} from "@/lib/sectionPreferences";
 import type { PnlRange } from "@/lib/pnl";
 import type { PositionFocusFilter } from "@/lib/positionFocus";
 import type { TradeScope } from "@/lib/tradeScope";
 
 export const SCREEN_CACHE_KEY = "trader-otto:screen-options";
+export const SCREEN_OPTIONS_EVENT = "trader-otto:screen-options-changed";
+export const LAND_ON_DEFAULT_KEY = "otto-land-on-default";
 
 export type ScreenOptions = {
   positionsView: string;
@@ -22,6 +28,8 @@ export type ScreenOptions = {
   portfolioReportLayout: "actions" | "board" | "detail";
   tradeScope: TradeScope;
   appWorkspace: AppWorkspace;
+  enabledSections: AppWorkspace[];
+  defaultSection: AppWorkspace;
   booksTab: "library" | "discover" | "add" | "stats" | "settings";
   booksFilter: string;
   booksOpenLibraryEnabled: boolean;
@@ -43,6 +51,8 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   portfolioReportLayout: "actions",
   tradeScope: "all",
   appWorkspace: "trader",
+  enabledSections: [...APP_WORKSPACES],
+  defaultSection: "trader",
   booksTab: "library",
   booksFilter: "reading",
   booksOpenLibraryEnabled: true,
@@ -95,7 +105,7 @@ export function readScreenOptions(): ScreenOptions {
     const raw = window.localStorage.getItem(SCREEN_CACHE_KEY);
     if (!raw) return SCREEN_OPTION_DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<ScreenOptions>;
-    return {
+    const options: ScreenOptions = {
       positionsView:
         typeof parsed.positionsView === "string"
           ? parsed.positionsView
@@ -132,6 +142,11 @@ export function readScreenOptions(): ScreenOptions {
         : parsed.appWorkspace === "tasks"
           ? "life"
           : SCREEN_OPTION_DEFAULTS.appWorkspace,
+      enabledSections: normalizeEnabledSections(parsed.enabledSections),
+      defaultSection: normalizeDefaultSection(
+        parsed.defaultSection,
+        normalizeEnabledSections(parsed.enabledSections)
+      ),
       booksTab:
         parsed.booksTab === "discover" ||
         parsed.booksTab === "add" ||
@@ -153,6 +168,10 @@ export function readScreenOptions(): ScreenOptions {
           ? parsed.lifeTab
           : "today",
     };
+    if (!options.enabledSections.includes(options.appWorkspace)) {
+      options.appWorkspace = options.defaultSection;
+    }
+    return options;
   } catch {
     return SCREEN_OPTION_DEFAULTS;
   }
@@ -160,4 +179,15 @@ export function readScreenOptions(): ScreenOptions {
 
 export function writeScreenOptions(next: ScreenOptions) {
   window.localStorage.setItem(SCREEN_CACHE_KEY, JSON.stringify(next));
+}
+
+export function updateScreenOptions(patch: Partial<ScreenOptions>) {
+  writeScreenOptions({ ...readScreenOptions(), ...patch });
+  window.dispatchEvent(new Event(SCREEN_OPTIONS_EVENT));
+}
+
+export function applyDefaultSection() {
+  const options = readScreenOptions();
+  if (options.appWorkspace === options.defaultSection) return;
+  updateScreenOptions({ appWorkspace: options.defaultSection });
 }

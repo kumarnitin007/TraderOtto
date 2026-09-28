@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { LibraryCheck } from "@/components/books/LibraryCheck";
+import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 import {
   KNOWN_BOOK_CATALOGS,
@@ -148,8 +149,11 @@ export function BooksSettingsScreen({
         Books preferences
       </p>
       <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
+      <div className="mt-5">
+        <SectionPreferences />
+      </div>
 
-      <details className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
+      <details className="overflow-hidden rounded-2xl bg-otto-surface">
         <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
           <UserRound size={18} className="text-otto-text-dim" />
           <span>

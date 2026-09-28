@@ -5,11 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "build:android": "npm run build && npx cap sync android && cd android && gradlew.bat assembleDebug",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:apk": "cd android && gradlew.bat assembleDebug",
     "lint": "next lint",
     "test:vault": "vitest run src/lib/vault/crypto.test.ts"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.5.2",
     "@supabase/supabase-js": "^2.116.0",
     "hash-wasm": "^4.12.0",
     "lucide-react": "^0.469.0",
@@ -24,6 +31,8 @@
     "unrs-resolver": true
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",

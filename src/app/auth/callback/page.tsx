@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { applyDefaultSection, LAND_ON_DEFAULT_KEY } from "@/lib/screenCache";
 import { getSupabaseClient } from "@/lib/supabase";
 
 export default function AuthCallbackPage() {
@@ -22,6 +23,8 @@ export default function AuthCallbackPage() {
     }
 
     supabase.auth.exchangeCodeForSession(code).finally(() => {
+      sessionStorage.removeItem(LAND_ON_DEFAULT_KEY);
+      applyDefaultSection();
       router.replace("/positions");
     });
   }, [router]);

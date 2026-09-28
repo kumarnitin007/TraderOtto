@@ -3,23 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --otto-bg: 0 0 0;
-  --otto-surface: 17 18 20;
-  --otto-surface-raise: 24 25 28;
-  --otto-divider: 35 37 41;
-  --otto-text: 255 255 255;
-  --otto-text-dim: 138 141 147;
-  --otto-text-faint: 85 88 94;
-  --otto-green: 0 200 5;
-  --otto-green-soft: 0 24 1;
-  --otto-red: 255 80 0;
-  --otto-red-soft: 31 10 0;
-  --otto-amber: 234 179 8;
-  --otto-amber-soft: 33 25 1;
-  color-scheme: dark;
-}
-
-html[data-theme="warm-paper"] {
   --otto-bg: 246 239 226;
   --otto-surface: 235 223 203;
   --otto-surface-raise: 224 208 181;
@@ -34,6 +17,23 @@ html[data-theme="warm-paper"] {
   --otto-amber: 157 105 13;
   --otto-amber-soft: 234 222 198;
   color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --otto-bg: 0 0 0;
+  --otto-surface: 17 18 20;
+  --otto-surface-raise: 24 25 28;
+  --otto-divider: 35 37 41;
+  --otto-text: 255 255 255;
+  --otto-text-dim: 138 141 147;
+  --otto-text-faint: 85 88 94;
+  --otto-green: 0 200 5;
+  --otto-green-soft: 0 24 1;
+  --otto-red: 255 80 0;
+  --otto-red-soft: 31 10 0;
+  --otto-amber: 234 179 8;
+  --otto-amber-soft: 33 25 1;
+  color-scheme: dark;
 }
 
 @layer base {
@@ -112,6 +112,25 @@ html[data-theme="warm-paper"] {
   ::-webkit-scrollbar {
     width: 0;
     height: 0;
+  }
+
+  :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid rgb(var(--otto-green));
+    outline-offset: 3px;
+  }
+}
+
+@media (min-width: 960px) and (min-aspect-ratio: 16/10) {
+  html {
+    font-size: 17px;
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+
+  :is(button, a, [role="button"]) {
+    scroll-margin: 72px;
   }
 }
 
