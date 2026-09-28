@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, ExternalLink, Plus, RefreshCw, Sparkles } from "lucide-react";
 import { BookCover, StarRating } from "@/components/books/BookCover";
 import { PromptPreview } from "@/components/ai/PromptPreview";
+import { authHeaders } from "@/lib/authHeaders";
+import { coverPatchFromSearch } from "@/lib/bookCleanup";
 import { bookCoverColor } from "@/lib/books";
 import {
   DISCOVERY_BEST_COUNT,
@@ -16,7 +18,12 @@ import {
   type BooksPreferences,
   type RecommendationRequest,
 } from "@/lib/booksPreferences";
-import type { Book, BookRecommendation, StoredBookDiscoveryReport } from "@/types/book";
+import type {
+  Book,
+  BookRecommendation,
+  OpenLibraryBook,
+  StoredBookDiscoveryReport,
+} from "@/types/book";
 
 const RECOMMENDATION_GOALS = [
   "Best match",
@@ -38,6 +45,7 @@ export function DiscoverScreen({
   addingKey,
   onAddToWishlist,
   lastPrompt,
+  externalCovers,
 }: {
   books: Book[];
   preferences: BooksPreferences;
@@ -50,15 +58,66 @@ export function DiscoverScreen({
   addingKey: string | null;
   onAddToWishlist: (book: BookRecommendation) => Promise<void>;
   lastPrompt: string;
+  externalCovers: boolean;
 }) {
   const [reviewing, setReviewing] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [goal, setGoal] = useState<(typeof RECOMMENDATION_GOALS)[number]>("Best match");
   const [requestNote, setRequestNote] = useState("");
+  const [recommendationCovers, setRecommendationCovers] = useState<Record<string, number | null>>(
+    {}
+  );
 
   const suggestedIds = selectDiscoveryBooks(books).map((book) => book.id);
   const sendCount = Math.min(selected.length, DISCOVERY_LIMIT);
+
+  useEffect(() => {
+    if (!report || !externalCovers) {
+      setRecommendationCovers({});
+      return;
+    }
+    let cancelled = false;
+    const recommendations = [...report.recommendations, ...report.notForYou];
+    const unique = recommendations.filter(
+      (book, index) =>
+        recommendations.findIndex((item) => recommendationKey(item) === recommendationKey(book)) ===
+        index
+    );
+    void Promise.all(
+      unique.map(async (book) => {
+        const key = recommendationKey(book);
+        try {
+          const response = await fetch(
+            `/api/books/search?q=${encodeURIComponent(`${book.title} ${book.author}`)}`,
+            { headers: await authHeaders() }
+          );
+          if (!response.ok) return [key, null] as const;
+          const payload = (await response.json()) as { books?: OpenLibraryBook[] };
+          const patch = coverPatchFromSearch(
+            {
+              title: book.title,
+              author: book.author,
+              coverId: null,
+              isbn: "",
+              openLibraryId: "",
+              pageCount: null,
+              tags: [],
+            },
+            payload.books ?? []
+          );
+          return [key, patch?.coverId ?? null] as const;
+        } catch {
+          return [key, null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (!cancelled) setRecommendationCovers(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [externalCovers, report]);
 
   function openReview() {
     setSelected(suggestedIds);
@@ -262,6 +321,8 @@ export function DiscoverScreen({
                   adding={addingKey === key}
                   onAdd={() => onAddToWishlist(book)}
                   catalogs={preferences.catalogs}
+                  coverId={recommendationCovers[recommendationKey(book)]}
+                  externalCovers={externalCovers}
                 />
               );
             })}
@@ -277,6 +338,8 @@ export function DiscoverScreen({
                     key={`${book.title}-${book.author}`}
                     book={book}
                     catalogs={preferences.catalogs}
+                    coverId={recommendationCovers[recommendationKey(book)]}
+                    externalCovers={externalCovers}
                   />
                 ))}
               </div>
@@ -308,16 +371,26 @@ function RecommendationCard({
   adding = false,
   onAdd,
   catalogs = [],
+  coverId = null,
+  externalCovers = true,
 }: {
   book: BookRecommendation;
   inLibrary?: boolean;
   adding?: boolean;
   onAdd?: () => Promise<void>;
   catalogs?: BooksPreferences["catalogs"];
+  coverId?: number | null;
+  externalCovers?: boolean;
 }) {
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-otto-surface px-3.5 py-3">
-      <BookCover title={book.title} color={bookCoverColor(book.title)} size="sm" />
+      <BookCover
+        title={book.title}
+        color={bookCoverColor(book.title)}
+        size="sm"
+        coverId={coverId}
+        externalCovers={externalCovers}
+      />
       <div className="min-w-0 flex-1">
         <b className="block truncate text-[15px]">{book.title}</b>
         <span className="block truncate text-[12px] text-otto-text-dim">{book.author}</span>
@@ -369,6 +442,10 @@ function RecommendationCard({
       )}
     </div>
   );
+}
+
+function recommendationKey(book: Pick<BookRecommendation, "title" | "author">) {
+  return `${book.title.trim().toLowerCase()}\u001f${book.author.trim().toLowerCase()}`;
 }
 
 function audienceLabel(audience: BooksPreferences["audience"]): string {

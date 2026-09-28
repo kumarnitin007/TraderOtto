@@ -410,6 +410,7 @@ export function BooksWorkspace() {
           addingKey={addingRecommendation}
           onAddToWishlist={addRecommendationToWishlist}
           lastPrompt={lastPrompt}
+          externalCovers={openLibraryEnabled}
         />
       )}
       {visibleTab === "stats" && <BooksStatsScreen books={booksState.books} />}
