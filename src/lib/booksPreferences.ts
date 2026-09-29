@@ -13,6 +13,8 @@ export type BooksPreferences = {
   avoid: string;
   readerNotes: string;
   catalogs: BookCatalog[];
+  /** Writes one Journal entry when a book is marked finished or reviewed. */
+  logFinishedBooks: boolean;
 };
 
 export const RECOMMENDATION_CRITERIA = [
@@ -39,6 +41,7 @@ export const DEFAULT_BOOKS_PREFERENCES: BooksPreferences = {
   avoid: "",
   readerNotes: "",
   catalogs: [],
+  logFinishedBooks: true,
 };
 
 export const KNOWN_BOOK_CATALOGS: BookCatalog[] = [
@@ -67,6 +70,7 @@ export function readBooksPreferences(): BooksPreferences {
       likedGenres: text(parsed.likedGenres, 300),
       avoid: text(parsed.avoid, 300),
       readerNotes: text(parsed.readerNotes, 500),
+      logFinishedBooks: parsed.logFinishedBooks !== false,
       catalogs: Array.isArray(parsed.catalogs)
         ? parsed.catalogs
             .filter(isCatalog)

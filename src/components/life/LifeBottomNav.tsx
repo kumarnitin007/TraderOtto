@@ -5,17 +5,19 @@ import {
   CheckCheck,
   House,
   ListTodo,
+  Receipt,
   Settings,
   type LucideIcon,
 } from "lucide-react";
 
-export type LifeTab = "today" | "dates" | "tasks" | "lists" | "settings";
+export type LifeTab = "today" | "dates" | "tasks" | "lists" | "bills" | "settings";
 
 const ITEMS: { id: LifeTab; label: string; icon: LucideIcon }[] = [
   { id: "today", label: "Today", icon: House },
   { id: "dates", label: "Dates", icon: CalendarHeart },
   { id: "tasks", label: "Habits", icon: CheckCheck },
   { id: "lists", label: "To-dos", icon: ListTodo },
+  { id: "bills", label: "Bills", icon: Receipt },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

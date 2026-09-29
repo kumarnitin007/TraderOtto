@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { CalendarHeart, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
+import { LifeBillsScreen } from "@/components/life/LifeBillsScreen";
 import { LifeBottomNav } from "@/components/life/LifeBottomNav";
 import { LifeListsScreen } from "@/components/life/LifeListsScreen";
 import { LifeSettingsScreen } from "@/components/life/LifeSettingsScreen";
@@ -284,6 +285,8 @@ export function LifeWorkspace() {
             await removeListItem(id);
           }}
         />
+      ) : tab === "bills" ? (
+        <LifeBillsScreen />
       ) : tab === "settings" ? (
         <LifeSettingsScreen
           readonly={readonly}

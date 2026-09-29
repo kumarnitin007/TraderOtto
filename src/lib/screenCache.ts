@@ -33,7 +33,8 @@ export type ScreenOptions = {
   booksTab: "library" | "discover" | "add" | "stats" | "settings";
   booksFilter: string;
   booksOpenLibraryEnabled: boolean;
-  lifeTab: "today" | "dates" | "tasks" | "lists" | "settings";
+  lifeTab: "today" | "dates" | "tasks" | "lists" | "bills" | "settings";
+  journalTab: "entries" | "notes" | "add" | "day" | "settings";
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -57,6 +58,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   booksFilter: "reading",
   booksOpenLibraryEnabled: true,
   lifeTab: "today",
+  journalTab: "entries",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -164,9 +166,17 @@ export function readScreenOptions(): ScreenOptions {
         parsed.lifeTab === "dates" ||
         parsed.lifeTab === "tasks" ||
         parsed.lifeTab === "lists" ||
+        parsed.lifeTab === "bills" ||
         parsed.lifeTab === "settings"
           ? parsed.lifeTab
           : "today",
+      journalTab:
+        parsed.journalTab === "notes" ||
+        parsed.journalTab === "add" ||
+        parsed.journalTab === "day" ||
+        parsed.journalTab === "settings"
+          ? parsed.journalTab
+          : "entries",
     };
     if (!options.enabledSections.includes(options.appWorkspace)) {
       options.appWorkspace = options.defaultSection;

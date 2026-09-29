@@ -19,6 +19,7 @@ import { DiscoverScreen } from "@/components/books/DiscoverScreen";
 import { useBooks } from "@/hooks/useBooks";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { authHeaders } from "@/lib/authHeaders";
+import { syncFinishedBookJournal } from "@/lib/bookJournal";
 import { bookCoverColor, bookIdentityKey } from "@/lib/books";
 import {
   bookInputFromImport,
@@ -85,8 +86,17 @@ export function BooksWorkspace() {
     setTab(next);
   }
 
+  async function logFinished(book: Book) {
+    try {
+      await syncFinishedBookJournal(book, preferences.logFinishedBooks);
+    } catch {
+      /* The book save stands even if the journal table is not ready. */
+    }
+  }
+
   async function save(input: BookInput, book?: Book) {
     const saved = await booksState.saveBook(input, book?.id);
+    await logFinished(saved);
     setEditing(null);
     setSelected(saved);
     setDetailOpen(false);
@@ -141,6 +151,7 @@ export function BooksWorkspace() {
         book.id
       );
       setSelected(saved);
+      await logFinished(saved);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Could not update this book.");
     }
@@ -475,6 +486,7 @@ export function BooksWorkspace() {
           onClose={() => setReviewing(null)}
           onSave={async (patch) => {
             const saved = await booksState.saveBook(toInput(reviewing, patch), reviewing.id);
+            await logFinished(saved);
             setSelected(saved);
             setReviewing(null);
             setToast("Review saved");

@@ -8,6 +8,7 @@ import {
   MapPin,
   Pencil,
   ShieldCheck,
+  NotebookPen,
   Sparkles,
   Trash2,
   Upload,
@@ -635,6 +636,32 @@ export function BooksSettingsScreen({
               <span
                 className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
                   openLibraryEnabled ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </span>
+          }
+        />
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsRow
+          icon={NotebookPen}
+          label="Log finished books"
+          detail={preferences.logFinishedBooks ? "On" : "Off"}
+          onClick={() =>
+            onPreferencesChange({
+              ...preferences,
+              logFinishedBooks: !preferences.logFinishedBooks,
+            })
+          }
+          trailing={
+            <span
+              aria-hidden
+              className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${
+                preferences.logFinishedBooks ? "bg-otto-green" : "bg-otto-divider"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
+                  preferences.logFinishedBooks ? "translate-x-5" : "translate-x-1"
                 }`}
               />
             </span>
