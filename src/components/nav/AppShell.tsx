@@ -19,6 +19,7 @@ import { VaultWorkspace } from "@/components/vault/VaultWorkspace";
 import { BooksWorkspace } from "@/components/books/BooksWorkspace";
 import { LifeWorkspace } from "@/components/life/LifeWorkspace";
 import { JournalWorkspace } from "@/components/journal/JournalWorkspace";
+import { BanksWorkspace } from "@/components/banks/BanksWorkspace";
 import { PnlOverview } from "@/components/nav/PnlOverview";
 import { APP_WORKSPACE_META } from "@/lib/appWorkspace";
 import { useTrades } from "@/hooks/useTrades";
@@ -140,6 +141,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <LifeWorkspace />
             ) : workspace === "journal" ? (
               <JournalWorkspace />
+            ) : workspace === "banks" ? (
+              <BanksWorkspace />
             ) : !trading ? (
               <WorkspacePlaceholder workspace={workspace} />
             ) : (

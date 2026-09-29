@@ -1,0 +1,1054 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import {
+  Check,
+  Landmark,
+  Maximize2,
+  Pencil,
+  Plus,
+  Settings,
+  Trash2,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
+import { useBanks } from "@/hooks/useBanks";
+import { useScreenOption } from "@/hooks/useScreenOption";
+import {
+  ACCOUNT_KIND_LABEL,
+  DEPOSIT_TREATMENT,
+  accountBucket,
+  bankFocus,
+  countryFromCurrency,
+  daysUntil,
+  depositWhen,
+  displayCurrency,
+  maturityOutlook,
+  money,
+  nativeTotal,
+  netWorth,
+  usesMultipleCurrencies,
+} from "@/lib/banks";
+import { readBanksPreferences, writeBanksPreferences, type BanksPreferences } from "@/lib/banksPreferences";
+import { fmtDate } from "@/lib/pnl";
+import {
+  ACCOUNT_KINDS,
+  BANK_CURRENCIES,
+  DEPOSIT_KINDS,
+  DEPOSIT_PAYOUTS,
+  DEPOSIT_RENEWS,
+  type BankAccount,
+  type BankAccountInput,
+  type BankCurrency,
+  type BankDeposit,
+  type BankDepositInput,
+  type DepositPayout,
+  type DepositRenew,
+} from "@/types/bank";
+
+type BanksTab = "overview" | "holdings" | "settings";
+type HoldingRef = { kind: "account"; id: string } | { kind: "deposit"; id: string };
+type EditorState = { kind: "account" | "deposit"; id?: string };
+
+const TABS: { id: BanksTab; label: string; icon: LucideIcon }[] = [
+  { id: "overview", label: "Overview", icon: Wallet },
+  { id: "holdings", label: "Holdings", icon: Landmark },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
+const PAYOUT_LABEL: Record<DepositPayout, string> = {
+  maturity: "At maturity",
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+};
+
+const RENEW_LABEL: Record<DepositRenew, string> = {
+  close: "Close at maturity",
+  auto: "Auto renew",
+};
+
+const EMPTY_ACCOUNT: BankAccountInput = {
+  country: "us",
+  kind: "checking",
+  institution: "",
+  nickname: "",
+  owner: "",
+  currency: "USD",
+  balance: 0,
+  last4: "",
+  nominee: "",
+  notes: "",
+};
+
+const EMPTY_DEPOSIT: BankDepositInput = {
+  country: "in",
+  kind: "fd",
+  institution: "",
+  nickname: "",
+  owner: "",
+  currency: "INR",
+  principal: 0,
+  rate: null,
+  payout: "maturity",
+  startedOn: null,
+  maturesOn: null,
+  renew: "close",
+  nominee: "",
+  notes: "",
+  closed: false,
+};
+
+export function BanksWorkspace() {
+  const banks = useBanks();
+  const [tab, setTab] = useScreenOption("banksTab");
+  const [prefs, setPrefs] = useState<BanksPreferences>(readBanksPreferences);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [sheet, setSheet] = useState<HoldingRef | null>(null);
+  const [detail, setDetail] = useState<HoldingRef | null>(null);
+  const [notice, setNotice] = useState("");
+  const multi = usesMultipleCurrencies(banks.accounts, banks.deposits);
+  const entryCurrency = displayCurrency(banks.accounts, banks.deposits, prefs.home);
+
+  function savePrefs(next: BanksPreferences) {
+    setPrefs(next);
+    writeBanksPreferences(next);
+  }
+
+  function openDetail(ref: HoldingRef) {
+    setSheet(null);
+    setDetail(ref);
+  }
+
+  function openEditor(next: EditorState) {
+    setSheet(null);
+    setDetail(null);
+    setEditor(next);
+  }
+
+  async function onSaveAccount(input: BankAccountInput) {
+    setNotice("");
+    try {
+      await banks.saveAccount(input, editor?.kind === "account" ? editor.id : undefined);
+      setEditor(null);
+      setTab("holdings");
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Could not save this account.");
+    }
+  }
+
+  async function onSaveDeposit(input: BankDepositInput) {
+    setNotice("");
+    try {
+      await banks.saveDeposit(input, editor?.kind === "deposit" ? editor.id : undefined);
+      setEditor(null);
+      setTab("holdings");
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Could not save this deposit.");
+    }
+  }
+
+  const sheetAccount = sheet?.kind === "account" ? banks.accounts.find((item) => item.id === sheet.id) : undefined;
+  const sheetDeposit = sheet?.kind === "deposit" ? banks.deposits.find((item) => item.id === sheet.id) : undefined;
+  const detailAccount = detail?.kind === "account" ? banks.accounts.find((item) => item.id === detail.id) : undefined;
+  const detailDeposit = detail?.kind === "deposit" ? banks.deposits.find((item) => item.id === detail.id) : undefined;
+  const editingAccount = editor?.kind === "account" && editor.id ? banks.accounts.find((item) => item.id === editor.id) ?? null : null;
+  const editingDeposit = editor?.kind === "deposit" && editor.id ? banks.deposits.find((item) => item.id === editor.id) ?? null : null;
+
+  return (
+    <div className="mx-auto max-w-[720px] pb-28">
+      {banks.error && <p className="mb-3 rounded-xl bg-otto-red-soft px-3.5 py-3 text-[12px] text-otto-red">{banks.error}</p>}
+      {notice && <p className="mb-3 rounded-xl bg-otto-red-soft px-3.5 py-3 text-[12px] text-otto-red">{notice}</p>}
+      {tab === "overview" && (
+        <Overview
+          accounts={banks.accounts}
+          deposits={banks.deposits}
+          prefs={prefs}
+          loading={banks.loading}
+          onAdd={() => openEditor({ kind: "account" })}
+          onOpenDeposit={(id) => openDetail({ kind: "deposit", id })}
+        />
+      )}
+      {tab === "holdings" && (
+        <Holdings
+          accounts={banks.accounts}
+          deposits={banks.deposits}
+          loading={banks.loading}
+          onAdd={() => openEditor({ kind: "account" })}
+          onOpenAccount={(id) => setSheet({ kind: "account", id })}
+          onOpenDeposit={(id) => setSheet({ kind: "deposit", id })}
+        />
+      )}
+      {tab === "settings" && (
+        <BanksSettings
+          prefs={prefs}
+          multi={multi}
+          accounts={banks.accounts}
+          deposits={banks.deposits}
+          onPrefs={savePrefs}
+        />
+      )}
+      <nav
+        aria-label="Banks navigation"
+        className="fixed bottom-0 left-0 right-0 z-20 border-t border-otto-divider bg-otto-bg/90 px-1 pb-[calc(9px+env(safe-area-inset-bottom))] pt-[9px] backdrop-blur-[14px] desk:static desk:mt-8 desk:rounded-2xl desk:border desk:bg-otto-surface desk:pb-2"
+      >
+        <div className="mx-auto flex max-w-[720px]">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`flex flex-1 flex-col items-center gap-[3px] px-0 pb-1 pt-1.5 ${
+                tab === id ? "text-otto-green" : "text-otto-text-faint"
+              }`}
+            >
+              <Icon size={20} strokeWidth={tab === id ? 2.3 : 1.8} />
+              <small className="text-[10px] font-semibold">{label}</small>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {sheetAccount && (
+        <ActionSheet
+          title={sheetAccount.nickname || sheetAccount.institution}
+          subtitle={`${ACCOUNT_KIND_LABEL[sheetAccount.kind]} · ${money(sheetAccount.balance, sheetAccount.currency)}`}
+          icon={Landmark}
+          onClose={() => setSheet(null)}
+        >
+          <SheetAction icon={Maximize2} label="View" onClick={() => openDetail({ kind: "account", id: sheetAccount.id })} />
+          <SheetAction icon={Pencil} label="Edit" onClick={() => openEditor({ kind: "account", id: sheetAccount.id })} />
+          <SheetAction
+            icon={Trash2}
+            label="Remove"
+            tone="danger"
+            onClick={() => {
+              void banks.removeAccount(sheetAccount.id);
+              setSheet(null);
+            }}
+          />
+        </ActionSheet>
+      )}
+      {sheetDeposit && (
+        <ActionSheet
+          title={sheetDeposit.nickname || sheetDeposit.institution}
+          subtitle={`${DEPOSIT_TREATMENT[sheetDeposit.kind].label} · ${money(sheetDeposit.principal, sheetDeposit.currency)}`}
+          icon={Landmark}
+          onClose={() => setSheet(null)}
+        >
+          <SheetAction icon={Maximize2} label="View" onClick={() => openDetail({ kind: "deposit", id: sheetDeposit.id })} />
+          <SheetAction icon={Pencil} label="Edit" onClick={() => openEditor({ kind: "deposit", id: sheetDeposit.id })} />
+          <SheetAction
+            icon={Check}
+            label={sheetDeposit.closed ? "Mark open" : "Mark matured"}
+            onClick={() => {
+              void banks.saveDeposit({ ...sheetDeposit, closed: !sheetDeposit.closed }, sheetDeposit.id);
+              setSheet(null);
+            }}
+          />
+          <SheetAction
+            icon={Trash2}
+            label="Remove"
+            tone="danger"
+            onClick={() => {
+              void banks.removeDeposit(sheetDeposit.id);
+              setSheet(null);
+            }}
+          />
+        </ActionSheet>
+      )}
+
+      {detailAccount && (
+        <AccountDetail
+          account={detailAccount}
+          multi={multi}
+          onClose={() => setDetail(null)}
+          onEdit={() => openEditor({ kind: "account", id: detailAccount.id })}
+        />
+      )}
+      {detailDeposit && (
+        <DepositDetail
+          deposit={detailDeposit}
+          multi={multi}
+          onClose={() => setDetail(null)}
+          onEdit={() => openEditor({ kind: "deposit", id: detailDeposit.id })}
+        />
+      )}
+      {editor && (
+        <Editor
+          initialKind={editor.kind}
+          account={editingAccount}
+          deposit={editingDeposit}
+          currency={entryCurrency}
+          multi={multi}
+          readonly={banks.readonly}
+          onClose={() => setEditor(null)}
+          onSaveAccount={(input) => void onSaveAccount(input)}
+          onSaveDeposit={(input) => void onSaveDeposit(input)}
+        />
+      )}
+    </div>
+  );
+}
+
+function Overview({
+  accounts,
+  deposits,
+  prefs,
+  loading,
+  onAdd,
+  onOpenDeposit,
+}: {
+  accounts: BankAccount[];
+  deposits: BankDeposit[];
+  prefs: BanksPreferences;
+  loading: boolean;
+  onAdd: () => void;
+  onOpenDeposit: (id: string) => void;
+}) {
+  const multi = usesMultipleCurrencies(accounts, deposits);
+  const shown = displayCurrency(accounts, deposits, prefs.home);
+  const worth = netWorth(accounts, deposits, shown, prefs.inrPerUsd);
+  const focus = bankFocus(deposits).slice(0, 6);
+  const parts = [
+    { label: "Cash", amount: worth.cash, color: "bg-sky-500" },
+    { label: "Deposits", amount: worth.deposits, color: "bg-amber-500" },
+    { label: "Trading", amount: worth.investments, color: "bg-emerald-600" },
+    { label: "Owed", amount: worth.liabilities, color: "bg-rose-500" },
+  ];
+  const span = parts.reduce((sum, part) => sum + part.amount, 0) || 1;
+  const empty = accounts.length === 0 && deposits.length === 0;
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Net worth</h1>
+        <AddButton onClick={onAdd} />
+      </div>
+      <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4 text-center">
+        <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Total net worth</div>
+        <div className="mt-1 text-[28px] font-black">{worth.total == null ? "—" : money(worth.total, shown)}</div>
+        {multi && worth.unconverted > 0 && (
+          <p className="mt-1 text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
+        )}
+        {multi && worth.total != null && prefs.inrPerUsd && (
+          <p className="mt-1 text-[12px] text-otto-text-dim">Combined at 1 USD = {prefs.inrPerUsd} INR</p>
+        )}
+        <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-otto-divider">
+          {parts.map((part) => (
+            <span key={part.label} className={part.color} style={{ width: `${(part.amount / span) * 100}%` }} />
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] text-otto-text-dim">
+          {parts.map((part) => (
+            <span key={part.label}>{part.label}</span>
+          ))}
+        </div>
+      </div>
+      {multi && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(["USD", "INR"] as const).map((currency) => (
+            <div key={currency} className="rounded-2xl bg-otto-surface px-3 py-3">
+              <div className="text-[12px] font-bold">{currency}</div>
+              <div className="mt-1 text-[16px] font-extrabold">{money(nativeTotal(accounts, deposits, currency), currency)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mb-2 mt-5 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Coming up</p>
+      {focus.length === 0 && (
+        <p className="rounded-2xl bg-otto-surface px-4 py-5 text-[13px] text-otto-text-dim">
+          {loading
+            ? "Loading accounts…"
+            : empty
+              ? "Add an account or a deposit. Maturity and interest dates show up here."
+              : "Nothing matures in the next 45 days, and no interest is due in the next 3 weeks."}
+        </p>
+      )}
+      <div className="space-y-2">
+        {focus.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onOpenDeposit(item.depositId)}
+            className="block w-full rounded-2xl bg-otto-surface px-4 py-3 text-left"
+          >
+            <span className="block truncate text-[15px] font-extrabold">{item.title}</span>
+            <span className="mt-0.5 block text-[12px] text-otto-text-dim">{item.detail}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Holdings({
+  accounts,
+  deposits,
+  loading,
+  onAdd,
+  onOpenAccount,
+  onOpenDeposit,
+}: {
+  accounts: BankAccount[];
+  deposits: BankDeposit[];
+  loading: boolean;
+  onAdd: () => void;
+  onOpenAccount: (id: string) => void;
+  onOpenDeposit: (id: string) => void;
+}) {
+  const today = new Date();
+  const openDeposits = deposits
+    .filter((item) => !item.closed)
+    .sort((left, right) => (daysUntil(left.maturesOn, today) ?? 9_999) - (daysUntil(right.maturesOn, today) ?? 9_999));
+  const groups = [
+    { id: "cash", label: "Cash", accounts: accounts.filter((item) => accountBucket(item.kind) === "cash"), deposits: [] as BankDeposit[] },
+    { id: "deposits", label: "Deposits", accounts: [] as BankAccount[], deposits: [...openDeposits, ...deposits.filter((item) => item.closed)] },
+    { id: "trading", label: "Trading", accounts: accounts.filter((item) => item.kind === "trading"), deposits: [] as BankDeposit[] },
+    { id: "owed", label: "Cards and loans", accounts: accounts.filter((item) => accountBucket(item.kind) === "liabilities"), deposits: [] as BankDeposit[] },
+  ].filter((group) => group.accounts.length || group.deposits.length);
+  const [filter, setFilter] = useState("all");
+  const shown = filter === "all" ? groups : groups.filter((group) => group.id === filter);
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Holdings</h1>
+        <AddButton onClick={onAdd} />
+      </div>
+      {groups.length > 1 && (
+        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
+          <FilterChip label="All" active={filter === "all"} onClick={() => setFilter("all")} />
+          {groups.map((group) => (
+            <FilterChip key={group.id} label={group.label} active={filter === group.id} onClick={() => setFilter(group.id)} />
+          ))}
+        </div>
+      )}
+      {groups.length === 0 && (
+        <p className="mt-4 rounded-2xl bg-otto-surface px-4 py-5 text-[13px] text-otto-text-dim">
+          {loading ? "Loading accounts…" : "Checking, deposits, trading balances, cards, and loans go here."}
+        </p>
+      )}
+      {shown.map((group) => (
+        <div key={group.id} className="mt-4">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{group.label}</p>
+          <div className="space-y-2">
+            {group.accounts.map((item) => (
+              <HoldingRow
+                key={item.id}
+                title={item.nickname || item.institution}
+                detail={accountDetail(item)}
+                amount={money(item.balance, item.currency)}
+                onClick={() => onOpenAccount(item.id)}
+              />
+            ))}
+            {group.deposits.map((item) => (
+              <HoldingRow
+                key={item.id}
+                title={item.nickname || item.institution}
+                detail={`${DEPOSIT_TREATMENT[item.kind].label}${item.rate != null ? ` · ${item.rate}%` : ""} · ${depositWhen(item, today)}`}
+                amount={money(item.principal, item.currency)}
+                onClick={() => onOpenDeposit(item.id)}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function accountDetail(account: BankAccount) {
+  if (account.kind === "trading") return "Trading · approximate balance";
+  if (accountBucket(account.kind) === "liabilities") return `${ACCOUNT_KIND_LABEL[account.kind]} · owed`;
+  return ACCOUNT_KIND_LABEL[account.kind];
+}
+
+function HoldingRow({ title, detail, amount, onClick }: { title: string; detail: string; amount: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-2xl bg-otto-surface px-4 py-3 text-left">
+      <span className="min-w-0">
+        <span className="block truncate text-[15px] font-extrabold">{title}</span>
+        <span className="block truncate text-[12px] text-otto-text-dim">{detail}</span>
+      </span>
+      <span className="shrink-0 text-[14px] font-bold">{amount}</span>
+    </button>
+  );
+}
+
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold ${active ? "bg-otto-text text-otto-bg" : "bg-otto-surface text-otto-text-dim"}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function AddButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-label="Add" className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-green text-black">
+      <Plus size={18} />
+    </button>
+  );
+}
+
+function BanksSettings({
+  prefs,
+  multi,
+  accounts,
+  deposits,
+  onPrefs,
+}: {
+  prefs: BanksPreferences;
+  multi: boolean;
+  accounts: BankAccount[];
+  deposits: BankDeposit[];
+  onPrefs: (next: BanksPreferences) => void;
+}) {
+  const [rate, setRate] = useState(prefs.inrPerUsd ? String(prefs.inrPerUsd) : "");
+  return (
+    <section>
+      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Banks settings</h1>
+      <div className="mt-4 space-y-2">
+        <ChoiceRow
+          label="Preferred currency"
+          value={prefs.home}
+          options={[["USD", "US dollar"], ["INR", "Indian rupee"]] as const}
+          onChange={(home) => onPrefs({ ...prefs, home })}
+        />
+        <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">
+          {multi
+            ? "Totals use this currency. Each entry can still be dollars or rupees."
+            : "Totals stay in the currency you actually hold. The exchange rate appears once an entry uses the other one."}
+        </p>
+        {multi && (
+          <label className="block rounded-2xl bg-otto-surface px-4 py-3 text-[13px] font-semibold">
+            Exchange rate
+            <span className="mt-0.5 block text-[12px] font-normal text-otto-text-dim">1 US dollar equals this many rupees.</span>
+            <input
+              value={rate}
+              inputMode="decimal"
+              placeholder="For example 83"
+              aria-label="Rupees per US dollar"
+              onChange={(event) => setRate(event.target.value)}
+              onBlur={() => {
+                const next = Number(rate);
+                onPrefs({ ...prefs, inrPerUsd: Number.isFinite(next) && next > 0 ? next : null });
+              }}
+              className="mt-2 w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px] font-normal"
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={() => downloadBanksCsv(accounts, deposits)}
+          className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
+        >
+          Export accounts and deposits
+        </button>
+        <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">
+          Balances are typed in by hand. Trading here is an approximate account total. Day-to-day trades stay in Trader. Full account numbers are not stored.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function Editor({
+  initialKind,
+  account,
+  deposit,
+  currency,
+  multi,
+  readonly,
+  onClose,
+  onSaveAccount,
+  onSaveDeposit,
+}: {
+  initialKind: "account" | "deposit";
+  account: BankAccount | null;
+  deposit: BankDeposit | null;
+  currency: BankCurrency;
+  multi: boolean;
+  readonly: boolean;
+  onClose: () => void;
+  onSaveAccount: (input: BankAccountInput) => void;
+  onSaveDeposit: (input: BankDepositInput) => void;
+}) {
+  const editing = Boolean(account || deposit);
+  const [mode, setMode] = useState(deposit ? "deposit" : initialKind);
+  return (
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-otto-bg">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-otto-divider bg-otto-bg/95 px-3 py-3 backdrop-blur">
+        <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface" aria-label="Close">
+          <X size={18} />
+        </button>
+        <b className="text-[15px]">{editing ? "Edit" : "Add"}</b>
+        <button type="submit" form={`bank-editor-${mode}`} disabled={readonly} className="px-2 text-[14px] font-bold text-otto-green disabled:opacity-40">
+          Save
+        </button>
+      </header>
+      <main className="mx-auto w-full max-w-[720px] px-[18px] py-5 pb-12">
+        {!editing && (
+          <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl bg-otto-surface p-1.5">
+            {(["account", "deposit"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setMode(item)}
+                className={`rounded-xl py-2.5 text-[13px] font-bold ${mode === item ? "bg-otto-text text-otto-bg" : "text-otto-text-dim"}`}
+              >
+                {item === "account" ? "Account" : "Deposit"}
+              </button>
+            ))}
+          </div>
+        )}
+        {mode === "account" ? (
+          <AccountForm formId="bank-editor-account" preferred={currency} multi={multi} initial={account} readonly={readonly} onSave={onSaveAccount} />
+        ) : (
+          <DepositForm formId="bank-editor-deposit" preferred={currency} multi={multi} initial={deposit} readonly={readonly} onSave={onSaveDeposit} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+function AccountForm({
+  formId,
+  preferred,
+  multi,
+  initial,
+  readonly,
+  onSave,
+}: {
+  formId: string;
+  preferred: BankCurrency;
+  multi: boolean;
+  initial: BankAccount | null;
+  readonly: boolean;
+  onSave: (input: BankAccountInput) => void;
+}) {
+  const [draft, setDraft] = useState<BankAccountInput>(
+    initial ?? { ...EMPTY_ACCOUNT, currency: preferred, country: countryFromCurrency(preferred) }
+  );
+  const [balance, setBalance] = useState(initial ? String(initial.balance) : "");
+  const [more, setMore] = useState(Boolean(initial && (initial.owner || initial.last4 || initial.nominee || initial.notes || (!multi && initial.currency !== preferred))));
+  return (
+    <form
+      id={formId}
+      className="space-y-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!draft.institution.trim()) return;
+        onSave({ ...draft, balance: Number(balance) || 0, country: countryFromCurrency(draft.currency) });
+      }}
+    >
+      <ChoiceRow
+        label="Type"
+        value={draft.kind}
+        options={ACCOUNT_KINDS.map((id) => [id, ACCOUNT_KIND_LABEL[id]] as const)}
+        onChange={(kind) => setDraft({ ...draft, kind })}
+      />
+      {draft.kind === "trading" && (
+        <p className="px-1 text-[12px] text-otto-text-dim">An approximate total for net worth. Day-to-day trades stay in Trader.</p>
+      )}
+      <Field label="Institution" value={draft.institution} onChange={(institution) => setDraft({ ...draft, institution })} placeholder="Bank or broker" />
+      <Field label="Nickname" value={draft.nickname} onChange={(nickname) => setDraft({ ...draft, nickname })} placeholder="Optional" />
+      <Field label="Balance" value={balance} onChange={setBalance} placeholder="0.00" numeric />
+      {multi && (
+        <ChoiceRow
+          label="Currency"
+          value={draft.currency}
+          options={BANK_CURRENCIES.map((id) => [id, id] as const)}
+          onChange={(currency) => setDraft({ ...draft, currency })}
+        />
+      )}
+      <MoreToggle open={more} onToggle={() => setMore((current) => !current)} />
+      {more && (
+        <>
+          {!multi && (
+            <ChoiceRow
+              label="Currency"
+              value={draft.currency}
+              options={BANK_CURRENCIES.map((id) => [id, id] as const)}
+              onChange={(currency) => setDraft({ ...draft, currency })}
+            />
+          )}
+          <Field label="Owner" value={draft.owner} onChange={(owner) => setDraft({ ...draft, owner })} placeholder="Optional, such as joint" />
+          <Field label="Last 4" value={draft.last4} onChange={(last4) => setDraft({ ...draft, last4 })} placeholder="Optional" />
+          <Field label="Nominee" value={draft.nominee} onChange={(nominee) => setDraft({ ...draft, nominee })} placeholder="Optional" />
+          <Field label="Notes" value={draft.notes} onChange={(notes) => setDraft({ ...draft, notes })} placeholder="Optional" />
+        </>
+      )}
+      <button type="submit" disabled={readonly} className="mt-2 w-full rounded-full bg-otto-green py-3 text-[15px] font-bold text-black disabled:opacity-40">
+        Save account
+      </button>
+    </form>
+  );
+}
+
+function DepositForm({
+  formId,
+  preferred,
+  multi,
+  initial,
+  readonly,
+  onSave,
+}: {
+  formId: string;
+  preferred: BankCurrency;
+  multi: boolean;
+  initial: BankDeposit | null;
+  readonly: boolean;
+  onSave: (input: BankDepositInput) => void;
+}) {
+  const [draft, setDraft] = useState<BankDepositInput>(
+    initial ?? { ...EMPTY_DEPOSIT, currency: preferred, country: countryFromCurrency(preferred), payout: DEPOSIT_TREATMENT.fd.defaultPayout }
+  );
+  const [principal, setPrincipal] = useState(initial ? String(initial.principal) : "");
+  const [rate, setRate] = useState(initial?.rate != null ? String(initial.rate) : "");
+  const [more, setMore] = useState(Boolean(initial && (initial.owner || initial.nominee || initial.notes || (!multi && initial.currency !== preferred))));
+  return (
+    <form
+      id={formId}
+      className="space-y-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!draft.institution.trim()) return;
+        onSave({
+          ...draft,
+          principal: Number(principal) || 0,
+          rate: rate.trim() ? Number(rate) : null,
+          country: countryFromCurrency(draft.currency),
+        });
+      }}
+    >
+      <ChoiceRow
+        label="Type"
+        value={draft.kind}
+        options={DEPOSIT_KINDS.map((id) => [id, DEPOSIT_TREATMENT[id].label] as const)}
+        onChange={(kind) =>
+          setDraft({
+            ...draft,
+            kind,
+            payout: kind === draft.kind ? draft.payout : DEPOSIT_TREATMENT[kind].defaultPayout,
+          })
+        }
+      />
+      <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">{DEPOSIT_TREATMENT[draft.kind].lockIn}</p>
+      <Field label="Institution" value={draft.institution} onChange={(institution) => setDraft({ ...draft, institution })} placeholder="Bank or post office" />
+      <Field label="Nickname" value={draft.nickname} onChange={(nickname) => setDraft({ ...draft, nickname })} placeholder="Optional" />
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Principal" value={principal} onChange={setPrincipal} placeholder="0.00" numeric />
+        <Field label="Rate %" value={rate} onChange={setRate} placeholder="0.00" numeric />
+      </div>
+      <ChoiceRow
+        label="Interest"
+        value={draft.payout}
+        options={DEPOSIT_PAYOUTS.map((id) => [id, PAYOUT_LABEL[id]] as const)}
+        onChange={(payout) => setDraft({ ...draft, payout })}
+      />
+      <label className="block text-[12px] font-semibold text-otto-text-dim">
+        Start
+        <input type="date" value={draft.startedOn ?? ""} onChange={(event) => setDraft({ ...draft, startedOn: event.target.value || null })} className="mt-1 w-full rounded-xl bg-otto-surface px-3 py-2.5 text-[14px] font-normal text-otto-text" />
+      </label>
+      <label className="block text-[12px] font-semibold text-otto-text-dim">
+        Matures
+        <input type="date" value={draft.maturesOn ?? ""} onChange={(event) => setDraft({ ...draft, maturesOn: event.target.value || null })} className="mt-1 w-full rounded-xl bg-otto-surface px-3 py-2.5 text-[14px] font-normal text-otto-text" />
+      </label>
+      <ChoiceRow
+        label="At maturity"
+        value={draft.renew}
+        options={DEPOSIT_RENEWS.map((id) => [id, RENEW_LABEL[id]] as const)}
+        onChange={(renew) => setDraft({ ...draft, renew })}
+      />
+      <p className="px-1 text-[12px] text-otto-text-dim">{maturityOutlook(draft.kind, draft.renew)}</p>
+      {multi && (
+        <ChoiceRow
+          label="Currency"
+          value={draft.currency}
+          options={BANK_CURRENCIES.map((id) => [id, id] as const)}
+          onChange={(currency) => setDraft({ ...draft, currency })}
+        />
+      )}
+      <MoreToggle open={more} onToggle={() => setMore((current) => !current)} />
+      {more && (
+        <>
+          {!multi && (
+            <ChoiceRow
+              label="Currency"
+              value={draft.currency}
+              options={BANK_CURRENCIES.map((id) => [id, id] as const)}
+              onChange={(currency) => setDraft({ ...draft, currency })}
+            />
+          )}
+          <Field label="Owner" value={draft.owner} onChange={(owner) => setDraft({ ...draft, owner })} placeholder="Optional" />
+          <Field label="Nominee" value={draft.nominee} onChange={(nominee) => setDraft({ ...draft, nominee })} placeholder="Optional" />
+          <Field label="Notes" value={draft.notes} onChange={(notes) => setDraft({ ...draft, notes })} placeholder="Optional" />
+        </>
+      )}
+      <button type="submit" disabled={readonly} className="mt-2 w-full rounded-full bg-otto-green py-3 text-[15px] font-bold text-black disabled:opacity-40">
+        Save deposit
+      </button>
+    </form>
+  );
+}
+
+function AccountDetail({
+  account,
+  multi,
+  onClose,
+  onEdit,
+}: {
+  account: BankAccount;
+  multi: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <DetailShell title="Account" onClose={onClose} onEdit={onEdit}>
+      <h1 className="text-[22px] font-extrabold leading-tight">{account.nickname || account.institution}</h1>
+      <p className="mt-1 text-[13.5px] text-otto-text-dim">
+        {account.nickname ? account.institution : ACCOUNT_KIND_LABEL[account.kind]}
+      </p>
+      <p className="mt-3 text-[28px] font-black">{money(account.balance, account.currency)}</p>
+      <div className="mt-6 overflow-hidden rounded-2xl bg-otto-surface">
+        <DetailRow label="Type" value={account.kind === "trading" ? "Trading · approximate balance" : accountBucket(account.kind) === "liabilities" ? `${ACCOUNT_KIND_LABEL[account.kind]} · owed` : ACCOUNT_KIND_LABEL[account.kind]} />
+        {multi && (
+          <>
+            <Divider />
+            <DetailRow label="Currency" value={account.currency} />
+          </>
+        )}
+        {account.owner && (
+          <>
+            <Divider />
+            <DetailRow label="Owner" value={account.owner} />
+          </>
+        )}
+        {account.last4 && (
+          <>
+            <Divider />
+            <DetailRow label="Last 4" value={account.last4} />
+          </>
+        )}
+        {account.nominee && (
+          <>
+            <Divider />
+            <DetailRow label="Nominee" value={account.nominee} />
+          </>
+        )}
+      </div>
+      {account.kind === "trading" && (
+        <p className="mt-4 text-[13px] leading-relaxed text-otto-text-dim">Day-to-day trades stay in Trader. This figure is only for net worth.</p>
+      )}
+      {account.notes && <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed">{account.notes}</p>}
+    </DetailShell>
+  );
+}
+
+function DepositDetail({
+  deposit,
+  multi,
+  onClose,
+  onEdit,
+}: {
+  deposit: BankDeposit;
+  multi: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const treatment = DEPOSIT_TREATMENT[deposit.kind];
+  const days = daysUntil(deposit.maturesOn);
+  return (
+    <DetailShell title="Deposit" onClose={onClose} onEdit={onEdit}>
+      <h1 className="text-[22px] font-extrabold leading-tight">{deposit.nickname || deposit.institution}</h1>
+      <p className="mt-1 text-[13.5px] text-otto-text-dim">
+        {treatment.label}
+        {deposit.nickname ? ` · ${deposit.institution}` : ""}
+      </p>
+      <p className="mt-3 text-[28px] font-black">{money(deposit.principal, deposit.currency)}</p>
+      <p className="mt-1 text-[13px] text-otto-text-dim">{depositWhen(deposit)}</p>
+      <div className="mt-6 overflow-hidden rounded-2xl bg-otto-surface">
+        {deposit.rate != null && (
+          <>
+            <DetailRow label="Rate" value={`${deposit.rate}%`} />
+            <Divider />
+          </>
+        )}
+        <DetailRow label="Interest" value={PAYOUT_LABEL[deposit.payout]} />
+        {deposit.startedOn && (
+          <>
+            <Divider />
+            <DetailRow label="Start" value={fmtDate(deposit.startedOn)} />
+          </>
+        )}
+        {deposit.maturesOn && (
+          <>
+            <Divider />
+            <DetailRow label="Matures" value={`${fmtDate(deposit.maturesOn)}${days != null && !deposit.closed ? ` · ${depositWhen(deposit)}` : ""}`} />
+          </>
+        )}
+        <Divider />
+        <DetailRow label="At maturity" value={maturityOutlook(deposit.kind, deposit.renew)} />
+        {multi && (
+          <>
+            <Divider />
+            <DetailRow label="Currency" value={deposit.currency} />
+          </>
+        )}
+        {deposit.owner && (
+          <>
+            <Divider />
+            <DetailRow label="Owner" value={deposit.owner} />
+          </>
+        )}
+        {deposit.nominee && (
+          <>
+            <Divider />
+            <DetailRow label="Nominee" value={deposit.nominee} />
+          </>
+        )}
+      </div>
+      <p className="mt-4 text-[13px] leading-relaxed text-otto-text-dim">{treatment.lockIn}</p>
+      {deposit.kind === "rd" && (
+        <p className="mt-2 text-[13px] leading-relaxed text-otto-text-dim">Principal is the amount saved so far, not the maturity value.</p>
+      )}
+      {deposit.notes && <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed">{deposit.notes}</p>}
+    </DetailShell>
+  );
+}
+
+function DetailShell({
+  title,
+  onClose,
+  onEdit,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  onEdit: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-otto-bg">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-otto-divider bg-otto-bg/95 px-3 py-3 backdrop-blur">
+        <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface" aria-label="Close">
+          <X size={18} />
+        </button>
+        <b className="text-[15px]">{title}</b>
+        <button type="button" onClick={onEdit} className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface" aria-label="Edit">
+          <Pencil size={16} />
+        </button>
+      </header>
+      <main className="mx-auto w-full max-w-[720px] px-[18px] py-7 pb-12">{children}</main>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-3">
+      <span className="text-[13px] text-otto-text-dim">{label}</span>
+      <span className="text-right text-[14px] font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="mx-4 h-px bg-otto-divider" />;
+}
+
+function MoreToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} className="px-1 py-1 text-[13px] font-bold text-otto-text-dim">
+      {open ? "Hide extra details" : "More details"}
+    </button>
+  );
+}
+
+function ChoiceRow<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly (readonly [T, string])[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${value === id ? "bg-otto-text text-otto-bg" : "bg-otto-surface text-otto-text-dim"}`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  numeric,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  numeric?: boolean;
+}) {
+  return (
+    <label className="block text-[12px] font-semibold text-otto-text-dim">
+      {label}
+      <input
+        value={value}
+        inputMode={numeric ? "decimal" : "text"}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-xl bg-otto-surface px-3 py-2.5 text-[14px] font-normal text-otto-text"
+      />
+    </label>
+  );
+}
+
+function downloadBanksCsv(accounts: BankAccount[], deposits: BankDeposit[]) {
+  const lines = [
+    "kind,country,type,institution,nickname,owner,currency,amount,rate,started,matures,last4",
+    ...accounts.map((item) =>
+      ["account", item.country, item.kind, item.institution, item.nickname, item.owner, item.currency, item.balance, "", "", "", item.last4].map(csv).join(",")
+    ),
+    ...deposits.map((item) =>
+      ["deposit", item.country, item.kind, item.institution, item.nickname, item.owner, item.currency, item.principal, item.rate ?? "", item.startedOn ?? "", item.maturesOn ?? "", ""].map(csv).join(",")
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "banks.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function csv(value: string | number) {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}

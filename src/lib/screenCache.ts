@@ -35,6 +35,7 @@ export type ScreenOptions = {
   booksOpenLibraryEnabled: boolean;
   lifeTab: "today" | "dates" | "tasks" | "lists" | "bills" | "settings";
   journalTab: "entries" | "notes" | "add" | "day" | "settings";
+  banksTab: "overview" | "holdings" | "settings";
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -59,6 +60,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   booksOpenLibraryEnabled: true,
   lifeTab: "today",
   journalTab: "entries",
+  banksTab: "overview",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -106,7 +108,8 @@ export function readScreenOptions(): ScreenOptions {
   try {
     const raw = window.localStorage.getItem(SCREEN_CACHE_KEY);
     if (!raw) return SCREEN_OPTION_DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<ScreenOptions>;
+    const parsed = JSON.parse(raw) as Partial<ScreenOptions> & { banksTab?: string };
+    const storedBanksTab = typeof parsed.banksTab === "string" ? parsed.banksTab : "";
     const options: ScreenOptions = {
       positionsView:
         typeof parsed.positionsView === "string"
@@ -177,6 +180,15 @@ export function readScreenOptions(): ScreenOptions {
         parsed.journalTab === "settings"
           ? parsed.journalTab
           : "entries",
+      banksTab:
+        storedBanksTab === "settings"
+          ? "settings"
+          : storedBanksTab === "holdings" ||
+              storedBanksTab === "accounts" ||
+              storedBanksTab === "add" ||
+              storedBanksTab === "deposits"
+            ? "holdings"
+            : "overview",
     };
     if (!options.enabledSections.includes(options.appWorkspace)) {
       options.appWorkspace = options.defaultSection;

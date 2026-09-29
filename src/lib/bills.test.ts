@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billDueThisMonth, billWhen } from "@/lib/bills";
+import { billDueThisMonth, billWhen, dueThisMonthTotal } from "@/lib/bills";
 import type { Bill } from "@/types/bill";
 
 function bill(patch: Partial<Bill>): Bill {
@@ -34,6 +34,16 @@ describe("bills", () => {
     expect(billWhen(bill({ frequency: "semimonthly", dueDay: 15, dueDay2: 1, dueSet: true }))).toBe(
       "due the 1 and 15"
     );
+  });
+
+  it("leaves yearly bills out of this month's total", () => {
+    const september = new Date(2026, 8, 29);
+    const rows = [
+      bill({ id: "installment", amount: 1900, frequency: "monthly" }),
+      bill({ id: "tax", amount: 9200, frequency: "yearly" }),
+      bill({ id: "hoa", amount: 300, frequency: "yearly", dueMonth: 4 }),
+    ];
+    expect(dueThisMonthTotal(rows, september)).toBe(1900);
   });
 
   it("counts every-other-month bills on the matching months", () => {

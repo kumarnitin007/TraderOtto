@@ -67,8 +67,30 @@ export function billStatus(bill: Bill, today = new Date()) {
   return { due, paid, days, active };
 }
 
-export function orderedBills(bills: Bill[]) {
-  return [...bills].sort(
-    (left, right) => left.dueDay - right.dueDay || left.name.localeCompare(right.name)
-  );
+export type BillSort = "due" | "amount" | "name";
+export type BillListFilter = "all" | "month" | BillFrequency;
+
+export function orderedBills(bills: Bill[], sort: BillSort = "due") {
+  return [...bills].sort((left, right) => {
+    if (sort === "name") return left.name.localeCompare(right.name);
+    if (sort === "amount") return (right.amount ?? -1) - (left.amount ?? -1) || left.name.localeCompare(right.name);
+    return left.dueDay - right.dueDay || left.name.localeCompare(right.name);
+  });
+}
+
+export function billsForList(bills: Bill[], filter: BillListFilter, sort: BillSort, today = new Date()) {
+  const matched = bills.filter((bill) => {
+    if (filter === "all") return true;
+    if (filter === "month") return billDueThisMonth(bill, today);
+    return bill.frequency === filter;
+  });
+  return orderedBills(matched, sort);
+}
+
+/** Unpaid amounts that actually fall in this month. Yearly bills count only in their month. */
+export function dueThisMonthTotal(bills: Bill[], today = new Date()) {
+  return bills.reduce((sum, bill) => {
+    const status = billStatus(bill, today);
+    return status.active && !status.paid ? sum + (bill.amount ?? 0) : sum;
+  }, 0);
 }
