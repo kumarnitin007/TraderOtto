@@ -73,16 +73,27 @@ export function orderedNotes(notes: JournalEntry[]) {
   );
 }
 
+/** First three words become the list title. The remainder keeps its line breaks. */
+export function noteTitle(body: string) {
+  const trimmed = body.replace(/^\s+/, "");
+  let words = 0;
+  let index = 0;
+  while (index < trimmed.length && words < 3) {
+    while (index < trimmed.length && /\s/.test(trimmed[index]!)) index += 1;
+    if (index >= trimmed.length) break;
+    while (index < trimmed.length && !/\s/.test(trimmed[index]!)) index += 1;
+    words += 1;
+  }
+  return {
+    title: trimmed.slice(0, index).replace(/\s+/g, " "),
+    rest: trimmed.slice(index).replace(/^\s+/, ""),
+  };
+}
+
 export function onThisDay(entries: JournalEntry[], today: string) {
   const monthDay = today.slice(5);
-  const year = today.slice(0, 4);
   return entries
-    .filter(
-      (entry) =>
-        entry.kind === "entry" &&
-        entry.entryDate.slice(5) === monthDay &&
-        entry.entryDate.slice(0, 4) !== year
-    )
+    .filter((entry) => entry.entryDate.slice(5) === monthDay)
     .sort((left, right) => right.entryDate.localeCompare(left.entryDate));
 }
 

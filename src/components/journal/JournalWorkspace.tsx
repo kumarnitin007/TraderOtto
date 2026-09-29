@@ -7,6 +7,7 @@ import {
   BookOpen,
   CalendarDays,
   NotebookPen,
+  Pencil,
   Pin,
   Plus,
   Settings,
@@ -16,14 +17,17 @@ import {
 } from "lucide-react";
 import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { useJournal } from "@/hooks/useJournal";
+import { useLife } from "@/hooks/useLife";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import {
   journalStreak,
   mondayOf,
+  noteTitle,
   onThisDay,
   orderedNotes,
   promptForDay,
 } from "@/lib/journal";
+import { LIFE_CATEGORY_LABEL, lifeOccasionLabel, lifeOnThisDay } from "@/lib/life";
 import {
   readBooksPreferences,
   writeBooksPreferences,
@@ -72,6 +76,8 @@ function readPrefs(): JournalPrefs {
 
 export function JournalWorkspace() {
   const journal = useJournal();
+  const life = useLife();
+  const [editing, setEditing] = useState<JournalEntry | null>(null);
   const [tab, setTab] = useScreenOption("journalTab");
   const [prefs, setPrefs] = useState<JournalPrefs>(readPrefs);
   const [booksPrefs, setBooksPrefs] = useState<BooksPreferences>(() =>
@@ -114,12 +120,31 @@ export function JournalWorkspace() {
           loading={journal.loading}
         />
       )}
-      {tab === "notes" && (
+      {tab === "notes" && !editing && (
         <NotesScreen
           notes={notes}
           loading={journal.loading}
           readonly={journal.readonly}
           onUpdate={(id, patch) => void journal.update(id, patch)}
+          onEdit={setEditing}
+        />
+      )}
+      {tab === "notes" && editing && (
+        <Composer
+          initial={editing}
+          tags={prefs.suggestTags ? tags : []}
+          showPrompt={false}
+          readonly={journal.readonly}
+          onCancel={() => setEditing(null)}
+          onSave={async (input) => {
+            await journal.update(editing.id, {
+              body: input.body,
+              entryDate: input.entryDate,
+              tags: input.tags,
+              prompt: input.prompt,
+            });
+            setEditing(null);
+          }}
         />
       )}
       {tab === "add" && (
@@ -133,7 +158,13 @@ export function JournalWorkspace() {
           }}
         />
       )}
-      {tab === "day" && <OnThisDay entries={onThisDay(entries, today)} today={today} />}
+      {tab === "day" && (
+        <OnThisDay
+          entries={onThisDay(journal.entries, today)}
+          occasions={lifeOnThisDay(life.items, today)}
+          today={today}
+        />
+      )}
       {tab === "settings" && (
         <JournalSettings
           prefs={prefs}
@@ -231,16 +262,16 @@ function EntryGroup({
       )}
       <div className="space-y-2">
         {entries.map((entry) => {
-          const [heading, ...rest] = entry.body.split("\n");
+          const { title, rest } = noteTitle(entry.body);
           return (
             <article key={entry.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
               <div className="text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">
                 {fmtDate(entry.entryDate)}
               </div>
-              <h2 className="mt-1 text-[15px] font-extrabold leading-snug">{heading}</h2>
-              {rest.length > 0 && (
-                <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-otto-text-dim">
-                  {rest.join(" ")}
+              <h2 className="mt-1 text-[15px] font-extrabold leading-snug">{title}</h2>
+              {rest && (
+                <p className="mt-1 line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-otto-text-dim">
+                  {rest}
                 </p>
               )}
               {entry.tags.length > 0 && (
@@ -269,11 +300,13 @@ function NotesScreen({
   loading,
   readonly,
   onUpdate,
+  onEdit,
 }: {
   notes: JournalEntry[];
   loading: boolean;
   readonly: boolean;
   onUpdate: (id: string, patch: Partial<JournalEntry>) => void;
+  onEdit: (note: JournalEntry) => void;
 }) {
   function move(note: JournalEntry, direction: -1 | 1) {
     const group = notes.filter(
@@ -298,9 +331,16 @@ function NotesScreen({
         </p>
       )}
       <div className="mt-4 space-y-2">
-        {notes.map((note) => (
+        {notes.map((note) => {
+          const { title, rest } = noteTitle(note.body);
+          return (
           <article key={note.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
-            <p className="text-[14px] font-semibold leading-snug">{note.body}</p>
+            <h2 className="text-[15px] font-extrabold leading-snug">{title}</h2>
+            {rest && (
+              <p className="mt-1 line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-otto-text-dim">
+                {rest}
+              </p>
+            )}
             <div className="mt-2 flex items-center justify-between gap-2">
               <span className="text-[10px] text-otto-text-faint">{fmtDate(note.entryDate)}</span>
               {note.tags[0] && (
@@ -310,6 +350,9 @@ function NotesScreen({
               )}
             </div>
             <div className="mt-2 flex gap-1">
+              <NoteAction label="Edit" onClick={() => onEdit(note)} disabled={readonly}>
+                <Pencil size={14} />
+              </NoteAction>
               <NoteAction label={note.pinned ? "Unpin" : "Pin"} onClick={() => onUpdate(note.id, { pinned: !note.pinned })} disabled={readonly}>
                 <Pin size={14} className={note.pinned ? "text-otto-green" : ""} />
               </NoteAction>
@@ -324,7 +367,8 @@ function NotesScreen({
               </NoteAction>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -359,19 +403,23 @@ function Composer({
   tags,
   showPrompt,
   readonly,
+  initial,
+  onCancel,
   onSave,
 }: {
   tags: string[];
   showPrompt: boolean;
   readonly: boolean;
+  initial?: JournalEntry;
+  onCancel?: () => void;
   onSave: (input: { kind: JournalKind; body: string; entryDate: string; prompt: string; tags: string[] }) => Promise<void>;
 }) {
   const today = todayISO();
-  const [kind, setKind] = useState<JournalKind>("entry");
-  const [entryDate, setEntryDate] = useState(today);
+  const [kind, setKind] = useState<JournalKind>(initial?.kind ?? "entry");
+  const [entryDate, setEntryDate] = useState(initial?.entryDate ?? today);
   const prompt = promptForDay(entryDate);
-  const [body, setBody] = useState("");
-  const [tag, setTag] = useState("");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [tag, setTag] = useState(initial?.tags[0] ?? "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -403,16 +451,24 @@ function Composer({
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-[22px] font-extrabold">New</h1>
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving || readonly}
-          className="text-[14px] font-bold text-otto-green disabled:opacity-40"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
+        <h1 className="text-[22px] font-extrabold">{initial ? "Edit" : "New"}</h1>
+        <div className="flex items-center gap-3">
+          {initial && (
+            <button type="button" onClick={onCancel} className="text-[13px] font-semibold text-otto-text-dim">
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || readonly}
+            className="text-[14px] font-bold text-otto-green disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
+      {!initial && (
       <div className="grid grid-cols-2 gap-2 rounded-2xl bg-otto-surface p-1.5">
         {(["entry", "note"] as const).map((item) => (
           <button
@@ -427,6 +483,7 @@ function Composer({
           </button>
         ))}
       </div>
+      )}
       <label className="mt-3 block">
         <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">
           Date
@@ -471,31 +528,79 @@ function Composer({
         </div>
       )}
       {error && <p className="mt-2 text-[12px] text-otto-red">{error}</p>}
+      <button
+        type="button"
+        onClick={() => void save()}
+        disabled={saving || readonly}
+        className="mt-4 w-full rounded-full bg-otto-green py-3 text-[15px] font-bold text-black disabled:opacity-40"
+      >
+        {saving ? "Saving…" : "Save"}
+      </button>
     </section>
   );
 }
 
-function OnThisDay({ entries, today }: { entries: JournalEntry[]; today: string }) {
+function OnThisDay({
+  entries,
+  occasions,
+  today,
+}: {
+  entries: JournalEntry[];
+  occasions: ReturnType<typeof lifeOnThisDay>;
+  today: string;
+}) {
+  const todayDate = new Date(`${today}T00:00:00`);
   return (
     <section>
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-        {fmtDate(today).replace(/,?\s*\d{4}$/, "")}
+        {fmtDate(today)}
       </p>
       <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">On this day</h1>
-      {entries.length === 0 ? (
+      {occasions.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {occasions.map((item) => {
+            const occasion = lifeOccasionLabel(item, todayDate);
+            return (
+              <article key={item.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">
+                  {LIFE_CATEGORY_LABEL[item.category]}
+                  {item.repeats === "once" && item.year ? ` · ${item.year}` : ""}
+                </div>
+                <h2 className="mt-1 text-[15px] font-extrabold">{item.name}</h2>
+                {occasion && <p className="mt-1 text-[12px] text-otto-text-dim">{occasion}</p>}
+                {item.notes && (
+                  <p className="mt-1 line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-otto-text-dim">
+                    {item.notes}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {entries.length === 0 && occasions.length === 0 ? (
         <p className="mt-4 rounded-2xl bg-otto-surface px-4 py-5 text-[13px] leading-relaxed text-otto-text-dim">
-          Entries from this date in earlier years will gather here.
+          Journal entries from this date, including this year, show up here. Birthdays and other Life dates on this day do too.
         </p>
       ) : (
         <div className="mt-4 space-y-2">
-          {entries.map((entry) => (
-            <article key={entry.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">
-                {entry.entryDate.slice(0, 4)}
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed">{entry.body}</p>
-            </article>
-          ))}
+          {entries.map((entry) => {
+            const { title, rest } = noteTitle(entry.body);
+            return (
+              <article key={entry.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">
+                  {entry.entryDate.slice(0, 4)}
+                  {entry.kind === "note" ? " · Note" : ""}
+                </div>
+                <h2 className="mt-1 text-[15px] font-extrabold leading-snug">{title}</h2>
+                {rest && (
+                  <p className="mt-1 line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-otto-text-dim">
+                    {rest}
+                  </p>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

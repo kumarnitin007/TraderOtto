@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { useBills } from "@/hooks/useBills";
-import { BILL_CATEGORY_LABEL, billStatus, monthKey, orderedBills } from "@/lib/bills";
+import { BILL_CATEGORY_LABEL, BILL_FREQUENCY_LABEL, BILL_MONTHS, billStatus, billWhen, monthKey, orderedBills } from "@/lib/bills";
 import { fmtMoney } from "@/lib/pnl";
-import { BILL_CATEGORIES, type Bill, type BillCategory } from "@/types/bill";
+import { BILL_CATEGORIES, BILL_FREQUENCIES, type Bill, type BillCategory, type BillFrequency } from "@/types/bill";
 
 export function LifeBillsScreen() {
   const { bills, loading, error, readonly, save, remove } = useBills();
@@ -13,11 +13,17 @@ export function LifeBillsScreen() {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDay, setDueDay] = useState("1");
+  const [dueDay2, setDueDay2] = useState("15");
+  const [dueMonth, setDueMonth] = useState(String(new Date().getMonth() + 1));
   const [category, setCategory] = useState<BillCategory>("other");
+  const [frequency, setFrequency] = useState<BillFrequency>("monthly");
   const [notice, setNotice] = useState("");
   const today = new Date();
   const ordered = orderedBills(bills);
-  const unpaid = ordered.filter((bill) => !billStatus(bill, today).paid);
+  const unpaid = ordered.filter((bill) => {
+    const status = billStatus(bill, today);
+    return status.active && !status.paid;
+  });
   const dueTotal = unpaid.reduce((sum, bill) => sum + (bill.amount ?? 0), 0);
 
   async function addBill() {
@@ -28,13 +34,19 @@ export function LifeBillsScreen() {
         name,
         amount: amount.trim() ? Number(amount) : null,
         dueDay: Number(dueDay) || 1,
+        dueDay2: frequency === "semimonthly" ? Number(dueDay2) || null : null,
+        dueMonth: frequency === "yearly" || frequency === "bimonthly" ? Number(dueMonth) || null : null,
+        dueSet: Boolean(dueDay.trim()),
+        frequency,
         category,
         paidMonth: null,
       });
       setName("");
       setAmount("");
       setDueDay("1");
+      setDueDay2("15");
       setCategory("other");
+      setFrequency("monthly");
       setAdding(false);
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : "Could not save this bill.");
@@ -80,17 +92,21 @@ export function LifeBillsScreen() {
                 <div>
                   <h2 className="text-[15px] font-extrabold">{bill.name}</h2>
                   <p className="mt-0.5 text-[12px] text-otto-text-dim">
-                    {BILL_CATEGORY_LABEL[bill.category]} · due the {bill.dueDay}
+                    {BILL_CATEGORY_LABEL[bill.category]} · {BILL_FREQUENCY_LABEL[bill.frequency]} · {billWhen(bill)}
                     {bill.amount != null ? ` · ${fmtMoney(bill.amount)}` : ""}
                   </p>
                   <p className={`mt-1 text-[11px] font-semibold ${status.paid ? "text-otto-green" : "text-otto-text-faint"}`}>
                     {status.paid
                       ? "Paid this month"
-                      : status.days < 0
-                        ? `${Math.abs(status.days)} days past due`
-                        : status.days === 0
-                          ? "Due today"
-                          : `Due in ${status.days} days`}
+                      : !status.active
+                        ? "Not due this month"
+                        : !bill.dueSet
+                          ? "Due day not set"
+                          : status.days < 0
+                            ? `${Math.abs(status.days)} days past due`
+                            : status.days === 0
+                              ? "Due today"
+                              : `Due in ${status.days} days`}
                   </p>
                 </div>
                 <button
@@ -118,7 +134,7 @@ export function LifeBillsScreen() {
         })}
         {!loading && ordered.length === 0 && (
           <p className="rounded-2xl bg-otto-surface px-4 py-5 text-[13px] text-otto-text-dim">
-            Add water, electric, cards, and the mortgage. Each one repeats on its day every month.
+            Add a monthly, twice-a-month, every-other-month, or yearly bill.
           </p>
         )}
       </div>
@@ -131,10 +147,25 @@ export function LifeBillsScreen() {
           }}
         >
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Water, Visa, mortgage…" className="w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]" />
-          <div className="grid grid-cols-2 gap-2">
+          <select value={frequency} onChange={(event) => setFrequency(event.target.value as BillFrequency)} aria-label="How often" className="w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]">
+            {BILL_FREQUENCIES.map((item) => (
+              <option key={item} value={item}>{BILL_FREQUENCY_LABEL[item]}</option>
+            ))}
+          </select>
+          <div className={`grid gap-2 ${frequency === "semimonthly" ? "grid-cols-3" : "grid-cols-2"}`}>
             <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="Amount" className="rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]" />
             <input value={dueDay} onChange={(event) => setDueDay(event.target.value)} inputMode="numeric" placeholder="Due day" aria-label="Due day" className="rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]" />
+            {frequency === "semimonthly" && (
+              <input value={dueDay2} onChange={(event) => setDueDay2(event.target.value)} inputMode="numeric" placeholder="2nd day" aria-label="Second due day" className="rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]" />
+            )}
           </div>
+          {(frequency === "yearly" || frequency === "bimonthly") && (
+            <select value={dueMonth} onChange={(event) => setDueMonth(event.target.value)} aria-label={frequency === "yearly" ? "Due month" : "Starting month"} className="w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]">
+              {BILL_MONTHS.map((label, index) => (
+                <option key={label} value={String(index + 1)}>{frequency === "yearly" ? label : `${label} and every other month`}</option>
+              ))}
+            </select>
+          )}
           <select value={category} onChange={(event) => setCategory(event.target.value as BillCategory)} className="w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px]">
             {BILL_CATEGORIES.map((item) => (
               <option key={item} value={item}>{BILL_CATEGORY_LABEL[item]}</option>

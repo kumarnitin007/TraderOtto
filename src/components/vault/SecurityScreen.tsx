@@ -13,9 +13,15 @@ import type { VaultSecuritySnapshot } from "@/lib/vaultSecurity";
 export function SecurityScreen({
   security,
   onGenerate,
+  healthHiddenUntil,
+  onHideHealth,
+  onShowHealth,
 }: {
   security: VaultSecuritySnapshot;
   onGenerate: () => void;
+  healthHiddenUntil: number | "forever" | null;
+  onHideHealth: (days?: number) => void;
+  onShowHealth: () => void;
 }) {
   const tools = [
     {
@@ -101,6 +107,45 @@ export function SecurityScreen({
             <ChevronRight size={18} className="shrink-0 text-otto-text-faint" />
           </button>
         ))}
+      </div>
+
+      <div className="mt-5 rounded-xl bg-otto-surface px-3.5 py-3">
+        <b className="block text-[14px]">List warning</b>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-otto-text-dim">
+          {healthHiddenUntil == null
+            ? "The health card stays on the vault list."
+            : healthHiddenUntil === "forever"
+              ? "The health card is hidden from the vault list."
+              : `The health card is hidden until ${new Date(healthHiddenUntil).toLocaleDateString()}.`}
+        </p>
+        <div className="mt-3 flex flex-col gap-2">
+          {healthHiddenUntil == null ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onHideHealth()}
+                className="w-full rounded-full bg-otto-bg py-2.5 text-[13px] font-bold"
+              >
+                Hide it
+              </button>
+              <button
+                type="button"
+                onClick={() => onHideHealth(30)}
+                className="w-full rounded-full border border-otto-divider py-2.5 text-[13px] font-bold"
+              >
+                Hide for 30 days
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onShowHealth}
+              className="w-full rounded-full bg-otto-bg py-2.5 text-[13px] font-bold"
+            >
+              Show it again
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-5 flex gap-3 rounded-xl border border-otto-divider bg-otto-surface px-3.5 py-3">

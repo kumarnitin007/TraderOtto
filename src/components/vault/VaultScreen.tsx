@@ -42,6 +42,7 @@ export function VaultScreen({
   security,
   recentIds,
   onClearRecents,
+  showHealth,
   onSelect,
   onCopy,
   onAdd,
@@ -61,6 +62,7 @@ export function VaultScreen({
   security: VaultSecuritySnapshot;
   recentIds: string[];
   onClearRecents: () => void;
+  showHealth: boolean;
   onSelect: (item: VaultItem) => void;
   onCopy: (value: string, label?: string, itemId?: string) => void;
   onAdd: () => void;
@@ -114,7 +116,7 @@ export function VaultScreen({
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-[13px] font-medium text-otto-text-dim">
-          {allItems.length} {allItems.length === 1 ? "item" : "items"}
+          {sortedItems.length} {itemCountLabel(filter, sortedItems.length)}
         </p>
         <button
           type="button"
@@ -149,12 +151,6 @@ export function VaultScreen({
       <div className="-mx-[18px] mb-4 flex snap-x items-center gap-2 overflow-x-auto px-[18px] pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <FilterChip active={filter === "all"} onClick={() => selectFilter("all")}>
           All
-        </FilterChip>
-        <FilterChip
-          active={filter === "favorites"}
-          onClick={() => selectFilter("favorites")}
-        >
-          Favorites
         </FilterChip>
         <button
           type="button"
@@ -191,7 +187,7 @@ export function VaultScreen({
         </FilterChip>
       </div>
 
-      {!browsingTags && (
+      {showHealth && !browsingTags && (
         <button
           type="button"
           onClick={onOpenHealth}
@@ -227,7 +223,13 @@ export function VaultScreen({
                 ? "Favorites"
                 : filter === "recent"
                   ? "Recently opened"
-                  : "All items"}
+                  : filter === "login"
+                    ? "Passwords"
+                    : filter === "card"
+                      ? "Cards"
+                      : filter === "note"
+                        ? "Notes"
+                        : "All items"}
           </h2>
         )}
         {!activeTag && filter === "recent" ? (
@@ -370,6 +372,16 @@ export function VaultScreen({
       )}
     </section>
   );
+}
+
+function itemCountLabel(filter: VaultFilter, count: number) {
+  const one = count === 1;
+  if (filter === "favorites") return one ? "favorite" : "favorites";
+  if (filter === "recent") return one ? "recent item" : "recent items";
+  if (filter === "login") return one ? "password" : "passwords";
+  if (filter === "card") return one ? "card" : "cards";
+  if (filter === "note") return one ? "note" : "notes";
+  return one ? "item" : "items";
 }
 
 function SortOption({

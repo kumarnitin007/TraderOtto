@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lifeDaysUntil, lifeOccasionLabel, parseLeoEvents } from "@/lib/life";
+import { lifeDaysUntil, lifeOccasionLabel, lifeOnThisDay, parseLeoEvents } from "@/lib/life";
 
 const CSV = `### Tasks ###
 id,name
@@ -53,5 +53,25 @@ describe("life dates", () => {
     expect(lifeDaysUntil(item, new Date(2026, 6, 22))).toBe(4);
     expect(lifeOccasionLabel(item, new Date(2026, 6, 22))).toBe("Turns 13");
     expect(lifeDaysUntil(item, new Date(2026, 6, 26))).toBe(0);
+  });
+
+  it("matches Life dates that fall on this month and day", () => {
+    const birthday = {
+      id: "1",
+      name: "Kaashvi",
+      category: "birthday" as const,
+      notes: "",
+      month: 9,
+      day: 29,
+      year: 2013,
+      occursOn: null,
+      repeats: "yearly" as const,
+      remindDays: 0,
+      milestone: false,
+      createdAt: "",
+      updatedAt: "",
+    };
+    expect(lifeOnThisDay([birthday], "2026-09-29").map((item) => item.name)).toEqual(["Kaashvi"]);
+    expect(lifeOnThisDay([birthday], "2026-09-28")).toEqual([]);
   });
 });

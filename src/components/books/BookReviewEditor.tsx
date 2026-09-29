@@ -190,7 +190,7 @@ export function BookReviewEditor({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-xl bg-otto-green py-3 text-[14px] font-bold text-white disabled:opacity-50"
+          className="w-full rounded-xl bg-otto-green py-3 text-[14px] font-bold text-white disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save review"}
         </button>

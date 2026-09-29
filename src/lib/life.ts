@@ -66,6 +66,14 @@ export function lifeOccasionLabel(
   return null;
 }
 
+export function lifeOnThisDay(items: LifeItem[], today: string) {
+  const month = Number(today.slice(5, 7));
+  const day = Number(today.slice(8, 10));
+  return items
+    .filter((item) => item.month === month && item.day === day)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export function lifeCountdownLabel(days: number) {
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";

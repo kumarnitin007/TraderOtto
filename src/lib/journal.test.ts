@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finishedBookBody, journalSortOrder, journalStreak, onThisDay, orderedNotes } from "@/lib/journal";
+import { finishedBookBody, journalSortOrder, journalStreak, noteTitle, onThisDay, orderedNotes } from "@/lib/journal";
 import type { JournalEntry } from "@/types/journal";
 
 function entry(patch: Partial<JournalEntry>): JournalEntry {
@@ -49,16 +49,24 @@ describe("journal", () => {
     ]);
   });
 
-  it("finds earlier years on this calendar day", () => {
+  it("finds this year and earlier years on this calendar day", () => {
     const found = onThisDay(
       [
         entry({ id: "today", kind: "entry", entryDate: "2026-09-29" }),
         entry({ id: "last-year", kind: "entry", entryDate: "2025-09-29" }),
         entry({ id: "note", kind: "note", entryDate: "2024-09-29" }),
+        entry({ id: "other", kind: "entry", entryDate: "2026-09-28" }),
       ],
       "2026-09-29"
     );
-    expect(found.map((item) => item.id)).toEqual(["last-year"]);
+    expect(found.map((item) => item.id)).toEqual(["today", "last-year", "note"]);
+  });
+
+  it("uses the first three words as a note title and keeps the remaining lines", () => {
+    expect(noteTitle("Called mom today\nShe sounded good")).toEqual({
+      title: "Called mom today",
+      rest: "She sounded good",
+    });
   });
 
   it("writes one book entry and nudges when there is no review", () => {

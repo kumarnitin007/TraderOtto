@@ -513,7 +513,7 @@ export function BookEditor({
         <button
           type="submit"
           disabled={busy}
-          className="mt-2 rounded-xl bg-otto-green py-3 text-[14px] font-bold text-white disabled:opacity-50"
+          className="mt-2 w-full rounded-xl bg-otto-green py-3 text-[14px] font-bold text-white disabled:opacity-50"
         >
           {busy ? "Saving…" : book ? "Save changes" : "Add book"}
         </button>

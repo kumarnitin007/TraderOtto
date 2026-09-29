@@ -27,6 +27,11 @@ import {
   readVaultRecents,
   rememberVaultRecent,
 } from "@/lib/vaultRecents";
+import {
+  hideHealthBanner,
+  readHealthBannerHide,
+  showHealthBanner,
+} from "@/lib/vaultHealthBanner";
 import { useEncryptedVault } from "@/hooks/useEncryptedVault";
 
 type Editor = { mode: "create" } | { mode: "edit"; item: VaultItem };
@@ -48,6 +53,7 @@ export function VaultWorkspace() {
   const [tagManager, setTagManager] = useState(false);
   const [dataTransfer, setDataTransfer] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState(false);
+  const [healthHiddenUntil, setHealthHiddenUntil] = useState<number | "forever" | null>(null);
   const [securitySettings, setSecuritySettings] = useState(false);
   const [toast, setToast] = useState("");
   const [dataError, setDataError] = useState("");
@@ -88,6 +94,7 @@ export function VaultWorkspace() {
 
   useEffect(() => {
     setRecentIds(readVaultRecents());
+    setHealthHiddenUntil(readHealthBannerHide()?.until ?? null);
   }, []);
 
   useEffect(() => {
@@ -376,6 +383,7 @@ export function VaultWorkspace() {
           security={security}
           recentIds={recentIds}
           onClearRecents={clearRecents}
+          showHealth={healthHiddenUntil == null}
           onSelect={openItem}
           onCopy={copy}
           onAdd={() => setEditor({ mode: "create" })}
@@ -383,7 +391,16 @@ export function VaultWorkspace() {
         />
       )}
       {tab === "security" && (
-        <SecurityScreen security={security} onGenerate={() => setGenerator(true)} />
+        <SecurityScreen
+          security={security}
+          onGenerate={() => setGenerator(true)}
+          healthHiddenUntil={healthHiddenUntil}
+          onHideHealth={(days) => setHealthHiddenUntil(hideHealthBanner(days).until)}
+          onShowHealth={() => {
+            showHealthBanner();
+            setHealthHiddenUntil(null);
+          }}
+        />
       )}
       {tab === "settings" && (
         <SettingsScreen
