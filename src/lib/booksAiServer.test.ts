@@ -21,14 +21,21 @@ describe("Books AI helpers", () => {
         likedGenres: "science fiction",
         avoid: "children's books",
       },
-      { goal: "Something different", note: "No graphic violence" }
+      {
+        goal: "Best selling",
+        note: "No graphic violence",
+        authors: ["Frank Herbert"],
+        criteria: "Best selling",
+      }
     );
     expect(prompt).toContain("Dune Messiah");
     expect(prompt).toContain("political intrigue");
     expect(prompt).toContain("not in the sample");
     expect(prompt).toContain('"audience":"adult"');
     expect(prompt).toContain("children's books");
-    expect(prompt).toContain("Something different");
+    expect(prompt).toContain("Best selling");
+    expect(prompt).toContain('"criteria":"Best selling"');
+    expect(prompt).toContain("Frank Herbert");
   });
 
   it("leaves empty book fields out of the prompt", () => {

@@ -655,8 +655,10 @@ export function BooksSettingsScreen({
       </div>
 
       <p className="mt-5 rounded-xl bg-otto-surface px-4 py-3 text-[12px] leading-relaxed text-otto-text-dim">
-        Discover shows the books and reviews it will send, and only includes the ones you leave
-        checked. Open Library searches and cover requests stop completely when its setting is off.
+        Discover starts from the authors you have been reading. You can turn authors off, add more,
+        and choose best selling, top rated, award winners, or new releases before fetching. The
+        taste sample only includes books you leave checked. Open Library searches and cover
+        requests stop completely when its setting is off.
       </p>
     </section>
   );

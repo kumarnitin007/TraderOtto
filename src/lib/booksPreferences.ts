@@ -15,9 +15,20 @@ export type BooksPreferences = {
   catalogs: BookCatalog[];
 };
 
+export const RECOMMENDATION_CRITERIA = [
+  "Best selling",
+  "Top rated",
+  "Award winners",
+  "New releases",
+] as const;
+
+export type RecommendationCriteria = (typeof RECOMMENDATION_CRITERIA)[number];
+
 export type RecommendationRequest = {
   goal: string;
   note: string;
+  authors: string[];
+  criteria: RecommendationCriteria;
 };
 
 export const BOOKS_PREFERENCES_KEY = "trader-otto:books-preferences";

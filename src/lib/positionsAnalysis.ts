@@ -1,6 +1,7 @@
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
 import type { TickerTechnical } from "@/lib/alpacaServer";
+import { crossesEarnings } from "@/lib/earningsCache";
 import { markPnl, todayISO } from "@/lib/pnl";
 import type { TickerContext } from "@/lib/positionsPrompt";
 import type { Trade } from "@/types/trade";
@@ -51,10 +52,9 @@ export function buildLocalPositionInsights(
     });
   }
 
-  const eventTrades = open.filter((trade) => {
-    const date = context[trade.ticker]?.earningsDate;
-    return date && date >= todayISO() && date <= trade.expiry;
-  });
+  const eventTrades = open.filter((trade) =>
+    crossesEarnings(trade.expiry, context[trade.ticker]?.earningsDate)
+  );
   if (eventTrades.length) {
     insights.push({
       tone: "danger",

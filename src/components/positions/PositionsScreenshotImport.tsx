@@ -1,16 +1,65 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Camera, LoaderCircle, X } from "lucide-react";
 import { useTrades } from "@/hooks/useTrades";
+import { useNotifications } from "@/hooks/useNotifications";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
 import { fmtDate, fmtMoney, realizedPnl } from "@/lib/pnl";
 import { parseRobinhoodScreenshot } from "@/lib/robinhoodScreenshot";
 import { isDuplicateClosedTrade } from "@/lib/tradeDuplicate";
-import type { ClosedTradeImport } from "@/types/trade";
+import type { ClosedTradeImport, NewTrade, Trade } from "@/types/trade";
 import { PositionsSummary } from "@/components/positions/PositionsSummary";
-import { RobinhoodCsvImport } from "@/components/positions/RobinhoodCsvImport";
+
+function toOpenTrade(
+  parsed: ReturnType<typeof parseRobinhoodScreenshot>
+): NewTrade | null {
+  if (
+    parsed.closed ||
+    !parsed.ticker ||
+    !parsed.strategy ||
+    !parsed.expiry ||
+    !parsed.openDate ||
+    !parsed.shortStrike ||
+    !parsed.premiumOpen
+  ) {
+    return null;
+  }
+  return {
+    ticker: parsed.ticker,
+    strategy: parsed.strategy,
+    contracts: Number(parsed.contracts) || 1,
+    expiry: parsed.expiry,
+    openDate: parsed.openDate,
+    shortStrike: Number(parsed.shortStrike),
+    longStrike: parsed.longStrike ? Number(parsed.longStrike) : null,
+    callShortStrike: parsed.callShort ? Number(parsed.callShort) : null,
+    callLongStrike: parsed.callLong ? Number(parsed.callLong) : null,
+    stockPriceOpen: Number(parsed.stockPriceOpen) || 0,
+    iv: Number(parsed.iv) || 0,
+    delta: Number(parsed.delta) || 0,
+    sigma: Number(parsed.sigma) || 0,
+    theta: Number(parsed.theta) || 0,
+    premiumOpen: Number(parsed.premiumOpen),
+    commissionOpen: 0,
+    notes: parsed.notes ?? "Imported from Robinhood screenshot.",
+  };
+}
+
+function sameOpenTrade(existing: Trade, candidate: NewTrade) {
+  return (
+    existing.status === "open" &&
+    existing.ticker === candidate.ticker &&
+    existing.strategy === candidate.strategy &&
+    existing.expiry === candidate.expiry &&
+    existing.openDate === candidate.openDate &&
+    existing.shortStrike === candidate.shortStrike &&
+    existing.longStrike === candidate.longStrike &&
+    existing.premiumOpen === candidate.premiumOpen
+  );
+}
 
 function toClosedTrade(
   parsed: ReturnType<typeof parseRobinhoodScreenshot>
@@ -59,9 +108,12 @@ export function PositionsScreenshotImport({
   quotes: Record<string, LiveQuote>;
   marks: Record<string, OptionMark>;
 }) {
-  const { trades, addClosedTrade, readonly } = useTrades();
+  const { trades, addTrade, addClosedTrade, readonly } = useTrades();
+  const { preferences } = useNotifications();
+  const router = useRouter();
   const [progress, setProgress] = useState<number | null>(null);
   const [candidate, setCandidate] = useState<ClosedTradeImport | null>(null);
+  const [openCandidate, setOpenCandidate] = useState<NewTrade | null>(null);
   const [duplicate, setDuplicate] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -70,6 +122,7 @@ export function PositionsScreenshotImport({
     if (!file) return;
     setError("");
     setCandidate(null);
+    setOpenCandidate(null);
     setDuplicate(false);
     setProgress(0);
     try {
@@ -83,17 +136,22 @@ export function PositionsScreenshotImport({
       });
       try {
         const result = await worker.recognize(file);
-        const parsed = toClosedTrade(parseRobinhoodScreenshot(result.data.text));
-        if (!parsed) {
+        const parsed = parseRobinhoodScreenshot(result.data.text);
+        const closed = toClosedTrade(parsed);
+        const opened = closed ? null : toOpenTrade(parsed);
+        if (!closed && !opened) {
           setError(
-            "Could not recognize a complete closed trade. Use the Robinhood realized profit detail screenshot."
+            "Could not recognize this screenshot. Use a filled-order screen or the realized profit detail."
           );
           return;
         }
-        setDuplicate(
-          trades.some((trade) => isDuplicateClosedTrade(trade, parsed))
-        );
-        setCandidate(parsed);
+        if (closed) {
+          setDuplicate(trades.some((trade) => isDuplicateClosedTrade(trade, closed)));
+          setCandidate(closed);
+        } else if (opened) {
+          setDuplicate(trades.some((trade) => sameOpenTrade(trade, opened)));
+          setOpenCandidate(opened);
+        }
       } finally {
         await worker.terminate();
       }
@@ -101,6 +159,28 @@ export function PositionsScreenshotImport({
       setError(cause instanceof Error ? cause.message : "Could not read this screenshot.");
     } finally {
       setProgress(null);
+    }
+  }
+
+  async function saveOpen() {
+    if (!openCandidate || saving) return;
+    if (readonly) {
+      setError("Sign in to save trades to the database.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const created = await addTrade(openCandidate);
+      setOpenCandidate(null);
+      setDuplicate(false);
+      if (preferences.riskAnalyzerEnabled) {
+        router.push(`/risk-analyzer?trade=${encodeURIComponent(created.id)}`);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not import this trade.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -164,10 +244,64 @@ export function PositionsScreenshotImport({
             }}
           />
         </label>
-        <RobinhoodCsvImport />
         <PositionsSummary quotes={quotes} marks={marks} />
         {error && <div className="text-xs font-medium text-otto-red">{error}</div>}
       </div>
+
+      {openCandidate && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/65 desk:items-center">
+          <div className="w-full max-w-[460px] rounded-t-[28px] bg-otto-bg p-5 shadow-2xl desk:rounded-[24px]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-otto-text-faint">
+                  Review open trade
+                </div>
+                <h2 className="mt-1 text-xl font-extrabold">
+                  {openCandidate.ticker} {openCandidate.shortStrike}
+                  {openCandidate.longStrike ? `/${openCandidate.longStrike}` : ""}{" "}
+                  {openCandidate.strategy}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenCandidate(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-otto-surface"
+                aria-label="Close import review"
+              >
+                <X size={17} />
+              </button>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-otto-surface p-4 text-sm">
+              <Review label="Opened" value={fmtDate(openCandidate.openDate)} />
+              <Review label="Expiry" value={fmtDate(openCandidate.expiry)} />
+              <Review label="Credit" value={fmtMoney(openCandidate.premiumOpen)} />
+              <Review label="Contracts" value={String(openCandidate.contracts)} />
+            </div>
+            {duplicate && (
+              <div className="mt-3 rounded-xl bg-otto-amber-soft px-3 py-2.5 text-xs font-semibold text-otto-amber">
+                An open trade with the same terms is already saved.
+              </div>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setOpenCandidate(null)}
+                className="flex-1 rounded-full border border-otto-divider py-3 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveOpen()}
+                disabled={saving || duplicate}
+                className="flex-[2] rounded-full bg-otto-green py-3 text-sm font-bold text-black disabled:opacity-60"
+              >
+                {saving ? "Importing…" : "Import open trade"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {candidate && (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/65 desk:items-center">

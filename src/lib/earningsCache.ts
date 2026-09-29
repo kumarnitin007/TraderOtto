@@ -10,11 +10,27 @@ function daysBetween(from: string, to: string) {
 }
 
 /** Fetch only if missing, past, or an empty lookup is older than a week. */
+export function earningsCacheNeedsRefresh(
+  cache: { earningsDate: string | null; earningsCheckedAt: string | null },
+  today = todayISO()
+) {
+  if (cache.earningsDate && cache.earningsDate >= today) return false;
+  if (cache.earningsDate && cache.earningsDate < today) return true;
+  if (!cache.earningsCheckedAt) return true;
+  return daysBetween(cache.earningsCheckedAt.slice(0, 10), today) >= EMPTY_REFRESH_DAYS;
+}
+
 export function earningsNeedsRefresh(tracker: WatchTracker, today = todayISO()) {
-  if (tracker.earningsDate && tracker.earningsDate >= today) return false;
-  if (tracker.earningsDate && tracker.earningsDate < today) return true;
-  if (!tracker.earningsCheckedAt) return true;
-  return daysBetween(tracker.earningsCheckedAt.slice(0, 10), today) >= EMPTY_REFRESH_DAYS;
+  return earningsCacheNeedsRefresh(tracker, today);
+}
+
+/** An open spread crosses earnings when the announcement is still ahead and on or before expiry. */
+export function crossesEarnings(
+  expiry: string,
+  earningsDate: string | null | undefined,
+  today = todayISO()
+) {
+  return Boolean(earningsDate && earningsDate >= today && earningsDate <= expiry);
 }
 
 /** Industry rarely changes; fetch once, retry empty lookups after a week. */

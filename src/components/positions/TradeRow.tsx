@@ -24,6 +24,7 @@ import { Sparkline } from "@/components/ui/Sparkline";
 import { QuickQuoteButton } from "@/components/ui/QuickQuoteButton";
 import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { PaceBadge } from "@/components/positions/PaceBadge";
+import { crossesEarnings } from "@/lib/earningsCache";
 import { assignmentCapital } from "@/lib/roi";
 import { AI_TRADE_DRAFT_KEY } from "@/lib/aiTradeDraft";
 import type { PositionRiskThresholds } from "@/types/notification";
@@ -41,6 +42,8 @@ export function TradeRow({
   live,
   optionMark,
   riskThresholds,
+  earningsDate = null,
+  earningsTiming = null,
 }: {
   t: Trade;
   open: boolean;
@@ -54,6 +57,8 @@ export function TradeRow({
   live?: LiveQuote;
   optionMark?: OptionMark;
   riskThresholds: PositionRiskThresholds;
+  earningsDate?: string | null;
+  earningsTiming?: string | null;
 }) {
   const router = useRouter();
   const pnl = tradePnl(t);
@@ -70,6 +75,8 @@ export function TradeRow({
     thresholds: riskThresholds,
   });
   const assignmentCash = assignmentCapital(t);
+  const earningsCross =
+    t.status === "open" && crossesEarnings(t.expiry, earningsDate);
   const [closeDate, setCloseDate] = useState(t.closeDate || todayISO());
   const [stockPriceClose, setStockPriceClose] = useState(
     t.stockPriceClose != null ? String(t.stockPriceClose) : ""
@@ -144,6 +151,16 @@ export function TradeRow({
               />
             )}
             <span className="truncate text-xs text-otto-text-faint">{t.strategy}</span>
+            {earningsCross && earningsDate && (
+              <span
+                className="shrink-0 rounded-full bg-otto-amber-soft px-1.5 py-0.5 text-[10px] font-semibold text-otto-amber"
+                title={`Earnings ${fmtDate(earningsDate)}${
+                  earningsTiming ? ` · ${earningsTiming}` : ""
+                }. This spread is still open through that date.`}
+              >
+                Earnings {fmtDate(earningsDate)}
+              </span>
+            )}
           </div>
           <div className="mt-0.5 truncate text-xs text-otto-text-faint">
             {strikesLabel} · exp {fmtDate(t.expiry)} · {t.contracts}x

@@ -257,7 +257,7 @@ export function BooksWorkspace() {
     includeIds: string[],
     request: RecommendationRequest
   ) {
-    if (!booksState.books.length || generating) return;
+    if (generating || (!includeIds.length && !request.authors.length)) return;
     setGenerating(true);
     setActionError("");
     try {
@@ -396,9 +396,7 @@ export function BooksWorkspace() {
           report={booksState.discovery}
           generating={generating}
           error={actionError}
-          canGenerate={
-            preferencesLoaded && !booksState.readonly && booksState.books.length > 0
-          }
+          canGenerate={preferencesLoaded && !booksState.readonly}
           onGenerate={(includeIds, request) =>
             void generateRecommendations(includeIds, request)
           }

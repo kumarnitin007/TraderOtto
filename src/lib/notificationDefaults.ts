@@ -46,6 +46,7 @@ const event = (enabled = true): EventPreference => ({
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   masterEnabled: true,
+  riskAnalyzerEnabled: false,
   quietHours: { enabled: false, start: "20:00", end: "09:00" },
   expiryDays: 3,
   earningsDays: 7,

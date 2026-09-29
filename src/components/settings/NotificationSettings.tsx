@@ -13,7 +13,8 @@ import type {
   NotificationPreferences,
 } from "@/types/notification";
 
-const CHANNELS: { id: keyof NotificationPreferences["events"]["price_range"]; label: string }[] = [
+type ChannelKey = "inApp" | "browser" | "email" | "discord" | "telegram";
+const CHANNELS: { id: ChannelKey; label: string }[] = [
   { id: "inApp", label: "In app" },
   { id: "browser", label: "Browser" },
   { id: "email", label: "Email" },
@@ -21,7 +22,7 @@ const CHANNELS: { id: keyof NotificationPreferences["events"]["price_range"]; la
   { id: "telegram", label: "Telegram" },
 ];
 
-export type TraderSettingsSection = "alerts" | "muted" | "risk" | "timing";
+export type TraderSettingsSection = "alerts" | "muted" | "risk" | "timing" | "data";
 
 export function NotificationSettings({
   section,
@@ -32,6 +33,7 @@ export function NotificationSettings({
   const { groups } = useWatchGroups();
   const [notice, setNotice] = useState("");
   const [testing, setTesting] = useState<NotificationChannel | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<ChannelKey>("inApp");
   const showAlerts = !section || section === "alerts";
   const showMuted = !section || section === "muted";
   const showRisk = !section || section === "risk";
@@ -53,6 +55,13 @@ export function NotificationSettings({
         ...preferences.events,
         [kind]: { ...preferences.events[kind], ...patch },
       },
+    });
+  }
+
+  function setEventChannel(kind: NotificationEventKind, channel: ChannelKey, enabled: boolean) {
+    patchEvent(kind, {
+      enabled: enabled ? true : preferences.events[kind].enabled,
+      [channel]: enabled,
     });
   }
 
@@ -162,69 +171,94 @@ export function NotificationSettings({
 
       {showAlerts && (
       <section className="space-y-3">
-        {section && (
-          <label className="mb-4 flex items-center justify-between rounded-xl bg-otto-surface px-3.5 py-3 text-[13px] font-semibold">
-            <span>
-              <span className="block text-[14px]">All alerts</span>
-              <span className="mt-0.5 block text-[11.5px] font-normal text-otto-text-faint">
-                Master switch for every alert type
-              </span>
+        <div className="flex items-center justify-between rounded-2xl bg-otto-surface px-4 py-3.5">
+          <span>
+            <span className="block text-sm font-bold">Notifications</span>
+            <span className="mt-0.5 block text-[11.5px] text-otto-text-faint">
+              Master switch for every channel
             </span>
-            <input
-              type="checkbox"
-              checked={preferences.masterEnabled}
-              onChange={(event) =>
-                void save({ ...preferences, masterEnabled: event.target.checked })
-              }
-              className="h-4 w-4"
-            />
-          </label>
-        )}
-        {(Object.keys(EVENT_LABELS) as NotificationEventKind[]).map((kind) => {
-          const event = preferences.events[kind];
-          return (
-            <div key={kind} className="rounded-xl border border-otto-divider p-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-bold">{EVENT_LABELS[kind].label}</div>
-                  <div className="mt-0.5 text-[11.5px] text-otto-text-faint">
-                    {EVENT_LABELS[kind].description}
+          </span>
+          <Switch
+            checked={preferences.masterEnabled}
+            label="Enable all notifications"
+            onChange={(checked) =>
+              void save({ ...preferences, masterEnabled: checked })
+            }
+          />
+        </div>
+
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-otto-text-faint">
+            1 · Choose a delivery channel
+          </div>
+          <div className="grid grid-cols-3 gap-2 desk:grid-cols-5">
+            {CHANNELS.map((channel) => {
+              const count = (Object.keys(EVENT_LABELS) as NotificationEventKind[]).filter(
+                (kind) =>
+                  preferences.events[kind].enabled &&
+                  Boolean(preferences.events[kind][channel.id])
+              ).length;
+              const selected = selectedChannel === channel.id;
+              return (
+                <button
+                  key={channel.id}
+                  type="button"
+                  onClick={() => setSelectedChannel(channel.id)}
+                  className={`rounded-2xl border px-2 py-3 text-center transition-colors ${
+                    selected
+                      ? "border-otto-green bg-otto-green-soft text-otto-text"
+                      : "border-otto-divider bg-otto-surface text-otto-text-dim"
+                  }`}
+                >
+                  <span className="block text-xs font-bold">{channel.label}</span>
+                  <span className="mt-0.5 block text-[9.5px] text-otto-text-faint">
+                    {count} type{count === 1 ? "" : "s"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <ChannelConfiguration
+          channel={selectedChannel}
+          preferences={preferences}
+          save={save}
+          test={test}
+          testing={testing}
+          enableChannelOnLiveAlerts={enableChannelOnLiveAlerts}
+          setNotice={setNotice}
+        />
+
+        <div>
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-otto-text-faint">
+            2 · Choose alerts for {CHANNELS.find((item) => item.id === selectedChannel)?.label}
+          </div>
+          <div className="overflow-hidden rounded-2xl bg-otto-surface">
+            {(Object.keys(EVENT_LABELS) as NotificationEventKind[]).map((kind, index) => {
+              const event = preferences.events[kind];
+              const checked = event.enabled && Boolean(event[selectedChannel]);
+              return (
+                <div key={kind}>
+                  {index > 0 && <div className="mx-4 border-t border-otto-divider" />}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-bold">{EVENT_LABELS[kind].label}</div>
+                      <div className="mt-0.5 text-[10.5px] leading-relaxed text-otto-text-faint">
+                        {EVENT_LABELS[kind].description}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={checked}
+                      label={`${checked ? "Disable" : "Enable"} ${EVENT_LABELS[kind].label} for ${selectedChannel}`}
+                      onChange={(next) => setEventChannel(kind, selectedChannel, next)}
+                    />
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={event.enabled}
-                  onChange={(input) => patchEvent(kind, { enabled: input.target.checked })}
-                  className="h-4 w-4 shrink-0"
-                  aria-label={`Enable ${EVENT_LABELS[kind].label}`}
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-                {CHANNELS.map((channel) => (
-                  <label
-                    key={channel.id}
-                    className="flex items-center gap-1.5 text-[11.5px] font-medium text-otto-text-dim"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={
-                        typeof event[channel.id] === "boolean"
-                          ? Boolean(event[channel.id])
-                          : false
-                      }
-                      disabled={!event.enabled}
-                      onChange={(input) =>
-                        patchEvent(kind, { [channel.id]: input.target.checked })
-                      }
-                      className="h-3.5 w-3.5"
-                    />
-                    {channel.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </div>
       </section>
       )}
 
@@ -283,7 +317,43 @@ export function NotificationSettings({
       )}
 
       {showRisk && (
-      <section className="rounded-xl bg-otto-surface p-4">
+      <div className="space-y-3">
+      <section className="rounded-2xl bg-otto-surface p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-bold">Review new trades</h2>
+            <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
+              Open Risk Analyzer after a manual or screenshot trade is saved.
+              The deterministic score uses expiry, earnings, strikes, exposure,
+              and available market data.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={preferences.riskAnalyzerEnabled}
+            onClick={() =>
+              void save({
+                ...preferences,
+                riskAnalyzerEnabled: !preferences.riskAnalyzerEnabled,
+              })
+            }
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+              preferences.riskAnalyzerEnabled ? "bg-otto-green" : "bg-otto-divider"
+            }`}
+          >
+            <span
+              className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                preferences.riskAnalyzerEnabled ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+        <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-otto-text-faint">
+          {preferences.riskAnalyzerEnabled ? "On" : "Off by default"}
+        </div>
+      </section>
+      <section className="rounded-2xl bg-otto-surface p-4">
         <h2 className="text-sm font-bold">Position risk rules</h2>
         <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
           These rules drive the Watch, Underwater, and Critical tags on
@@ -368,6 +438,7 @@ export function NotificationSettings({
           </Field>
         </div>
       </section>
+      </div>
       )}
 
       {showTiming && (
@@ -482,25 +553,70 @@ export function NotificationSettings({
       </section>
       )}
 
-      {showAlerts && (
-      <>
+      {(notice || error) && (
+        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-otto-text-dim">
+          {!error && <Check size={14} className="text-otto-green" />}
+          {error || notice}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChannelConfiguration({
+  channel,
+  preferences,
+  save,
+  test,
+  testing,
+  enableChannelOnLiveAlerts,
+  setNotice,
+}: {
+  channel: ChannelKey;
+  preferences: NotificationPreferences;
+  save: (next: NotificationPreferences) => Promise<void>;
+  test: (channel: NotificationChannel) => Promise<void>;
+  testing: NotificationChannel | null;
+  enableChannelOnLiveAlerts: (
+    channel: "email" | "discord" | "telegram"
+  ) => Promise<void>;
+  setNotice: (notice: string) => void;
+}) {
+  if (channel === "inApp") {
+    return (
+      <div className="rounded-2xl border border-otto-divider px-4 py-3">
+        <div className="text-sm font-bold">In-app inbox</div>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
+          Alerts appear in Otto&apos;s notification screen. No extra setup or
+          device permission is required.
+        </p>
+      </div>
+    );
+  }
+
+  if (channel === "browser") {
+    return (
       <Channel
         title="Browser"
-        description="Works while Trader Otto is open and your browser has permission."
+        description="Shows a device notification while Otto is open. Your browser or app must grant permission."
         action={() => void test("browser")}
         configured={
           typeof Notification !== "undefined" && Notification.permission === "granted"
         }
       />
+    );
+  }
 
+  if (channel === "email") {
+    return (
       <Channel
         title="Email"
-        description="Otto sends through SendGrid. Verify a Single Sender in SendGrid, put that address in NOTIFICATION_FROM_EMAIL, then any Delivery email works. Turn on Email per alert type, or Use for live alerts."
+        description="Delivered privately through Otto's configured SendGrid sender."
         action={() => void test("email")}
         busy={testing === "email"}
         configured={Boolean(preferences.emailAddress)}
         extraAction={{
-          label: "Use for live alerts",
+          label: "Turn on enabled alerts",
           onClick: () => void enableChannelOnLiveAlerts("email"),
         }}
       >
@@ -518,15 +634,19 @@ export function NotificationSettings({
           />
         </Field>
       </Channel>
+    );
+  }
 
+  if (channel === "discord") {
+    return (
       <Channel
         title="Discord"
-        description="Create a webhook in Discord → Channel settings → Integrations. It is stored in your private profile settings. Test does not turn Discord on for live alerts."
+        description="Paste a channel webhook from Discord → Channel settings → Integrations."
         action={() => void test("discord")}
         busy={testing === "discord"}
         configured={Boolean(preferences.discordWebhook)}
         extraAction={{
-          label: "Use for live alerts",
+          label: "Turn on enabled alerts",
           onClick: () => void enableChannelOnLiveAlerts("discord"),
         }}
       >
@@ -541,34 +661,52 @@ export function NotificationSettings({
           />
         </Field>
       </Channel>
+    );
+  }
 
-      <Channel
-        title="Telegram"
-        description="Otto uses one shared bot (token stays on the server). You only connect your chat. A successful test does not send live alerts until you enable Telegram on each alert type or tap Use for live alerts."
-        action={() => void test("telegram")}
-        busy={testing === "telegram"}
-        configured={Boolean(preferences.telegramChatId)}
-        extraAction={{
-          label: "Use for live alerts",
-          onClick: () => void enableChannelOnLiveAlerts("telegram"),
-        }}
-      >
-        <TelegramSetup
-          preferences={preferences}
-          save={save}
-          notice={setNotice}
-        />
-      </Channel>
-      </>
-      )}
+  return (
+    <Channel
+      title="Telegram"
+      description="Connect your chat to Otto's shared bot; the bot token remains on the server."
+      action={() => void test("telegram")}
+      busy={testing === "telegram"}
+      configured={Boolean(preferences.telegramChatId)}
+      extraAction={{
+        label: "Turn on enabled alerts",
+        onClick: () => void enableChannelOnLiveAlerts("telegram"),
+      }}
+    >
+      <TelegramSetup preferences={preferences} save={save} notice={setNotice} />
+    </Channel>
+  );
+}
 
-      {(notice || error) && (
-        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-otto-text-dim">
-          {!error && <Check size={14} className="text-otto-green" />}
-          {error || notice}
-        </div>
-      )}
-    </div>
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+        checked ? "bg-otto-green" : "bg-otto-divider"
+      }`}
+    >
+      <span
+        className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </button>
   );
 }
 

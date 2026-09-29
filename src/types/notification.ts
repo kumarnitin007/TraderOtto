@@ -26,6 +26,8 @@ export type PositionRiskThresholds = {
 
 export type NotificationPreferences = {
   masterEnabled: boolean;
+  /** Opens a deterministic risk review after a manual or screenshot trade entry. */
+  riskAnalyzerEnabled: boolean;
   quietHours: {
     enabled: boolean;
     start: string;

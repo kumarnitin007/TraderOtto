@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Clock3, EyeOff, ShieldAlert } from "lucide-react";
+import { Bell, Clock3, EyeOff, FileSpreadsheet, ShieldAlert } from "lucide-react";
 import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 import type { TraderSettingsSection } from "@/components/settings/NotificationSettings";
@@ -58,6 +58,13 @@ export function TraderSettingsScreen({
           label="Timing & quiet hours"
           detail={`${preferences.expiryDays}d before expiry`}
           onClick={() => onOpen("timing")}
+        />
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsRow
+          icon={FileSpreadsheet}
+          label="Import & export trades"
+          detail="CSV"
+          onClick={() => onOpen("data")}
         />
       </div>
 

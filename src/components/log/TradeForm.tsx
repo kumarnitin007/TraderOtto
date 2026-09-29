@@ -21,6 +21,7 @@ import { useAlpacaConnection } from "@/components/alpaca/AlpacaConnectionProvide
 import { parseRobinhoodScreenshot } from "@/lib/robinhoodScreenshot";
 import { WatchGroupsPanel } from "@/components/groups/WatchGroupsPanel";
 import { AI_TRADE_DRAFT_KEY, type AiTradeDraft } from "@/lib/aiTradeDraft";
+import { useNotifications } from "@/hooks/useNotifications";
 
 type FormState = {
   ticker: string;
@@ -167,6 +168,7 @@ function ScreenshotInput({
 
 export function TradeForm() {
   const { trades, addTrade, updateTrade, deleteTrade, readonly } = useTrades();
+  const { preferences } = useNotifications();
   const { state: alpacaState } = useAlpacaConnection();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -329,10 +331,15 @@ export function TradeForm() {
     try {
       if (mode === "edit" && selectedId) {
         await updateTrade(selectedId, trade);
+        router.push("/positions");
       } else {
-        await addTrade(trade);
+        const created = await addTrade(trade);
+        router.push(
+          preferences.riskAnalyzerEnabled
+            ? `/risk-analyzer?trade=${encodeURIComponent(created.id)}`
+            : "/positions"
+        );
       }
-      router.push("/positions");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save trade.");
     }

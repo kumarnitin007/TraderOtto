@@ -100,15 +100,18 @@ export function parseRobinhoodScreenshot(
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const header = lines.slice(0, 4).join(" ");
-  const spreadTitle = header.match(
+  const header = lines.slice(0, 8).join(" ");
+  const spreadTitle = text.match(
     /\b([A-Z]{1,6})\s+((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\/((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s+(Call|Put)\s+(Credit|Debit)\s+Spread\b/i
   );
-  const tickerMatch = header.match(/\b([A-Z]{1,5})\s*\$(\d+(?:\.\d+)?)/);
+  const tickerMatch =
+    text.match(/\b([A-Z]{1,5})\s+\$(\d+(?:\.\d+)?)/) ??
+    header.match(/\b([A-Z]{1,5})\s*\$(\d+(?:\.\d+)?)/);
   const ticker = tickerMatch?.[1] ?? spreadTitle?.[1]?.toUpperCase();
 
-  const headerAfterTicker = tickerMatch
-    ? header.slice((tickerMatch.index ?? 0) + tickerMatch[0].indexOf("$"))
+  const headerTicker = header.match(/\b([A-Z]{1,5})\s*\$(\d+(?:\.\d+)?)/);
+  const headerAfterTicker = headerTicker
+    ? header.slice((headerTicker.index ?? 0) + headerTicker[0].indexOf("$"))
     : header;
   const headerAmounts = Array.from(headerAfterTicker.matchAll(/\$(\d+(?:\.\d+)?)/g))
     .map((match) => Number(match[1]))
@@ -126,9 +129,10 @@ export function parseRobinhoodScreenshot(
     text.match(/(?:Contracts|Quantity)\s+Current price[\s\S]{0,40}?\n?\s*(-?\d+)\s+\$[\d.]+/i) ??
     text.match(/(?:Contracts|Quantity)[\s\S]{0,30}?(-?\d+)\b/i);
   const closedContracts = text.match(/x\s+(\d+)\s+contracts?\b/i)?.[1];
+  const filledQuantity = text.match(/(\d+)\s+filled at\s+\$/i)?.[1];
   const contracts = quantityMatch
     ? String(Math.abs(Number(quantityMatch[1])) || 1)
-    : closedContracts;
+    : filledQuantity ?? closedContracts;
 
   const closedMatch = text.match(/Closed\s+on\s+([A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4})/i);
   const closeDate = closedMatch ? parseWrittenDate(closedMatch[1]) ?? undefined : undefined;
@@ -172,13 +176,47 @@ export function parseRobinhoodScreenshot(
   if (closed && !expiryRaw) {
     expiryRaw = header.match(new RegExp(`(${DATE})(?![\\s\\S]*${DATE})`))?.[1];
   }
+  if (!expiryRaw) {
+    expiryRaw = text.match(
+      new RegExp(`(?:Credit|Debit)\\s+Spread\\s+(${DATE})`, "i")
+    )?.[1];
+  }
 
-  const currentYear = closeDate ? Number(closeDate.slice(0, 4)) : now.getFullYear();
+  const filledStamp = text.match(
+    /\bFilled(?!\s+quantity)[\s\S]{0,80}?(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?),\s*\d{1,2}:\d{2}\s*(?:AM|PM)/i
+  );
+  const filledParts = filledStamp ? parseDateParts(filledStamp[1]) : null;
+  const openingFill = /to open/i.test(text) && !/to close/i.test(text);
+  const closingFill = /to close/i.test(text) && !openingFill;
+  const filledAt = text.match(/filled at\s+\$(\d+(?:\.\d+)?)/i);
+  const estimatedCredit = text.match(
+    /est(?:imated)?\s+credit[\s\S]{0,40}?\$(\d+(?:\.\d+)?)/i
+  );
+  let filledPremium = filledAt ? Number(filledAt[1]) : undefined;
+  if (filledPremium == null && estimatedCredit) {
+    const dollars = Number(estimatedCredit[1]);
+    filledPremium = dollars >= 20 ? Math.round(dollars) / 100 : dollars;
+  }
+
+  const filledDate = filledParts
+    ? isoDate(
+        filledParts.month,
+        filledParts.day,
+        filledParts.explicitYear ?? now.getFullYear()
+      )
+    : undefined;
+  const currentYear = closeDate
+    ? Number(closeDate.slice(0, 4))
+    : filledDate
+      ? Number(filledDate.slice(0, 4))
+      : now.getFullYear();
   const openParts = openRaw ? parseDateParts(openRaw) : null;
   const expiryParts = expiryRaw ? parseDateParts(expiryRaw) : null;
   const openDate = openParts
     ? isoDate(openParts.month, openParts.day, openParts.explicitYear ?? currentYear)
-    : closeDate;
+    : openingFill
+      ? filledDate
+      : closeDate;
   let expiry = expiryParts
     ? isoDate(expiryParts.month, expiryParts.day, expiryParts.explicitYear ?? currentYear)
     : undefined;
@@ -255,12 +293,18 @@ export function parseRobinhoodScreenshot(
     premiumOpen:
       closedPremiumOpen != null
         ? String(Math.abs(closedPremiumOpen))
-        : premium == null
-          ? undefined
-          : String(Math.abs(premium)),
-    closeDate,
+        : premium != null
+          ? String(Math.abs(premium))
+          : openingFill && filledPremium != null
+            ? String(Math.abs(filledPremium))
+            : undefined,
+    closeDate: closeDate ?? (closingFill ? filledDate : undefined),
     premiumClose:
-      closedPremiumClose == null ? undefined : String(Math.abs(closedPremiumClose)),
+      closedPremiumClose != null
+        ? String(Math.abs(closedPremiumClose))
+        : closingFill && filledPremium != null
+          ? String(Math.abs(filledPremium))
+          : undefined,
     closed: closed || undefined,
     closeReason,
     notes: noteParts.join(" "),

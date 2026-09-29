@@ -61,10 +61,18 @@ Deno.serve(async (request) => {
       .filter((book) => !includeIds || includeIds.includes(book.id))
       .map((book) => ({ ...book, rating: Number(book.rating) })),
   );
-  if (!books.length) return json({ error: "Choose at least one book to send." }, 400);
+  const authors = (Array.isArray(body.request?.authors) ? body.request.authors : [])
+    .map((author: unknown) => safeText(author, 80))
+    .filter(Boolean)
+    .slice(0, 12);
+  const criteria = safeText(body.request?.criteria, 40) || "Best selling";
+  if (!books.length && !authors.length) {
+    return json({ error: "Choose at least one author or book to send." }, 400);
+  }
 
   const context: Record<string, string> = {
-    goal: safeText(body.request?.goal, 80) || "balanced suggestions",
+    goal: safeText(body.request?.goal, 80) || criteria,
+    criteria,
   };
   for (const [key, source, max] of [
     ["audience", body.preferences?.audience, 30],
@@ -86,12 +94,17 @@ Deno.serve(async (request) => {
     if (book.notes?.trim()) entry.review = book.notes.trim().slice(0, 200);
     return entry;
   });
+  const assignment = authors.length
+    ? "Recommend 3-6 real books by the listed authors that match the criteria and are not in the sample. Spread the list across those authors. Skip an author rather than inventing a weak match."
+    : "Recommend 3-6 real books that are not in the sample.";
   const prompt = `You are Otto Books, a careful personal reading recommender.
 The sample is the reader's highest and lowest rated books. Reader context outranks it.
-Recommend 3-6 real books not in the sample and verify title and author.
+${assignment} Verify each exact title and author with web search.
 Profile: 1-2 short sentences. Reason: under 140 characters. Tags: 2-4.
 Add at most 2 "not for you" books only for a clear dislike. Invent nothing.
 READER: ${JSON.stringify(context)}
+AUTHORS: ${JSON.stringify(authors)}
+CRITERIA: ${JSON.stringify(criteria)}
 SAMPLE (${sample.length} books): ${JSON.stringify(sample)}`;
   try {
     const result = await openAiJson(prompt, "book_discovery_report", schema, { webSearch: true });

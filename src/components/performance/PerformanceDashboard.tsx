@@ -1,14 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { PerformanceAiCoach } from "@/components/performance/PerformanceAiCoach";
 import { TradeScopeToggle } from "@/components/ui/TradeScopeToggle";
 import { DuplicateTradeReview } from "@/components/performance/DuplicateTradeReview";
 import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
-import { downloadJournalCsv } from "@/lib/journalExport";
 import {
   closedTradesInRange,
   fmtDate,
@@ -296,16 +295,6 @@ export function PerformanceDashboard() {
 
           <div className="mb-1 mt-6 flex items-center justify-between">
             <h3 className="text-[13px] font-bold">Closed trades</h3>
-            {scopedTrades.length > 0 && (
-              <button
-                type="button"
-                onClick={() => downloadJournalCsv(scopedTrades)}
-                className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-otto-text-faint"
-              >
-                <Download size={12} />
-                Export journal
-              </button>
-            )}
           </div>
           {closedSorted.length ? (
             closedSorted.map((trade) => (

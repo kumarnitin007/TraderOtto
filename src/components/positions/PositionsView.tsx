@@ -23,6 +23,7 @@ import {
 import { assignmentDetail } from "@/lib/roi";
 import { tradesInScope } from "@/lib/tradeScope";
 import { useNotifications } from "@/hooks/useNotifications";
+import { usePositionEarnings } from "@/hooks/usePositionEarnings";
 
 /** 10 letters keeps Open + two or three list names readable on a phone row. */
 const LIST_TAB_CHARS = 10;
@@ -97,6 +98,7 @@ export function PositionsView() {
     () => tradesInScope(trades, tradeScope),
     [tradeScope, trades]
   );
+  const earningsByTicker = usePositionEarnings(scopedTrades);
 
   const pinnedGroups = groups.slice(0, PINNED_LISTS);
   const extraGroups = groups.slice(PINNED_LISTS);
@@ -269,6 +271,8 @@ export function PositionsView() {
                 live={live[t.ticker]}
                 optionMark={optionMarks[t.id]}
                 riskThresholds={preferences.positionRiskThresholds}
+                earningsDate={earningsByTicker[t.ticker.toUpperCase()]?.earningsDate}
+                earningsTiming={earningsByTicker[t.ticker.toUpperCase()]?.earningsTiming}
               />
             ))}
           </div>

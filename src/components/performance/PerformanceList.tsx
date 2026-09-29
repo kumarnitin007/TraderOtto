@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { Download } from "lucide-react";
 import { useOptionMarks } from "@/hooks/useOptionMarks";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useTrades } from "@/hooks/useTrades";
@@ -25,7 +24,6 @@ import {
 } from "@/lib/pnl";
 import type { Trade } from "@/types/trade";
 import { assignmentDetail, fmtPct, tradeRoi } from "@/lib/roi";
-import { downloadJournalCsv } from "@/lib/journalExport";
 
 export function PerformanceList() {
   const { trades } = useTrades();
@@ -177,19 +175,6 @@ export function PerformanceList() {
       </div>
 
       <AssignmentCashCard detail={assignment} className="mb-[22px]" />
-
-      {trades.length > 0 && (
-        <div className="-mt-3 mb-4 flex justify-end">
-          <button
-            type="button"
-            onClick={() => downloadJournalCsv(trades)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-otto-divider px-3 py-1.5 text-[11px] font-semibold text-otto-text-dim"
-          >
-            <Download size={13} />
-            Export complete journal CSV
-          </button>
-        </div>
-      )}
 
       <div className="mb-1 flex items-end justify-between">
         <span className="pb-3 text-[13px] text-otto-text-faint">
