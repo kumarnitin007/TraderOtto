@@ -103,13 +103,19 @@ function isPnlRange(value: unknown): value is PnlRange {
   );
 }
 
+function readBanksTab(value: unknown): ScreenOptions["banksTab"] {
+  if (value === "settings") return "settings";
+  if (value === "holdings" || value === "accounts" || value === "add" || value === "deposits") return "holdings";
+  return "overview";
+}
+
 export function readScreenOptions(): ScreenOptions {
   if (typeof window === "undefined") return SCREEN_OPTION_DEFAULTS;
   try {
     const raw = window.localStorage.getItem(SCREEN_CACHE_KEY);
     if (!raw) return SCREEN_OPTION_DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<ScreenOptions> & { banksTab?: string };
-    const storedBanksTab = typeof parsed.banksTab === "string" ? parsed.banksTab : "";
+    const decoded = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = decoded as Partial<ScreenOptions>;
     const options: ScreenOptions = {
       positionsView:
         typeof parsed.positionsView === "string"
@@ -180,15 +186,7 @@ export function readScreenOptions(): ScreenOptions {
         parsed.journalTab === "settings"
           ? parsed.journalTab
           : "entries",
-      banksTab:
-        storedBanksTab === "settings"
-          ? "settings"
-          : storedBanksTab === "holdings" ||
-              storedBanksTab === "accounts" ||
-              storedBanksTab === "add" ||
-              storedBanksTab === "deposits"
-            ? "holdings"
-            : "overview",
+      banksTab: readBanksTab(decoded.banksTab),
     };
     if (!options.enabledSections.includes(options.appWorkspace)) {
       options.appWorkspace = options.defaultSection;

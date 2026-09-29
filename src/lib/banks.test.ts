@@ -19,7 +19,7 @@ function account(patch: Partial<BankAccount>): BankAccount {
   };
 }
 
-function deposit(patch: Partial<BankDeposit>): BankDeposit {
+function deposit(patch: Partial<BankDeposit> = {}): BankDeposit {
   return {
     id: "d",
     country: "in",
