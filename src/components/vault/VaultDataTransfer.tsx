@@ -10,6 +10,11 @@ import {
 } from "lucide-react";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import {
+  DataTransferButton,
+  DataTransferCard,
+  DataTransferNotice,
+} from "@/components/settings/DataTransferPrimitives";
+import {
   downloadVaultCsv,
   exportFilename,
   filterItemsForExport,
@@ -153,17 +158,17 @@ export function VaultDataTransfer({
           Export a subset of your vault or import items from a vault-format CSV. Journal trade
           exports are not supported here.
         </p>
-        <div className="mb-5 rounded-xl border border-otto-amber/35 bg-otto-amber-soft px-3.5 py-3 text-[12.5px] leading-relaxed text-otto-text-dim">
+        <DataTransferNotice tone="warning">
           CSV exports are plaintext and include readable secrets. They are not protected by your
           master password.
-        </div>
+        </DataTransferNotice>
 
-        <section className="mb-5 rounded-2xl bg-otto-surface p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Download size={18} className="text-otto-text-dim" />
-            <h2 className="text-[15px] font-bold">Export</h2>
-          </div>
-
+        <DataTransferCard
+          icon={Download}
+          title="Export vault"
+          description="Choose all items, one category, or one tag. The CSV includes the selected secrets in readable form."
+          className="mt-3"
+        >
           <fieldset className="space-y-2">
             <legend className="sr-only">Export scope</legend>
             <ScopeOption
@@ -227,23 +232,24 @@ export function VaultDataTransfer({
             </label>
           )}
 
-          <button
-            type="button"
+          <div className="mt-4">
+          <DataTransferButton
             onClick={handleExport}
             disabled={exportCount === 0}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-otto-green py-3 text-[15px] font-semibold text-black disabled:opacity-40"
           >
-            <Download size={17} />
+            <Download size={14} />
             Download CSV ({exportCount})
-          </button>
-        </section>
-
-        <section className="rounded-2xl bg-otto-surface p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Upload size={18} className="text-otto-text-dim" />
-            <h2 className="text-[15px] font-bold">Import</h2>
+          </DataTransferButton>
           </div>
+        </DataTransferCard>
 
+        <DataTransferCard
+          icon={Upload}
+          title="Import vault"
+          description="Choose an Otto Vault CSV. Review new, updated, duplicate, and skipped rows before saving."
+          tone="accent"
+          className="mt-3"
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -251,14 +257,13 @@ export function VaultDataTransfer({
             className="sr-only"
             onChange={handleFileChange}
           />
-          <button
-            type="button"
+          <DataTransferButton
+            variant="dashed"
             onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-otto-divider bg-otto-bg py-4 text-[14px] font-medium text-otto-text-dim hover:border-otto-text-faint"
           >
-            <FileUp size={18} />
+            <FileUp size={14} />
             {fileLabel ? fileLabel : "Choose CSV file"}
-          </button>
+          </DataTransferButton>
           <button
             type="button"
             onClick={() =>
@@ -350,23 +355,21 @@ export function VaultDataTransfer({
                 </div>
               )}
 
-              <button
-                type="button"
+              <DataTransferButton
                 onClick={() => void confirmImport()}
                 disabled={
                   importing || blockingErrors.length > 0 || selectedIds.size === 0
                 }
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-otto-green py-3 text-[15px] font-semibold text-black disabled:opacity-40"
               >
                 {importing
                   ? "Importing…"
                   : `Confirm import (${selectedIds.size} item${
                       selectedIds.size === 1 ? "" : "s"
                     })`}
-              </button>
+              </DataTransferButton>
             </div>
           )}
-        </section>
+        </DataTransferCard>
       </div>
     </div>
   );

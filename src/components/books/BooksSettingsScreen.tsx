@@ -18,6 +18,12 @@ import { LibraryCheck } from "@/components/books/LibraryCheck";
 import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { SettingsRow } from "@/components/settings/SettingsPrimitives";
 import {
+  DataTransferButton,
+  DataTransferCard,
+  DataTransferChip,
+  DataTransferNotice,
+} from "@/components/settings/DataTransferPrimitives";
+import {
   KNOWN_BOOK_CATALOGS,
   type BooksPreferences,
   type ReaderAudience,
@@ -505,31 +511,48 @@ export function BooksSettingsScreen({
             <span className="text-[12px] text-otto-text-dim">{books.length} books</span>
           </span>
         </summary>
-        <div className="border-t border-otto-divider">
-        <SettingsRow
+        <div className="space-y-3 border-t border-otto-divider bg-otto-bg p-3">
+        <DataTransferCard
           icon={Upload}
-          label="Import JSON"
-          detail={importing ? "Importing…" : "Bookshelf export"}
-          onClick={() => jsonRef.current?.click()}
-        />
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
-          icon={Upload}
-          label="Import CSV"
-          detail={importing ? "Importing…" : "Bookshelf export"}
-          onClick={() => csvRef.current?.click()}
-        />
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <div className="px-3.5 py-3">
-          <b className="block text-[13px]">What to export</b>
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            <ExportChip
+          title="Import bookshelf"
+          description="Restore an Otto Books JSON or CSV export. Existing books are merged during review."
+          tone="accent"
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <DataTransferButton
+              variant="secondary"
+              disabled={importing}
+              onClick={() => jsonRef.current?.click()}
+            >
+              <Upload size={14} />
+              {importing ? "Importing…" : "Choose JSON"}
+            </DataTransferButton>
+            <DataTransferButton
+              variant="secondary"
+              disabled={importing}
+              onClick={() => csvRef.current?.click()}
+            >
+              <Upload size={14} />
+              {importing ? "Importing…" : "Choose CSV"}
+            </DataTransferButton>
+          </div>
+        </DataTransferCard>
+        <DataTransferCard
+          icon={Download}
+          title="Export bookshelf"
+          description={`${exportCount} book${exportCount === 1 ? "" : "s"} match the current selection.`}
+        >
+          <div className="text-[10px] font-bold uppercase tracking-wider text-otto-text-faint">
+            Shelves
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <DataTransferChip
               label="All shelves"
               active={!exportOptions.shelves.length}
               onClick={() => setExportOptions((current) => ({ ...current, shelves: [] }))}
             />
             {shelves.map((shelf) => (
-              <ExportChip
+              <DataTransferChip
                 key={shelf.slug}
                 label={shelf.name}
                 active={exportOptions.shelves.includes(shelf.slug)}
@@ -537,8 +560,11 @@ export function BooksSettingsScreen({
               />
             ))}
           </div>
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            <ExportChip
+          <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-otto-text-faint">
+            Include
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <DataTransferChip
               label="Favorites only"
               active={exportOptions.favoritesOnly}
               onClick={() =>
@@ -548,7 +574,7 @@ export function BooksSettingsScreen({
                 }))
               }
             />
-            <ExportChip
+            <DataTransferChip
               label="Reviews"
               active={exportOptions.includeReviews}
               onClick={() =>
@@ -558,7 +584,7 @@ export function BooksSettingsScreen({
                 }))
               }
             />
-            <ExportChip
+            <DataTransferChip
               label="Ratings and dates"
               active={exportOptions.includeRatings}
               onClick={() =>
@@ -568,7 +594,7 @@ export function BooksSettingsScreen({
                 }))
               }
             />
-            <ExportChip
+            <DataTransferChip
               label="Covers"
               active={exportOptions.includeCovers}
               onClick={() =>
@@ -579,21 +605,27 @@ export function BooksSettingsScreen({
               }
             />
           </div>
-        </div>
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
-          icon={Download}
-          label="Export JSON"
-          detail={`${exportCount} book${exportCount === 1 ? "" : "s"}`}
-          onClick={() => onExport("json", exportOptions)}
-        />
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
-          icon={Download}
-          label="Export CSV"
-          detail={`${exportCount} book${exportCount === 1 ? "" : "s"}`}
-          onClick={() => onExport("csv", exportOptions)}
-        />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <DataTransferButton
+              disabled={!exportCount}
+              onClick={() => onExport("json", exportOptions)}
+            >
+              <Download size={14} />
+              Export JSON
+            </DataTransferButton>
+            <DataTransferButton
+              disabled={!exportCount}
+              onClick={() => onExport("csv", exportOptions)}
+            >
+              <Download size={14} />
+              Export CSV
+            </DataTransferButton>
+          </div>
+        </DataTransferCard>
+        <DataTransferNotice>
+          Files are processed on this device. Imports merge matching books instead of creating
+          another copy.
+        </DataTransferNotice>
         <input
           ref={jsonRef}
           type="file"
@@ -616,7 +648,7 @@ export function BooksSettingsScreen({
             if (file) void importFile(file);
           }}
         />
-        {importError && <p className="px-3.5 pb-3 text-[12px] text-otto-red">{importError}</p>}
+        {importError && <p className="px-1 text-[12px] text-otto-red">{importError}</p>}
         </div>
       </details>
 
@@ -688,29 +720,6 @@ export function BooksSettingsScreen({
         requests stop completely when its setting is off.
       </p>
     </section>
-  );
-}
-
-function ExportChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`rounded-full px-3.5 py-2 text-[12px] font-bold ${
-        active ? "bg-otto-text text-otto-bg" : "bg-otto-bg text-otto-text-dim"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 

@@ -11,7 +11,7 @@ export function VaultRow({
 }: {
   item: VaultItem;
   onSelect: (item: VaultItem) => void;
-  onCopy: (value: string, label?: string) => void;
+  onCopy: (value: string, label?: string, itemId?: string) => void;
 }) {
   const Icon = kindMeta(item.kind).icon;
 
@@ -50,7 +50,8 @@ export function VaultRow({
           event.stopPropagation();
           onCopy(
             item.password || item.username || item.note || "",
-            item.password ? "Password copied" : "Copied"
+            item.password ? "Password copied" : "Copied",
+            item.id
           );
         }}
         aria-label="Copy"

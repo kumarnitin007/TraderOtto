@@ -294,7 +294,7 @@ function NotesScreen({
       </p>
       {notes.length === 0 && (
         <p className="mt-4 rounded-2xl bg-otto-surface px-4 py-5 text-[13px] text-otto-text-dim">
-          {loading ? "Loading notes…" : "Quick notes you want to keep, without a date attached."}
+          {loading ? "Loading notes…" : "Quick notes keep the date you choose, starting with today."}
         </p>
       )}
       <div className="mt-4 space-y-2">
@@ -367,8 +367,9 @@ function Composer({
   onSave: (input: { kind: JournalKind; body: string; entryDate: string; prompt: string; tags: string[] }) => Promise<void>;
 }) {
   const today = todayISO();
-  const prompt = promptForDay(today);
   const [kind, setKind] = useState<JournalKind>("entry");
+  const [entryDate, setEntryDate] = useState(today);
+  const prompt = promptForDay(entryDate);
   const [body, setBody] = useState("");
   const [tag, setTag] = useState("");
   const [error, setError] = useState("");
@@ -385,12 +386,13 @@ function Composer({
       await onSave({
         kind,
         body: body.trim(),
-        entryDate: today,
+        entryDate,
         prompt: kind === "entry" && showPrompt ? prompt : "",
         tags: tag.trim() ? [tag.trim().replace(/^#/, "")] : [],
       });
       setBody("");
       setTag("");
+      setEntryDate(todayISO());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save.");
     } finally {
@@ -425,6 +427,17 @@ function Composer({
           </button>
         ))}
       </div>
+      <label className="mt-3 block">
+        <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-otto-text-faint">
+          Date
+        </span>
+        <input
+          type="date"
+          value={entryDate}
+          onChange={(event) => setEntryDate(event.target.value || todayISO())}
+          className="w-full rounded-2xl bg-otto-surface px-4 py-2.5 text-[14px]"
+        />
+      </label>
       {kind === "entry" && showPrompt && (
         <p className="mt-3 rounded-xl bg-otto-green-soft px-3 py-2 text-[12.5px] font-medium text-otto-green">
           {prompt}

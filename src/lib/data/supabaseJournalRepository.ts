@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { journalSortOrder } from "@/lib/journal";
 import type { JournalEntry, JournalInput } from "@/types/journal";
 
 type Row = {
@@ -44,7 +45,7 @@ function bodyFor(input: JournalInput) {
     tags: (input.tags ?? []).map((tag) => tag.trim().slice(0, 24)).filter(Boolean).slice(0, 6),
     pinned: Boolean(input.pinned),
     favorite: Boolean(input.favorite),
-    sort_order: input.sortOrder ?? Date.now(),
+    sort_order: journalSortOrder(input.sortOrder),
     source_type: input.sourceType ?? null,
     source_id: input.sourceId ?? null,
   };
@@ -79,7 +80,7 @@ export function createSupabaseJournalRepository(client: SupabaseClient, userId: 
       if (patch.tags != null) next.tags = patch.tags;
       if (patch.pinned != null) next.pinned = patch.pinned;
       if (patch.favorite != null) next.favorite = patch.favorite;
-      if (patch.sortOrder != null) next.sort_order = patch.sortOrder;
+      if (patch.sortOrder != null) next.sort_order = journalSortOrder(patch.sortOrder);
       const { error } = await client.from("jn_entries").update(next).eq("id", id).eq("user_id", userId);
       if (error) throw new Error(error.message);
     },

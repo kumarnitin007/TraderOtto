@@ -1,8 +1,8 @@
 "use client";
 
-import { Home, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Home, Plus, Settings, ShieldCheck, Star, type LucideIcon } from "lucide-react";
 
-export type VaultTab = "vault" | "security" | "settings";
+export type VaultTab = "vault" | "favorites" | "add" | "security" | "settings";
 
 function NavButton({
   icon: Icon,
@@ -22,7 +22,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={`relative flex flex-1 flex-col items-center gap-[3px] px-0 pb-1 pt-1.5 ${
-        active ? "text-otto-text" : "text-otto-text-faint"
+        active ? "text-otto-green" : "text-otto-text-faint"
       }`}
     >
       <span className="relative">
@@ -63,6 +63,13 @@ export function VaultBottomNav({
           active={tab === "vault"}
           onClick={() => onTab("vault")}
         />
+        <NavButton
+          icon={Star}
+          label="Favorites"
+          active={tab === "favorites"}
+          onClick={() => onTab("favorites")}
+        />
+        <NavButton icon={Plus} label="Add" active={false} onClick={() => onTab("add")} />
         <NavButton
           icon={ShieldCheck}
           label="Security"

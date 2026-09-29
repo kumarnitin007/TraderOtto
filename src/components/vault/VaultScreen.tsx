@@ -62,7 +62,7 @@ export function VaultScreen({
   recentIds: string[];
   onClearRecents: () => void;
   onSelect: (item: VaultItem) => void;
-  onCopy: (value: string, label?: string) => void;
+  onCopy: (value: string, label?: string, itemId?: string) => void;
   onAdd: () => void;
   onOpenHealth: () => void;
 }) {

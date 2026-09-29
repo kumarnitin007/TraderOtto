@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finishedBookBody, journalStreak, onThisDay, orderedNotes } from "@/lib/journal";
+import { finishedBookBody, journalSortOrder, journalStreak, onThisDay, orderedNotes } from "@/lib/journal";
 import type { JournalEntry } from "@/types/journal";
 
 function entry(patch: Partial<JournalEntry>): JournalEntry {
@@ -22,6 +22,12 @@ function entry(patch: Partial<JournalEntry>): JournalEntry {
 }
 
 describe("journal", () => {
+  it("keeps note order inside a 32-bit integer", () => {
+    expect(journalSortOrder(1_790_703_622_285)).toBe(2_147_483_647);
+    expect(journalSortOrder(undefined, 1_790_703_622_285)).toBe(1_790_703_622);
+    expect(journalSortOrder(4)).toBe(4);
+  });
+
   it("counts a streak through today and keeps yesterday alive", () => {
     expect(journalStreak(["2026-09-27", "2026-09-28", "2026-09-29"], "2026-09-29")).toBe(3);
     expect(journalStreak(["2026-09-27", "2026-09-28"], "2026-09-29")).toBe(2);

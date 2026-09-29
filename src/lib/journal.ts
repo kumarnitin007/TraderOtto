@@ -52,6 +52,17 @@ export function journalStreak(dates: string[], today: string) {
   return count;
 }
 
+const INTEGER_MAX = 2_147_483_647;
+const INTEGER_MIN = -2_147_483_648;
+
+/** A sort key that fits a Postgres integer. Millisecond timestamps do not. */
+export function journalSortOrder(value?: number, now = Date.now()) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.min(INTEGER_MAX, Math.max(INTEGER_MIN, Math.trunc(value)));
+  }
+  return Math.floor(now / 1000);
+}
+
 export function orderedNotes(notes: JournalEntry[]) {
   return [...notes].sort(
     (left, right) =>

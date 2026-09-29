@@ -3,6 +3,12 @@
 import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { SectionPreferences } from "@/components/settings/SectionPreferences";
+import {
+  DataTransferButton,
+  DataTransferCard,
+  DataTransferChip,
+  DataTransferNotice,
+} from "@/components/settings/DataTransferPrimitives";
 import { parseLeoEvents } from "@/lib/life";
 import { parseLeoTasks } from "@/lib/lifeTasks";
 import {
@@ -38,79 +44,80 @@ export function LifeSettingsScreen({
     <div>
       <h1 className="mb-3 text-[22px] font-extrabold tracking-[-0.3px]">Settings</h1>
       <SectionPreferences />
-      <div className="overflow-hidden rounded-2xl bg-otto-surface">
-        <button
-          type="button"
+      <div className="mt-3 space-y-3">
+        <DataTransferCard
+          icon={Upload}
+          title="Import from Leo"
+          description="Choose a Leo CSV export. Dates and recurring habits are parsed locally and shown for confirmation."
+          tone="accent"
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              void file.text().then((text) => onFile(parseLeoEvents(text), parseLeoTasks(text)));
+            }}
+          />
+          <DataTransferButton
+            variant="secondary"
           disabled={readonly}
           onClick={() => fileRef.current?.click()}
-          className="flex w-full items-center gap-3 px-3.5 py-3 text-left disabled:opacity-40"
+          >
+            <Upload size={14} />
+            Choose CSV file
+          </DataTransferButton>
+        </DataTransferCard>
+
+        <DataTransferCard
+          icon={Download}
+          title="Export Life data"
+          description="Choose what to include, then download JSON for backup or CSV for a spreadsheet."
         >
-          <Upload size={18} className="text-otto-text-dim" />
-          <span>
-            <b className="block text-[14px]">Import</b>
-            <span className="text-[12px] text-otto-text-dim">Leo export of dates and habits</span>
-          </span>
-        </button>
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <div className="px-3.5 py-3">
-          <b className="block text-[14px]">Export</b>
-          <span className="text-[12px] text-otto-text-dim">Choose what goes in the file</span>
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-otto-text-faint">
+            Include
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
             {choices.map((choice) => (
-              <button
+              <DataTransferChip
                 key={choice.key}
-                type="button"
-                aria-pressed={exportOptions[choice.key]}
+                label={choice.label}
+                active={exportOptions[choice.key]}
                 onClick={() =>
                   setExportOptions((current) => ({
                     ...current,
                     [choice.key]: !current[choice.key],
                   }))
                 }
-                className={`rounded-full px-3.5 py-2 text-[12px] font-bold ${
-                  exportOptions[choice.key]
-                    ? "bg-otto-text text-otto-bg"
-                    : "bg-otto-bg text-otto-text-dim"
-                }`}
-              >
-                {choice.label}
-              </button>
+              />
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <DataTransferButton
               disabled={!selected}
               onClick={() => onExport("json", exportOptions)}
-              className="flex items-center gap-2 rounded-full bg-otto-bg px-4 py-2 text-[13px] font-bold disabled:opacity-40"
             >
-              <Download size={15} />
+              <Download size={14} />
               Export JSON
-            </button>
-            <button
-              type="button"
+            </DataTransferButton>
+            <DataTransferButton
               disabled={!selected}
               onClick={() => onExport("csv", exportOptions)}
-              className="flex items-center gap-2 rounded-full bg-otto-bg px-4 py-2 text-[13px] font-bold disabled:opacity-40"
             >
-              <Download size={15} />
+              <Download size={14} />
               Export CSV
-            </button>
+            </DataTransferButton>
           </div>
-        </div>
+        </DataTransferCard>
+        <DataTransferNotice>
+          Nothing is imported until you confirm the preview. Exports are created directly on
+          this device.
+        </DataTransferNotice>
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".csv,text/csv"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (!file) return;
-          void file.text().then((text) => onFile(parseLeoEvents(text), parseLeoTasks(text)));
-        }}
-      />
       {notice && <p className="mt-3 text-[13px] text-otto-text-dim">{notice}</p>}
       <p className="mt-4 text-[13px] text-otto-text-dim">
         Birthdays and anniversaries stay on Dates. Recurring items land on Habits. One-off items

@@ -106,6 +106,7 @@ export function VaultWorkspace() {
           .includes(query.toLowerCase());
         const matchesType =
           filter === "all" ||
+          filter === "recent" ||
           (filter === "favorites" ? item.favorite : item.kind === filter);
         const matchesTag = !tagFilter || item.tags.includes(tagFilter);
         return matchesText && matchesType && matchesTag;
@@ -124,7 +125,8 @@ export function VaultWorkspace() {
     setToast("Recent list cleared");
   }
 
-  async function copy(value: string, label = "Copied") {
+  async function copy(value: string, label = "Copied", itemId?: string) {
+    if (itemId) setRecentIds(rememberVaultRecent(itemId));
     if (!value) return;
     await navigator.clipboard?.writeText(value);
     clipboardValueRef.current = value;
@@ -355,14 +357,17 @@ export function VaultWorkspace() {
           {dataError}
         </div>
       )}
-      {tab === "vault" && (
+      {(tab === "vault" || tab === "favorites") && (
         <VaultScreen
           items={filtered}
           allItems={items}
           query={query}
           setQuery={setQuery}
-          filter={filter}
-          setFilter={setFilter}
+          filter={tab === "favorites" ? "favorites" : filter}
+          setFilter={(next) => {
+            setFilter(next);
+            setTab(next === "favorites" ? "favorites" : "vault");
+          }}
           tags={tags}
           tagFilter={tagFilter}
           setTagFilter={setTagFilter}
@@ -401,7 +406,19 @@ export function VaultWorkspace() {
 
       <VaultBottomNav
         tab={tab}
-        onTab={setTab}
+        onTab={(next) => {
+          if (next === "add") {
+            setEditor({ mode: "create" });
+            setTab("vault");
+            return;
+          }
+          if (next === "favorites") {
+            setFilter("favorites");
+            setBrowsingTags(false);
+          }
+          if (next === "vault") setFilter("all");
+          setTab(next);
+        }}
         securityBadge={security.weakCount}
       />
 
