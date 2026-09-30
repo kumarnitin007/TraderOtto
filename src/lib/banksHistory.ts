@@ -41,7 +41,7 @@ function eventsFor(snapshots: BankSnapshot[], kind: string, id: string) {
 }
 
 function signed(amount: number, liability: boolean) {
-  return liability ? -amount : amount;
+  return liability ? -Math.abs(amount) : amount;
 }
 
 export function growthSinceStart(

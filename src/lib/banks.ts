@@ -49,6 +49,12 @@ export function money(amount: number, currency: BankCurrency) {
   return currency === "INR" ? `${sign}₹${formatted}` : `${sign}$${formatted}`;
 }
 
+export function moneyWhole(amount: number, currency: BankCurrency) {
+  const formatted = Math.abs(Math.round(amount)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const sign = amount < 0 ? "-" : "";
+  return currency === "INR" ? `${sign}₹${formatted}` : `${sign}$${formatted}`;
+}
+
 export type WorthBuckets = {
   cash: number;
   deposits: number;
@@ -81,7 +87,11 @@ export function netWorth(
     }
     buckets[bucket] += converted;
   }
-  for (const account of accounts) add(accountBucket(account.kind), account.balance, account.currency);
+  for (const account of accounts) {
+    const bucket = accountBucket(account.kind);
+    const amount = bucket === "liabilities" ? Math.abs(account.balance) : account.balance;
+    add(bucket, amount, account.currency);
+  }
   for (const deposit of deposits) {
     if (!deposit.closed) add("deposits", deposit.principal, deposit.currency);
   }
@@ -226,6 +236,16 @@ export function depositWhen(deposit: BankDeposit, today = new Date()) {
   return `${deposit.renew === "auto" ? "Renews" : "Matures"} in ${days}d`;
 }
 
+export function depositReference(notes: string) {
+  return notes.match(/^No\. ([^·]+?)(?: · |$)/)?.[1]?.trim() ?? "";
+}
+
+export function notesWithDepositReference(notes: string, number: string) {
+  const rest = notes.replace(/^No\. [^·]+?(?: · |$)/, "").trim();
+  const label = number.trim().slice(0, 24);
+  return label ? (rest ? `No. ${label} · ${rest}` : `No. ${label}`) : rest;
+}
+
 export function bankFocus(deposits: BankDeposit[], today = new Date()): BankFocus[] {
   const items: BankFocus[] = [];
   for (const deposit of deposits) {
@@ -281,7 +301,7 @@ export function nativeTotal(accounts: BankAccount[], deposits: BankDeposit[], cu
   let total = 0;
   for (const account of accounts) {
     if (account.currency !== currency) continue;
-    total += accountBucket(account.kind) === "liabilities" ? -account.balance : account.balance;
+    total += accountBucket(account.kind) === "liabilities" ? -Math.abs(account.balance) : account.balance;
   }
   for (const deposit of deposits) {
     if (deposit.closed || deposit.currency !== currency) continue;

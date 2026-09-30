@@ -60,6 +60,18 @@ describe("banks", () => {
     );
     expect(worth.total).toBe(290);
     expect(worth.liabilities).toBe(40);
+    const negative = netWorth(
+      [
+        account({ balance: 200, kind: "checking" }),
+        account({ id: "2", balance: 50, kind: "trading" }),
+        account({ id: "3", balance: -40, kind: "loan" }),
+      ],
+      [deposit({ currency: "USD", principal: 80, country: "us" })],
+      "USD",
+      null
+    );
+    expect(negative.liabilities).toBe(40);
+    expect(negative.total).toBe(290);
   });
 
   it("leaves a closed deposit out of the total", () => {

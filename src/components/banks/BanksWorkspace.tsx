@@ -9,6 +9,7 @@ import {
   Import,
   Landmark,
   Maximize2,
+  MoreHorizontal,
   Pencil,
   Plus,
   Settings,
@@ -36,16 +37,21 @@ import {
   bankFocus,
   countryFromCurrency,
   daysUntil,
+  depositReference,
   depositWhen,
   displayCurrency,
   HOLDING_SORTS,
   maturityOutlook,
   money,
+  moneyWhole,
   nativeTotal,
   netWorth,
+  notesWithDepositReference,
   sortHoldings,
+  toHome,
   usesMultipleCurrencies,
   type HoldingSort,
+  type WorthBuckets,
 } from "@/lib/banks";
 import { readBanksPreferences, writeBanksPreferences, type BanksPreferences } from "@/lib/banksPreferences";
 import { accountMatchKey, depositMatchKey, ottoSheets, parseBankSheets, planBankImport, type ParsedTransfer } from "@/lib/banksTransfer";
@@ -359,13 +365,6 @@ function Overview({
   const shown = displayCurrency(accounts, deposits, prefs.home);
   const worth = netWorth(accounts, deposits, shown, prefs.inrPerUsd);
   const focus = bankFocus(deposits).slice(0, 6);
-  const parts = [
-    { label: "Cash", amount: worth.cash, color: "bg-sky-500" },
-    { label: "Deposits", amount: worth.deposits, color: "bg-amber-500" },
-    { label: "Trading", amount: worth.investments, color: "bg-emerald-600" },
-    { label: "Owed", amount: worth.liabilities, color: "bg-rose-500" },
-  ];
-  const span = parts.reduce((sum, part) => sum + part.amount, 0) || 1;
   const empty = accounts.length === 0 && deposits.length === 0;
 
   return (
@@ -374,25 +373,14 @@ function Overview({
         <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Net worth</h1>
         <AddButton onClick={onAdd} />
       </div>
-      <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4 text-center">
-        <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Total net worth</div>
-        <div className="mt-1 text-[28px] font-black">{worth.total == null ? "—" : money(worth.total, shown)}</div>
+      <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4">
+        <WorthSplit worth={worth} currency={shown} />
         {multi && worth.unconverted > 0 && (
-          <p className="mt-1 text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
+          <p className="mt-2 text-center text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
         )}
         {multi && worth.total != null && prefs.inrPerUsd && (
-          <p className="mt-1 text-[12px] text-otto-text-dim">Combined at 1 USD = {prefs.inrPerUsd} INR</p>
+          <p className="mt-1 text-center text-[12px] text-otto-text-dim">Combined at 1 USD = {prefs.inrPerUsd} INR</p>
         )}
-        <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-otto-divider">
-          {parts.map((part) => (
-            <span key={part.label} className={part.color} style={{ width: `${(part.amount / span) * 100}%` }} />
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] text-otto-text-dim">
-          {parts.map((part) => (
-            <span key={part.label}>{part.label}</span>
-          ))}
-        </div>
       </div>
       {multi && (
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -470,7 +458,10 @@ function Holdings({
     <section>
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Holdings</h1>
-        <AddButton onClick={onAdd} />
+        <div className="flex items-center gap-1">
+          {groups.length > 0 && <HoldingSortMenu sort={sort} onSort={setSort} />}
+          <AddButton onClick={onAdd} />
+        </div>
       </div>
       {groups.length > 0 && (
         <HoldingsTotal
@@ -488,16 +479,6 @@ function Holdings({
           ))}
         </div>
       )}
-      {groups.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Sort</p>
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
-            {HOLDING_SORTS.map(([id, label]) => (
-              <FilterChip key={id} label={label} active={sort === id} onClick={() => setSort(id)} />
-            ))}
-          </div>
-        </div>
-      )}
       {groups.length === 0 && (
         <p className="mt-4 rounded-2xl bg-otto-surface px-4 py-5 text-[13px] text-otto-text-dim">
           {loading ? "Loading accounts…" : "Checking, deposits, trading balances, cards, and loans go here."}
@@ -509,10 +490,10 @@ function Holdings({
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{group.label}</p>
               <div className="space-y-2">
                 {group.accounts.map((item) => (
-                  <AccountHolding key={item.id} item={item} onOpen={onOpenAccount} />
+                  <AccountHolding key={item.id} item={item} prefs={prefs} onOpen={onOpenAccount} />
                 ))}
                 {group.deposits.map((item) => (
-                  <DepositHolding key={item.id} item={item} today={today} onOpen={onOpenDeposit} />
+                  <DepositHolding key={item.id} item={item} prefs={prefs} onOpen={onOpenDeposit} />
                 ))}
               </div>
             </div>
@@ -521,9 +502,9 @@ function Holdings({
             <div className="mt-4 space-y-2">
               {flat.map((row) =>
                 row.kind === "account" ? (
-                  <AccountHolding key={row.account.id} item={row.account} onOpen={onOpenAccount} />
+                  <AccountHolding key={row.account.id} item={row.account} prefs={prefs} onOpen={onOpenAccount} />
                 ) : (
-                  <DepositHolding key={row.deposit.id} item={row.deposit} today={today} onOpen={onOpenDeposit} />
+                  <DepositHolding key={row.deposit.id} item={row.deposit} prefs={prefs} onOpen={onOpenDeposit} />
                 )
               )}
             </div>
@@ -549,12 +530,14 @@ function HoldingsTotal({
     accounts.some((item) => item.currency === currency) ||
     deposits.some((item) => !item.closed && item.currency === currency)
   );
+  const assets = worth.cash + worth.deposits + worth.investments;
+  const both = assets > 0 && worth.liabilities > 0;
   const count = accounts.length + deposits.filter((item) => !item.closed).length;
   return (
-    <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4 text-center">
-      <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{label}</div>
-      <div className="mt-1 text-[28px] font-black">{worth.total == null ? "—" : money(worth.total, shown)}</div>
-      <p className="mt-1 text-[12px] text-otto-text-dim">
+    <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4">
+      {both && <div className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{label}</div>}
+      <WorthSplit worth={worth} currency={shown} caption={both ? undefined : label} />
+      <p className="mt-1 text-center text-[12px] text-otto-text-dim">
         {count} open {count === 1 ? "holding" : "holdings"}
       </p>
       {currencies.length > 1 && (
@@ -568,66 +551,163 @@ function HoldingsTotal({
         </div>
       )}
       {worth.total == null && (
-        <p className="mt-2 text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
+        <p className="mt-2 text-center text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
       )}
     </div>
   );
 }
 
-function AccountHolding({ item, onOpen }: { item: BankAccount; onOpen: (id: string) => void }) {
+function WorthSplit({ worth, currency, caption }: { worth: WorthBuckets; currency: BankCurrency; caption?: string }) {
+  const assets = worth.cash + worth.deposits + worth.investments;
+  const owed = worth.liabilities;
+  if (assets > 0 && owed > 0) {
+    return (
+      <div>
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Assets</div>
+            <div className="mt-0.5 text-[20px] font-black">{money(assets, currency)}</div>
+          </div>
+          <span className="pb-1 text-[18px] font-bold text-otto-text-faint">−</span>
+          <div className="text-right">
+            <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Liabilities</div>
+            <div className="mt-0.5 text-[20px] font-black">{money(owed, currency)}</div>
+          </div>
+        </div>
+        <div className="mt-3 border-t border-otto-divider pt-3 text-center">
+          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Net</div>
+          <div className="mt-0.5 text-[28px] font-black">{worth.total == null ? "—" : money(worth.total, currency)}</div>
+        </div>
+      </div>
+    );
+  }
+  const amount = owed > 0 ? -owed : assets > 0 ? assets : worth.total;
+  return (
+    <div className="text-center">
+      {caption && <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{caption}</div>}
+      <div className="mt-1 text-[28px] font-black">{amount == null ? "—" : money(amount, currency)}</div>
+    </div>
+  );
+}
+
+function AccountHolding({ item, prefs, onOpen }: { item: BankAccount; prefs: BanksPreferences; onOpen: (id: string) => void }) {
   return (
     <HoldingRow
-      title={item.nickname || item.institution}
-      detail={accountDetail(item)}
-      amount={money(item.balance, item.currency)}
+      title={accountTitle(item)}
+      amount={item.balance}
       currency={item.currency}
+      prefs={prefs}
       onClick={() => onOpen(item.id)}
     />
   );
 }
 
-function DepositHolding({ item, today, onOpen }: { item: BankDeposit; today: Date; onOpen: (id: string) => void }) {
+function DepositHolding({ item, prefs, onOpen }: { item: BankDeposit; prefs: BanksPreferences; onOpen: (id: string) => void }) {
   return (
     <HoldingRow
-      title={item.nickname || item.institution}
-      detail={`${DEPOSIT_TREATMENT[item.kind].label}${item.rate != null ? ` · ${item.rate}%` : ""} · ${depositWhen(item, today)}`}
-      amount={money(item.principal, item.currency)}
+      title={depositTitle(item)}
+      amount={item.principal}
       currency={item.currency}
+      prefs={prefs}
       onClick={() => onOpen(item.id)}
     />
   );
 }
 
-function accountDetail(account: BankAccount) {
-  if (account.kind === "trading") return "Trading · approximate balance";
-  if (accountBucket(account.kind) === "liabilities") return `${ACCOUNT_KIND_LABEL[account.kind]} · owed`;
-  return ACCOUNT_KIND_LABEL[account.kind];
+function accountTitle(account: BankAccount) {
+  const name = account.nickname || account.institution;
+  const kind = ACCOUNT_KIND_LABEL[account.kind];
+  return name.toLowerCase().includes(kind.toLowerCase()) ? name : `${name} · ${kind}`;
+}
+
+function depositTitle(deposit: BankDeposit) {
+  const kind = shortDepositKind(deposit.kind);
+  const bank = deposit.institution.trim();
+  const named = deposit.nickname.trim();
+  const number = depositReference(deposit.notes);
+  const identity = named && named.toLowerCase() !== bank.toLowerCase() ? named : kind;
+  return [bank, identity, number].filter((part, index, parts) => part && parts.indexOf(part) === index).join(" · ");
+}
+
+function shortDepositKind(kind: BankDeposit["kind"]) {
+  if (kind === "fd") return "FD";
+  if (kind === "cd") return "CD";
+  if (kind === "rd") return "RD";
+  if (kind === "ppf") return "PPF";
+  if (kind === "scss") return "SCSS";
+  if (kind === "po") return "PO";
+  return DEPOSIT_TREATMENT[kind].label;
 }
 
 function HoldingRow({
   title,
-  detail,
   amount,
   currency,
+  prefs,
   onClick,
 }: {
   title: string;
-  detail: string;
-  amount: string;
+  amount: number;
   currency: BankCurrency;
+  prefs: BanksPreferences;
   onClick: () => void;
 }) {
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-2xl bg-otto-surface px-4 py-3 text-left">
-      <span className="min-w-0">
-        <span className="block truncate text-[15px] font-extrabold">{title}</span>
-        <span className="block truncate text-[12px] text-otto-text-dim">{detail}</span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className="block text-[14px] font-bold">{amount}</span>
-        <span className="block text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">{currency}</span>
-      </span>
+      <span className="min-w-0 truncate text-[15px] font-extrabold">{title}</span>
+      <HoldingAmount amount={amount} currency={currency} prefs={prefs} />
     </button>
+  );
+}
+
+function HoldingAmount({ amount, currency, prefs }: { amount: number; currency: BankCurrency; prefs: BanksPreferences }) {
+  const native = moneyWhole(amount, currency);
+  const converted = currency === prefs.home ? null : toHome(amount, currency, prefs.home, prefs.inrPerUsd);
+  if (converted == null) return <span className="shrink-0 text-[15px] font-bold tabular-nums">{native}</span>;
+  return (
+    <span className="shrink-0 text-right">
+      <span className="text-[15px] font-bold tabular-nums">{moneyWhole(converted, prefs.home)}</span>
+      <span className="ml-1.5 text-[11px] font-semibold text-otto-text-faint tabular-nums">{native}</span>
+    </span>
+  );
+}
+
+function HoldingSortMenu({ sort, onSort }: { sort: HoldingSort; onSort: (sort: HoldingSort) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-9 w-9 items-center justify-center rounded-full text-otto-text-faint hover:bg-otto-surface"
+        aria-label="Sort holdings"
+        aria-expanded={open}
+      >
+        <MoreHorizontal size={20} />
+      </button>
+      {open && (
+        <>
+          <button type="button" aria-label="Close sort menu" className="fixed inset-0 z-10 cursor-default" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-10 z-20 w-52 overflow-hidden rounded-xl border border-otto-divider bg-otto-bg p-1.5 shadow-xl">
+            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-otto-text-faint">Sort by</p>
+            {HOLDING_SORTS.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  onSort(id);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[13px] font-medium hover:bg-otto-surface"
+              >
+                <span className="flex-1">{label}</span>
+                {sort === id && <Check size={15} className="text-otto-green" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1026,11 +1106,16 @@ function DepositForm({
   onSave: (input: BankDepositInput) => void;
 }) {
   const [draft, setDraft] = useState<BankDepositInput>(
-    initial ?? { ...EMPTY_DEPOSIT, currency: preferred, country: countryFromCurrency(preferred), payout: DEPOSIT_TREATMENT.fd.defaultPayout }
+    initial
+      ? { ...initial, notes: notesWithDepositReference(initial.notes, "") }
+      : { ...EMPTY_DEPOSIT, currency: preferred, country: countryFromCurrency(preferred), payout: DEPOSIT_TREATMENT.fd.defaultPayout }
   );
   const [principal, setPrincipal] = useState(initial ? String(initial.principal) : "");
   const [rate, setRate] = useState(initial?.rate != null ? String(initial.rate) : "");
-  const [more, setMore] = useState(Boolean(initial && (initial.owner || initial.nominee || initial.notes || (!multi && initial.currency !== preferred))));
+  const [number, setNumber] = useState(initial ? depositReference(initial.notes) : "");
+  const [more, setMore] = useState(
+    Boolean(initial && (initial.owner || initial.nominee || notesWithDepositReference(initial.notes, "") || (!multi && initial.currency !== preferred)))
+  );
   return (
     <form
       id={formId}
@@ -1043,6 +1128,7 @@ function DepositForm({
           principal: Number(principal) || 0,
           rate: rate.trim() ? Number(rate) : null,
           country: countryFromCurrency(draft.currency),
+          notes: notesWithDepositReference(draft.notes, number),
         });
       }}
     >
@@ -1060,7 +1146,10 @@ function DepositForm({
       />
       <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">{DEPOSIT_TREATMENT[draft.kind].lockIn}</p>
       <Field label="Institution" value={draft.institution} onChange={(institution) => setDraft({ ...draft, institution })} placeholder="Bank or post office" />
-      <Field label="Nickname" value={draft.nickname} onChange={(nickname) => setDraft({ ...draft, nickname })} placeholder="Optional" />
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Nickname" value={draft.nickname} onChange={(nickname) => setDraft({ ...draft, nickname })} placeholder="Optional" />
+        <Field label="Deposit number" value={number} onChange={setNumber} placeholder="Optional" />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Principal" value={principal} onChange={setPrincipal} placeholder="0.00" numeric />
         <Field label="Rate %" value={rate} onChange={setRate} placeholder="0.00" numeric />
@@ -1176,6 +1265,8 @@ function DepositDetail({
 }) {
   const treatment = DEPOSIT_TREATMENT[deposit.kind];
   const days = daysUntil(deposit.maturesOn);
+  const number = depositReference(deposit.notes);
+  const notes = notesWithDepositReference(deposit.notes, "");
   return (
     <DetailShell title="Deposit" onClose={onClose} onEdit={onEdit}>
       <h1 className="text-[22px] font-extrabold leading-tight">{deposit.nickname || deposit.institution}</h1>
@@ -1210,6 +1301,12 @@ function DepositDetail({
         <DetailRow label="At maturity" value={maturityOutlook(deposit.kind, deposit.renew)} />
         <Divider />
         <DetailRow label="Currency" value={deposit.currency} />
+        {number && (
+          <>
+            <Divider />
+            <DetailRow label="Deposit number" value={number} />
+          </>
+        )}
         {deposit.owner && (
           <>
             <Divider />
@@ -1227,7 +1324,7 @@ function DepositDetail({
       {deposit.kind === "rd" && (
         <p className="mt-2 text-[13px] leading-relaxed text-otto-text-dim">Principal is the amount saved so far, not the maturity value.</p>
       )}
-      {deposit.notes && <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed">{deposit.notes}</p>}
+      {notes && <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed">{notes}</p>}
     </DetailShell>
   );
 }

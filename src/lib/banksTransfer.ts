@@ -1,4 +1,4 @@
-import { ACCOUNT_KIND_LABEL, countryFromCurrency, DEPOSIT_TREATMENT, money } from "@/lib/banks";
+import { ACCOUNT_KIND_LABEL, countryFromCurrency, DEPOSIT_TREATMENT, depositReference, money } from "@/lib/banks";
 import {
   ACCOUNT_KINDS,
   DEPOSIT_KINDS,
@@ -157,31 +157,33 @@ function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): P
     const institution = textAt(row, columns.get("institution")) || (sheetName === "po" ? "Post office" : "Bank");
     const owner = textAt(row, columns.get("owner"));
     const nominee = textAt(row, columns.get("nominee"));
-    const notes = [textAt(row, columns.get("notes")), textAt(row, columns.get("action"))].filter(Boolean).join(" · ");
-    const nickname = textAt(row, columns.get("nickname")) || schemeName(typeText, grouped.kind);
+    const extra = [textAt(row, columns.get("notes")), textAt(row, columns.get("action"))].filter(Boolean).join(" · ");
+    const accountNickname = textAt(row, columns.get("nickname"));
     if (grouped.group === "account" && isAccountKind(grouped.kind)) {
       accounts.push({
         country: countryFromCurrency(currency),
         kind: grouped.kind,
         institution,
-        nickname,
+        nickname: accountNickname,
         owner,
         currency,
         balance: amount,
         last4: last4(textAt(row, columns.get("last4"))),
         nominee,
-        notes,
+        notes: extra,
       });
       return;
     }
     if (grouped.group === "deposit" && isDepositKind(grouped.kind)) {
       const rate = annualRate(numberAt(row, columns.get("rate")));
+      const number = depositNumber(textAt(row, columns.get("reference")) || textAt(row, columns.get("last4")));
+      const notes = number ? (extra ? `No. ${number} · ${extra}` : `No. ${number}`) : extra;
       const payout = payoutAt(textAt(row, columns.get("payout")), notes, grouped.kind);
       deposits.push({
         country: countryFromCurrency(currency),
         kind: grouped.kind,
         institution,
-        nickname,
+        nickname: accountNickname || schemeName(typeText, grouped.kind),
         owner,
         currency,
         principal: amount,
@@ -257,6 +259,9 @@ function depositChanges(existing: BankDeposit, input: BankDepositInput) {
   if (existing.rate !== input.rate) changes.push(`Rate ${existing.rate ?? "—"}% → ${input.rate ?? "—"}%`);
   if (existing.maturesOn !== input.maturesOn) changes.push("Maturity date");
   if (existing.closed !== input.closed) changes.push(input.closed ? "Marked closed" : "Marked open");
+  if (existing.notes !== input.notes) {
+    changes.push(depositReference(existing.notes) !== depositReference(input.notes) ? "Deposit number" : "Notes");
+  }
   return changes;
 }
 
@@ -278,6 +283,7 @@ function headerKind(value: unknown) {
   if (text === "renew" || text === "at maturity") return "renew";
   if (text === "closed") return "closed";
   if (text === "last4" || text === "last 4" || text === "account number") return "last4";
+  if (text === "deposit id" || text === "deposit number" || text === "reference") return "reference";
   if (text === "notes" || text === "note" || text === "next action") return notesOrAction(text);
   return null;
 }
@@ -317,6 +323,16 @@ function schemeName(typeText: string, kind: AccountKind | DepositKind) {
   const text = typeText.trim();
   if (kind !== "other" || !text || /^(other|deposit)$/i.test(text) || /^\d+(\.\d+)?$/.test(text)) return "";
   return text;
+}
+
+/** Short label from a deposit id. Long all-digit account numbers stay as the last 4. */
+function depositNumber(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  const compact = text.replace(/[\s-]/g, "");
+  const digits = compact.replace(/\D/g, "");
+  if (digits.length > 6 && digits.length >= compact.length - 1) return digits.slice(-4);
+  return text.slice(0, 24);
 }
 
 function kindFromLabel(text: string): AccountKind | DepositKind | null {

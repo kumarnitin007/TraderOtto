@@ -127,8 +127,8 @@ describe("bank transfer", () => {
       {
         name: "Deposits",
         rows: [
-          ["Bank", "Type", "Deposit", "Currency"],
-          ["Post office", "PO-PF", 1200, "INR"],
+          ["Bank", "Type", "Deposit", "Currency", "Deposit ID"],
+          ["Post office", "PO-PF", 1200, "INR", "1842"],
           ["State bank", "Standard FD", 3000, "INR"],
           ["Branch", "", 400, "INR"],
           ["Old", "Paid by Employer", "", "INR"],
@@ -144,6 +144,7 @@ describe("bank transfer", () => {
       ["Branch", "other"],
     ]);
     expect(parsed.skipped.map((row) => row.reason)).toEqual(["No amount"]);
+    expect(parsed.deposits.find((item) => item.nickname === "PO-PF")?.notes).toBe("No. 1842");
   });
 
   it("ignores SKIP rows on the accounts and deposits sheets", () => {
