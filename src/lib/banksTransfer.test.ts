@@ -40,7 +40,7 @@ describe("bank transfer", () => {
     const parsed = parseBankSheets(ottoSheets([account], [deposit]));
     expect(parsed.accounts[0]).toMatchObject({ institution: "Credit union", balance: 100, last4: "6789", currency: "USD" });
     expect(parsed.deposits[0]).toMatchObject({ institution: "State bank", principal: 8000, rate: 7.1, startedOn: "2026-01-15" });
-    expect(parsed.skipped).toBe(0);
+    expect(parsed.skipped).toEqual([]);
   });
 
   it("reads a household banks sheet and keeps only the last 4", () => {

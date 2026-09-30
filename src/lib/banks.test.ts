@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankFocus, daysUntil, displayCurrency, nativeTotal, netWorth, nextPayoutOn, toHome } from "@/lib/banks";
+import { bankFocus, daysUntil, displayCurrency, nativeTotal, netWorth, nextPayoutOn, sortHoldings, toHome } from "@/lib/banks";
 import type { BankAccount, BankDeposit } from "@/types/bank";
 
 function account(patch: Partial<BankAccount>): BankAccount {
@@ -101,5 +101,18 @@ describe("banks", () => {
     expect(focus[0].detail).toContain("Closes in 7d");
     expect(focus[0].detail).toContain("Money comes back");
     expect(focus[1].detail).toContain("Quarterly interest");
+  });
+
+  it("sorts holdings by amount, type, and owner", () => {
+    const accounts = [
+      account({ id: "loan", kind: "loan", institution: "Card bank", balance: 40, owner: "Sam", currency: "USD" }),
+      account({ id: "cash", kind: "checking", institution: "Credit union", balance: 10, owner: "Alex", currency: "INR" }),
+    ];
+    const deposits = [deposit({ id: "fd", institution: "State bank", principal: 25, owner: "Alex" })];
+    const ids = (sort: "amount-desc" | "type" | "owner") =>
+      sortHoldings(accounts, deposits, sort).map((row) => (row.kind === "account" ? row.account.id : row.deposit.id));
+    expect(ids("amount-desc")).toEqual(["loan", "fd", "cash"]);
+    expect(ids("type")).toEqual(["cash", "fd", "loan"]);
+    expect(ids("owner")).toEqual(["cash", "fd", "loan"]);
   });
 });

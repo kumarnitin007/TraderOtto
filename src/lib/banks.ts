@@ -290,6 +290,62 @@ export function nativeTotal(accounts: BankAccount[], deposits: BankDeposit[], cu
   return total;
 }
 
+export const HOLDING_SORTS = [
+  ["group", "Grouped"],
+  ["name", "Name"],
+  ["amount-desc", "Largest amount"],
+  ["amount-asc", "Smallest amount"],
+  ["type", "Type"],
+  ["currency", "Currency"],
+  ["owner", "Owner"],
+] as const;
+
+export type HoldingSort = (typeof HOLDING_SORTS)[number][0];
+
+export type SortedHolding =
+  | { kind: "account"; account: BankAccount }
+  | { kind: "deposit"; deposit: BankDeposit };
+
+export function sortHoldings(accounts: BankAccount[], deposits: BankDeposit[], sort: HoldingSort): SortedHolding[] {
+  const rows: SortedHolding[] = [
+    ...accounts.map((account) => ({ kind: "account" as const, account })),
+    ...deposits.map((deposit) => ({ kind: "deposit" as const, deposit })),
+  ];
+  if (sort === "group") return rows;
+  return rows.sort((left, right) => compareHoldings(left, right, sort) || holdingName(left).localeCompare(holdingName(right)));
+}
+
+function compareHoldings(left: SortedHolding, right: SortedHolding, sort: HoldingSort) {
+  if (sort === "amount-desc") return holdingAmount(right) - holdingAmount(left);
+  if (sort === "amount-asc") return holdingAmount(left) - holdingAmount(right);
+  if (sort === "type") return holdingType(left).localeCompare(holdingType(right));
+  if (sort === "currency") return holdingCurrency(left).localeCompare(holdingCurrency(right));
+  if (sort === "owner") return holdingOwner(left).localeCompare(holdingOwner(right));
+  return holdingName(left).localeCompare(holdingName(right));
+}
+
+function holdingName(row: SortedHolding) {
+  const item = row.kind === "account" ? row.account : row.deposit;
+  return item.nickname || item.institution;
+}
+
+function holdingAmount(row: SortedHolding) {
+  return row.kind === "account" ? row.account.balance : row.deposit.principal;
+}
+
+function holdingType(row: SortedHolding) {
+  return row.kind === "account" ? ACCOUNT_KIND_LABEL[row.account.kind] : DEPOSIT_TREATMENT[row.deposit.kind].label;
+}
+
+function holdingCurrency(row: SortedHolding) {
+  return row.kind === "account" ? row.account.currency : row.deposit.currency;
+}
+
+function holdingOwner(row: SortedHolding) {
+  const owner = row.kind === "account" ? row.account.owner : row.deposit.owner;
+  return owner.trim() || "\uffff";
+}
+
 export function daysUntil(iso: string | null, today = new Date()) {
   if (!iso) return null;
   const due = new Date(`${iso}T00:00:00`);

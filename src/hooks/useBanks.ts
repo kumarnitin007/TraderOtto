@@ -132,6 +132,17 @@ export function useBanks() {
     setDeposits(next);
   }
 
+  async function clearAll() {
+    if (!repository) throw new Error("Sign in to delete bank data.");
+    await repository.clearAll();
+    accountsRef.current = [];
+    depositsRef.current = [];
+    snapshotsRef.current = [];
+    setAccounts([]);
+    setDeposits([]);
+    setSnapshots([]);
+  }
+
   return {
     accounts,
     deposits,
@@ -144,5 +155,6 @@ export function useBanks() {
     removeAccount,
     saveDeposit,
     removeDeposit,
+    clearAll,
   };
 }

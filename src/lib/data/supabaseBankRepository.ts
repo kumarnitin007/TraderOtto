@@ -171,6 +171,15 @@ export function createSupabaseBankRepository(client: SupabaseClient, userId: str
         createdAt: String(row.created_at ?? ""),
       }));
     },
+    async clearAll(): Promise<void> {
+      const deletedAt = new Date().toISOString();
+      const accounts = await client.from("nw_accounts").update({ deleted_at: deletedAt }).eq("user_id", userId).is("deleted_at", null);
+      if (accounts.error) throw new Error(accounts.error.message);
+      const deposits = await client.from("nw_deposits").update({ deleted_at: deletedAt }).eq("user_id", userId).is("deleted_at", null);
+      if (deposits.error) throw new Error(deposits.error.message);
+      const snapshots = await client.from("nw_snapshots").delete().eq("user_id", userId);
+      if (snapshots.error && !/nw_snapshots|schema cache/i.test(snapshots.error.message)) throw new Error(snapshots.error.message);
+    },
     async addSnapshots(rows: Omit<BankSnapshot, "createdAt">[]): Promise<void> {
       if (!rows.length) return;
       const { error } = await client.from("nw_snapshots").insert(

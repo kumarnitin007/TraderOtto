@@ -1,4 +1,4 @@
-import { countryFromCurrency, DEPOSIT_TREATMENT } from "@/lib/banks";
+import { ACCOUNT_KIND_LABEL, countryFromCurrency, DEPOSIT_TREATMENT, money } from "@/lib/banks";
 import {
   ACCOUNT_KINDS,
   DEPOSIT_KINDS,
@@ -14,10 +14,27 @@ import {
 
 export type TransferSheet = { name: string; rows: unknown[][] };
 
+export type TransferSkip = {
+  label: string;
+  reason: string;
+};
+
 export type ParsedTransfer = {
   accounts: BankAccountInput[];
   deposits: BankDepositInput[];
-  skipped: number;
+  skipped: TransferSkip[];
+};
+
+export type ImportPlanLine = {
+  label: string;
+  detail: string;
+};
+
+export type ImportPlan = {
+  created: ImportPlanLine[];
+  updated: ImportPlanLine[];
+  unchanged: ImportPlanLine[];
+  skipped: TransferSkip[];
 };
 
 const ACCOUNT_HEADERS = ["type", "institution", "nickname", "owner", "currency", "balance", "last4", "nominee", "notes"] as const;
@@ -78,14 +95,14 @@ export function depositMatchKey(input: Pick<BankDepositInput, "kind" | "institut
 export function parseBankSheets(sheets: TransferSheet[]): ParsedTransfer {
   const accounts: BankAccountInput[] = [];
   const deposits: BankDepositInput[] = [];
-  let skipped = 0;
+  const skipped: TransferSkip[] = [];
   for (const sheet of sheets) {
     const name = sheet.name.trim().toLowerCase();
     if (!/^(accounts|deposits|banks|po)$/.test(name) && !hasRecordColumn(sheet.rows)) continue;
-    const parsed = parseSheet(sheet.rows, name);
+    const parsed = parseSheet(sheet.rows, name, sheet.name);
     accounts.push(...parsed.accounts);
     deposits.push(...parsed.deposits);
-    skipped += parsed.skipped;
+    skipped.push(...parsed.skipped);
   }
   return { accounts, deposits, skipped };
 }
@@ -94,7 +111,7 @@ function hasRecordColumn(rows: unknown[][]) {
   return rows.slice(0, 6).some((row) => row.some((cell) => headerKind(cell) === "record"));
 }
 
-function parseSheet(rows: unknown[][], sheetName: string): ParsedTransfer {
+function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): ParsedTransfer {
   const headerIndex = rows.findIndex(
     (row, index) =>
       index < 8 &&
@@ -103,7 +120,7 @@ function parseSheet(rows: unknown[][], sheetName: string): ParsedTransfer {
         return kind === "type" || (sheetName === "po" && kind === "amount");
       })
   );
-  if (headerIndex < 0) return { accounts: [], deposits: [], skipped: 0 };
+  if (headerIndex < 0) return { accounts: [], deposits: [], skipped: [] };
   const columns = new Map<string, number>();
   rows[headerIndex].forEach((cell, index) => {
     const kind = headerKind(cell);
@@ -111,15 +128,20 @@ function parseSheet(rows: unknown[][], sheetName: string): ParsedTransfer {
   });
   const accounts: BankAccountInput[] = [];
   const deposits: BankDepositInput[] = [];
-  let skipped = 0;
-  for (const row of rows.slice(headerIndex + 1)) {
+  const skipped: TransferSkip[] = [];
+  rows.slice(headerIndex + 1).forEach((row, offset) => {
     const typeText = textAt(row, columns.get("type"));
     const record = textAt(row, columns.get("record")).toLowerCase();
     const grouped = classify(typeText, sheetName, record);
     const amount = numberAt(row, columns.get("amount"));
+    const label = rowLabel(row, columns, typeText, sheetTitle, headerIndex + offset + 2);
     if (!grouped || amount == null) {
-      if (typeText || amount != null) skipped += 1;
-      continue;
+      if (!typeText && amount == null && !textAt(row, columns.get("institution"))) return;
+      skipped.push({
+        label,
+        reason: !typeText ? "No type" : !grouped ? `Unrecognized type “${typeText}”` : "No amount",
+      });
+      return;
     }
     const currency = currencyAt(row, columns.get("currency"), grouped.kind);
     const institution = textAt(row, columns.get("institution")) || (sheetName === "po" ? "Post office" : "Bank");
@@ -140,7 +162,7 @@ function parseSheet(rows: unknown[][], sheetName: string): ParsedTransfer {
         nominee,
         notes,
       });
-      continue;
+      return;
     }
     if (grouped.group === "deposit" && isDepositKind(grouped.kind)) {
       const rate = annualRate(numberAt(row, columns.get("rate")));
@@ -162,11 +184,70 @@ function parseSheet(rows: unknown[][], sheetName: string): ParsedTransfer {
         notes,
         closed: /^(yes|true|closed)$/i.test(textAt(row, columns.get("closed"))),
       });
+      return;
+    }
+    skipped.push({ label, reason: "This type cannot be saved" });
+  });
+  return { accounts, deposits, skipped };
+}
+
+function rowLabel(row: unknown[], columns: Map<string, number>, typeText: string, sheetTitle: string, rowNumber: number) {
+  const name = textAt(row, columns.get("nickname")) || textAt(row, columns.get("institution")) || textAt(row, columns.get("owner"));
+  const parts = [name, typeText].filter(Boolean);
+  return parts.length ? parts.join(" · ") : `${sheetTitle} row ${rowNumber}`;
+}
+
+export function planBankImport(parsed: ParsedTransfer, accounts: BankAccount[], deposits: BankDeposit[]): ImportPlan {
+  const created: ImportPlanLine[] = [];
+  const updated: ImportPlanLine[] = [];
+  const unchanged: ImportPlanLine[] = [];
+  for (const input of parsed.accounts) {
+    const existing = accounts.find((item) => accountMatchKey(item) === accountMatchKey(input));
+    const label = holdingLabel(input.nickname || input.institution, ACCOUNT_KIND_LABEL[input.kind], input.currency);
+    if (!existing) {
+      created.push({ label, detail: money(input.balance, input.currency) });
       continue;
     }
-    skipped += 1;
+    const changes = accountChanges(existing, input);
+    if (changes.length) updated.push({ label, detail: changes.join(" · ") });
+    else unchanged.push({ label, detail: "Already saved" });
   }
-  return { accounts, deposits, skipped };
+  for (const input of parsed.deposits) {
+    const existing = deposits.find((item) => depositMatchKey(item) === depositMatchKey(input));
+    const label = holdingLabel(input.nickname || input.institution, DEPOSIT_TREATMENT[input.kind].label, input.currency);
+    if (!existing) {
+      created.push({ label, detail: money(input.principal, input.currency) });
+      continue;
+    }
+    const changes = depositChanges(existing, input);
+    if (changes.length) updated.push({ label, detail: changes.join(" · ") });
+    else unchanged.push({ label, detail: "Already saved" });
+  }
+  return { created, updated, unchanged, skipped: parsed.skipped };
+}
+
+function holdingLabel(name: string, kind: string, currency: string) {
+  return `${name} · ${kind} · ${currency}`;
+}
+
+function accountChanges(existing: BankAccount, input: BankAccountInput) {
+  const changes: string[] = [];
+  if (existing.balance !== input.balance) changes.push(`Balance ${money(existing.balance, existing.currency)} → ${money(input.balance, input.currency)}`);
+  if (existing.currency !== input.currency) changes.push(`Currency ${existing.currency} → ${input.currency}`);
+  if (existing.owner !== input.owner) changes.push("Owner");
+  if (existing.nominee !== input.nominee) changes.push("Nominee");
+  if (existing.notes !== input.notes) changes.push("Notes");
+  return changes;
+}
+
+function depositChanges(existing: BankDeposit, input: BankDepositInput) {
+  const changes: string[] = [];
+  if (existing.principal !== input.principal) changes.push(`Principal ${money(existing.principal, existing.currency)} → ${money(input.principal, input.currency)}`);
+  if (existing.currency !== input.currency) changes.push(`Currency ${existing.currency} → ${input.currency}`);
+  if (existing.rate !== input.rate) changes.push(`Rate ${existing.rate ?? "—"}% → ${input.rate ?? "—"}%`);
+  if (existing.maturesOn !== input.maturesOn) changes.push("Maturity date");
+  if (existing.closed !== input.closed) changes.push(input.closed ? "Marked closed" : "Marked open");
+  return changes;
 }
 
 function headerKind(value: unknown) {

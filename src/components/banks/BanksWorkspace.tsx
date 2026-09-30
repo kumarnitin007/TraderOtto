@@ -5,17 +5,25 @@ import {
   BarChart3,
   Bell,
   Check,
+  Download,
   Landmark,
   Maximize2,
   Pencil,
   Plus,
   Settings,
   Trash2,
+  Upload,
   Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { BanksActivity, BanksPerformance } from "@/components/banks/BanksInsights";
+import { SectionPreferences } from "@/components/settings/SectionPreferences";
+import {
+  DataTransferButton,
+  DataTransferCard,
+  DataTransferNotice,
+} from "@/components/settings/DataTransferPrimitives";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { useBanks } from "@/hooks/useBanks";
 import { useScreenOption } from "@/hooks/useScreenOption";
@@ -28,11 +36,14 @@ import {
   daysUntil,
   depositWhen,
   displayCurrency,
+  HOLDING_SORTS,
   maturityOutlook,
   money,
   nativeTotal,
   netWorth,
+  sortHoldings,
   usesMultipleCurrencies,
+  type HoldingSort,
 } from "@/lib/banks";
 import { readBanksPreferences, writeBanksPreferences, type BanksPreferences } from "@/lib/banksPreferences";
 import { accountMatchKey, depositMatchKey, ottoSheets, parseBankSheets, type ParsedTransfer } from "@/lib/banksTransfer";
@@ -210,7 +221,9 @@ export function BanksWorkspace() {
           multi={multi}
           accounts={banks.accounts}
           deposits={banks.deposits}
+          readonly={banks.readonly}
           onPrefs={savePrefs}
+          onClear={() => banks.clearAll()}
           onImport={async (parsed) => {
             for (const account of parsed.accounts) {
               const existing = banks.accounts.find((item) => accountMatchKey(item) === accountMatchKey(account));
@@ -441,7 +454,13 @@ function Holdings({
     { id: "owed", label: "Cards and loans", accounts: accounts.filter((item) => accountBucket(item.kind) === "liabilities"), deposits: [] as BankDeposit[] },
   ].filter((group) => group.accounts.length || group.deposits.length);
   const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState<HoldingSort>("group");
   const shown = filter === "all" ? groups : groups.filter((group) => group.id === filter);
+  const flat = sortHoldings(
+    shown.flatMap((group) => group.accounts),
+    shown.flatMap((group) => group.deposits),
+    sort
+  );
 
   return (
     <section>
@@ -449,6 +468,23 @@ function Holdings({
         <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Holdings</h1>
         <AddButton onClick={onAdd} />
       </div>
+      {groups.length > 0 && (
+        <label className="mt-3 flex items-center justify-between gap-3 text-[13px] font-semibold">
+          Sort
+          <select
+            aria-label="Sort holdings"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as HoldingSort)}
+            className="rounded-full bg-otto-surface px-3 py-1.5 text-[12px] font-bold"
+          >
+            {HOLDING_SORTS.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {groups.length > 1 && (
         <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
           <FilterChip label="All" active={filter === "all"} onClick={() => setFilter("all")} />
@@ -462,34 +498,56 @@ function Holdings({
           {loading ? "Loading accounts…" : "Checking, deposits, trading balances, cards, and loans go here."}
         </p>
       )}
-      {shown.map((group) => (
-        <div key={group.id} className="mt-4">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{group.label}</p>
-          <div className="space-y-2">
-            {group.accounts.map((item) => (
-              <HoldingRow
-                key={item.id}
-                title={item.nickname || item.institution}
-                detail={accountDetail(item)}
-                amount={money(item.balance, item.currency)}
-                currency={item.currency}
-                onClick={() => onOpenAccount(item.id)}
-              />
-            ))}
-            {group.deposits.map((item) => (
-              <HoldingRow
-                key={item.id}
-                title={item.nickname || item.institution}
-                detail={`${DEPOSIT_TREATMENT[item.kind].label}${item.rate != null ? ` · ${item.rate}%` : ""} · ${depositWhen(item, today)}`}
-                amount={money(item.principal, item.currency)}
-                currency={item.currency}
-                onClick={() => onOpenDeposit(item.id)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+      {sort === "group"
+        ? shown.map((group) => (
+            <div key={group.id} className="mt-4">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{group.label}</p>
+              <div className="space-y-2">
+                {group.accounts.map((item) => (
+                  <AccountHolding key={item.id} item={item} onOpen={onOpenAccount} />
+                ))}
+                {group.deposits.map((item) => (
+                  <DepositHolding key={item.id} item={item} today={today} onOpen={onOpenDeposit} />
+                ))}
+              </div>
+            </div>
+          ))
+        : flat.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {flat.map((row) =>
+                row.kind === "account" ? (
+                  <AccountHolding key={row.account.id} item={row.account} onOpen={onOpenAccount} />
+                ) : (
+                  <DepositHolding key={row.deposit.id} item={row.deposit} today={today} onOpen={onOpenDeposit} />
+                )
+              )}
+            </div>
+          )}
     </section>
+  );
+}
+
+function AccountHolding({ item, onOpen }: { item: BankAccount; onOpen: (id: string) => void }) {
+  return (
+    <HoldingRow
+      title={item.nickname || item.institution}
+      detail={accountDetail(item)}
+      amount={money(item.balance, item.currency)}
+      currency={item.currency}
+      onClick={() => onOpen(item.id)}
+    />
+  );
+}
+
+function DepositHolding({ item, today, onOpen }: { item: BankDeposit; today: Date; onOpen: (id: string) => void }) {
+  return (
+    <HoldingRow
+      title={item.nickname || item.institution}
+      detail={`${DEPOSIT_TREATMENT[item.kind].label}${item.rate != null ? ` · ${item.rate}%` : ""} · ${depositWhen(item, today)}`}
+      amount={money(item.principal, item.currency)}
+      currency={item.currency}
+      onClick={() => onOpen(item.id)}
+    />
   );
 }
 
@@ -551,14 +609,18 @@ function BanksSettings({
   multi,
   accounts,
   deposits,
+  readonly,
   onPrefs,
+  onClear,
   onImport,
 }: {
   prefs: BanksPreferences;
   multi: boolean;
   accounts: BankAccount[];
   deposits: BankDeposit[];
+  readonly: boolean;
   onPrefs: (next: BanksPreferences) => void;
+  onClear: () => Promise<void>;
   onImport: (parsed: ParsedTransfer) => Promise<void>;
 }) {
   const [rate, setRate] = useState(prefs.inrPerUsd ? String(prefs.inrPerUsd) : "");
@@ -568,101 +630,138 @@ function BanksSettings({
   const fileRef = useRef<HTMLInputElement>(null);
   return (
     <section>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Banks settings</h1>
-      <div className="mt-4 space-y-2">
-        <ChoiceRow
-          label="Preferred currency"
-          value={prefs.home}
-          options={[["USD", "US dollar"], ["INR", "Indian rupee"]] as const}
-          onChange={(home) => onPrefs({ ...prefs, home })}
-        />
-        <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">
-          {multi
-            ? "Totals use this currency. Each entry can still be dollars or rupees."
-            : "Totals stay in the currency you actually hold. The exchange rate appears once an entry uses the other one."}
-        </p>
-        {multi && (
-          <label className="block rounded-2xl bg-otto-surface px-4 py-3 text-[13px] font-semibold">
-            Exchange rate
-            <span className="mt-0.5 block text-[12px] font-normal text-otto-text-dim">1 US dollar equals this many rupees.</span>
-            <input
-              value={rate}
-              inputMode="decimal"
-              placeholder="For example 83"
-              aria-label="Rupees per US dollar"
-              onChange={(event) => setRate(event.target.value)}
-              onBlur={() => {
-                const next = Number(rate);
-                onPrefs({ ...prefs, inrPerUsd: Number.isFinite(next) && next > 0 ? next : null });
-              }}
-              className="mt-2 w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px] font-normal"
-            />
-          </label>
-        )}
-        <button
-          type="button"
-          onClick={() => void exportWorkbook(accounts, deposits)}
-          className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
+      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
+      <div className="mt-4">
+        <SectionPreferences />
+      </div>
+      <div className="mt-3 space-y-3">
+        <div className="rounded-2xl bg-otto-surface p-4">
+          <ChoiceRow
+            label="Preferred currency"
+            value={prefs.home}
+            options={[["USD", "US dollar"], ["INR", "Indian rupee"]] as const}
+            onChange={(home) => onPrefs({ ...prefs, home })}
+          />
+          <p className="mt-2 text-[11.5px] leading-relaxed text-otto-text-faint">
+            {multi
+              ? "Totals use this currency. Each entry can still be dollars or rupees."
+              : "Totals stay in the currency you actually hold. The exchange rate appears once an entry uses the other one."}
+          </p>
+          {multi && (
+            <label className="mt-3 block text-[13px] font-semibold">
+              Exchange rate
+              <span className="mt-0.5 block text-[11.5px] font-normal text-otto-text-faint">1 US dollar equals this many rupees.</span>
+              <input
+                value={rate}
+                inputMode="decimal"
+                placeholder="For example 83"
+                aria-label="Rupees per US dollar"
+                onChange={(event) => setRate(event.target.value)}
+                onBlur={() => {
+                  const next = Number(rate);
+                  onPrefs({ ...prefs, inrPerUsd: Number.isFinite(next) && next > 0 ? next : null });
+                }}
+                className="mt-2 w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px] font-normal"
+              />
+            </label>
+          )}
+        </div>
+        <DataTransferCard
+          icon={Upload}
+          title="Import accounts"
+          description="Choose an Otto workbook, Otto CSV, or a household Banks, Deposits, or post office sheet. Nothing is saved until you confirm the preview."
+          tone="accent"
         >
-          Export workbook
-        </button>
-        <button
-          type="button"
-          onClick={() => downloadBanksCsv(accounts, deposits)}
-          className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,text/csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              setTransferNote("");
+              void readTransferFile(file).then(setPreview).catch(() => setTransferNote("Could not read that file."));
+            }}
+          />
+          <DataTransferButton variant="secondary" onClick={() => fileRef.current?.click()}>
+            <Upload size={14} />
+            Choose file
+          </DataTransferButton>
+          {preview && (
+            <div className="mt-3">
+              <p className="text-[13px] font-bold">
+                {preview.accounts.length} accounts, {preview.deposits.length} deposits
+                {preview.skipped.length > 0 ? `, ${preview.skipped.length} skipped` : ""}
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
+                Matching rows update. New rows are added. Full account numbers are stored as the last 4 only.
+              </p>
+              <div className="mt-3">
+                <DataTransferButton
+                  disabled={busy || (preview.accounts.length === 0 && preview.deposits.length === 0)}
+                  onClick={() => {
+                    setBusy(true);
+                    setTransferNote("");
+                    void onImport(preview)
+                      .then(() => {
+                        setTransferNote("Import saved.");
+                        setPreview(null);
+                      })
+                      .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not import."))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {busy ? "Importing…" : "Import these rows"}
+                </DataTransferButton>
+              </div>
+            </div>
+          )}
+        </DataTransferCard>
+        <DataTransferCard
+          icon={Download}
+          title="Export accounts"
+          description="Download a workbook or CSV. Either file can be imported back into Banks."
         >
-          Export CSV
-        </button>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
-        >
-          Import workbook or CSV
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,text/csv"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (!file) return;
-            void readTransferFile(file).then(setPreview).catch(() => setTransferNote("Could not read that file."));
-          }}
-        />
-        {preview && (
-          <div className="rounded-2xl bg-otto-surface px-4 py-3">
-            <p className="text-[14px] font-bold">
-              {preview.accounts.length} accounts, {preview.deposits.length} deposits
-              {preview.skipped > 0 ? `, ${preview.skipped} skipped` : ""}
-            </p>
-            <p className="mt-1 text-[12px] text-otto-text-dim">Matching rows update. New rows are added. Full account numbers are stored as the last 4 only.</p>
-            <button
-              type="button"
-              disabled={busy || (preview.accounts.length === 0 && preview.deposits.length === 0)}
-              onClick={() => {
-                setBusy(true);
-                setTransferNote("");
-                void onImport(preview)
-                  .then(() => {
-                    setTransferNote("Import saved.");
-                    setPreview(null);
-                  })
-                  .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not import."))
-                  .finally(() => setBusy(false));
-              }}
-              className="mt-3 w-full rounded-full bg-otto-green py-2.5 text-[14px] font-bold text-black disabled:opacity-40"
-            >
-              {busy ? "Importing…" : "Import these rows"}
-            </button>
+          <div className="grid grid-cols-2 gap-2">
+            <DataTransferButton onClick={() => void exportWorkbook(accounts, deposits)}>
+              <Download size={14} />
+              Export workbook
+            </DataTransferButton>
+            <DataTransferButton variant="secondary" onClick={() => downloadBanksCsv(accounts, deposits)}>
+              <Download size={14} />
+              Export CSV
+            </DataTransferButton>
           </div>
-        )}
-        {transferNote && <p className="px-1 text-[12px] text-otto-text-dim">{transferNote}</p>}
-        <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">
-          The workbook export can be imported back. Household Banks, Deposits, and post office sheets are read when they have a type and an amount. Trading here is an approximate total. Full account numbers are not stored.
-        </p>
+        </DataTransferCard>
+        <DataTransferNotice>
+          Files stay on this device. Household sheets are read when a row has a type and an amount. Trading balances here are approximate totals for net worth.
+        </DataTransferNotice>
+        <DataTransferCard
+          icon={Trash2}
+          title="Delete all bank data"
+          description="Removes every account, deposit, and saved balance change. Use this to clear a test import and start again."
+        >
+          <button
+            type="button"
+            disabled={busy || readonly || (accounts.length === 0 && deposits.length === 0)}
+            onClick={() => {
+              if (!window.confirm("Delete all bank accounts, deposits, and balance history?")) return;
+              setBusy(true);
+              setTransferNote("");
+              void onClear()
+                .then(() => setTransferNote("All bank data was deleted."))
+                .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not delete bank data."))
+                .finally(() => setBusy(false));
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-otto-red-soft px-4 py-2.5 text-xs font-bold text-otto-red disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+            {busy ? "Deleting…" : "Delete everything"}
+          </button>
+        </DataTransferCard>
+        {transferNote && <p className="text-[13px] text-otto-text-dim">{transferNote}</p>}
       </div>
     </section>
   );
