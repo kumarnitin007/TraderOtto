@@ -133,8 +133,14 @@ function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): P
     const typeText = textAt(row, columns.get("type"));
     const record = textAt(row, columns.get("record")).toLowerCase();
     const amount = numberAt(row, columns.get("amount"));
-    const grouped = classify(typeText, sheetName, record, amount != null);
     const label = rowLabel(row, columns, typeText, sheetTitle, headerIndex + offset + 2);
+    if (markedSkip(row, columns.get("status"))) {
+      if (typeText || amount != null || textAt(row, columns.get("institution"))) {
+        skipped.push({ label, reason: "Marked SKIP" });
+      }
+      return;
+    }
+    const grouped = classify(typeText, sheetName, record, amount != null);
     if (/^total\b/i.test(typeText)) {
       skipped.push({ label, reason: "Total row" });
       return;
@@ -263,6 +269,7 @@ function headerKind(value: unknown) {
   const text = String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   if (text === "type") return "type";
   if (text === "record") return "record";
+  if (text === "status") return "status";
   if (text === "currency") return "currency";
   if (text === "institution" || text === "bank" || text === "source") return "institution";
   if (text === "nickname") return "nickname";
@@ -278,6 +285,12 @@ function headerKind(value: unknown) {
   if (text === "last4" || text === "last 4" || text === "account number") return "last4";
   if (text === "notes" || text === "note" || text === "next action") return notesOrAction(text);
   return null;
+}
+
+function markedSkip(row: unknown[], statusIndex: number | undefined) {
+  const status = textAt(row, statusIndex);
+  const first = textAt(row, 0);
+  return /^skip/i.test(status) || /^skip/i.test(first);
 }
 
 function notesOrAction(text: string) {

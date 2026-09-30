@@ -145,4 +145,29 @@ describe("bank transfer", () => {
     ]);
     expect(parsed.skipped.map((row) => row.reason)).toEqual(["No amount"]);
   });
+
+  it("ignores SKIP rows on the accounts and deposits sheets", () => {
+    const parsed = parseBankSheets([
+      {
+        name: "Banks",
+        rows: [
+          ["Status", "Source", "Amount", "Type", "Currency"],
+          ["SKIP", "Old bank", 100, "Checking", "USD"],
+          ["skip closed", "Other bank", 50, "Saving", "USD"],
+          ["", "Credit union", 250, "Checking", "USD"],
+        ],
+      },
+      {
+        name: "Deposits",
+        rows: [
+          ["Status", "Bank", "Type", "Deposit", "Currency"],
+          ["Skipped", "State bank", "FD", 8000, "INR"],
+          ["", "Post office", "PO-PF", 1200, "INR"],
+        ],
+      },
+    ]);
+    expect(parsed.accounts.map((item) => item.institution)).toEqual(["Credit union"]);
+    expect(parsed.deposits.map((item) => item.nickname || item.institution)).toEqual(["PO-PF"]);
+    expect(parsed.skipped.map((row) => row.reason)).toEqual(["Marked SKIP", "Marked SKIP", "Marked SKIP"]);
+  });
 });
