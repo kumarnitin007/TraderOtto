@@ -1,5 +1,6 @@
 import type {
   EventPreference,
+  NotificationChannels,
   NotificationEventKind,
   NotificationPreferences,
 } from "@/types/notification";
@@ -44,8 +45,17 @@ const event = (enabled = true): EventPreference => ({
   telegram: false,
 });
 
+export const DEFAULT_NOTIFICATION_CHANNELS: NotificationChannels = {
+  inApp: true,
+  browser: false,
+  email: false,
+  discord: false,
+  telegram: false,
+};
+
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   masterEnabled: true,
+  channels: DEFAULT_NOTIFICATION_CHANNELS,
   riskAnalyzerEnabled: false,
   quietHours: { enabled: false, start: "20:00", end: "09:00" },
   expiryDays: 3,
@@ -95,9 +105,27 @@ export function mergeNotificationPreferences(
     })
   ) as NotificationPreferences["events"];
 
+  const savedChannels =
+    input.channels && typeof input.channels === "object" ? input.channels : null;
+
   return {
     ...DEFAULT_NOTIFICATION_PREFERENCES,
     ...input,
+    channels: savedChannels
+      ? {
+          inApp: typeof savedChannels.inApp === "boolean" ? savedChannels.inApp : true,
+          browser: savedChannels.browser === true,
+          email: savedChannels.email === true,
+          discord: savedChannels.discord === true,
+          telegram: savedChannels.telegram === true,
+        }
+      : {
+          inApp: usesChannel(events, "inApp"),
+          browser: usesChannel(events, "browser"),
+          email: usesChannel(events, "email"),
+          discord: usesChannel(events, "discord"),
+          telegram: usesChannel(events, "telegram"),
+        },
     quietHours: {
       ...DEFAULT_NOTIFICATION_PREFERENCES.quietHours,
       ...(input.quietHours ?? {}),
@@ -126,4 +154,13 @@ export function mergeNotificationPreferences(
         ? input.telegramPairExpires
         : "",
   };
+}
+
+function usesChannel(
+  events: NotificationPreferences["events"],
+  channel: keyof NotificationChannels
+) {
+  return (Object.keys(events) as NotificationEventKind[]).some((kind) =>
+    Boolean(events[kind][channel])
+  );
 }

@@ -23,6 +23,8 @@ export function notificationPreferences(value: unknown, email = "") {
       ...(input.events?.[kind] ?? {}),
     };
   }
+  const saved = input.channels && typeof input.channels === "object" ? input.channels : null;
+  const using = (key: string) => Object.values(events).some((event) => Boolean(event[key]));
   return {
     masterEnabled: true,
     discordWebhook: "",
@@ -32,6 +34,13 @@ export function notificationPreferences(value: unknown, email = "") {
     emailAddress: email,
     ...input,
     events,
+    channels: {
+      inApp: saved ? saved.inApp !== false : using("inApp"),
+      browser: saved ? saved.browser === true : using("browser"),
+      email: saved ? saved.email === true : using("email"),
+      discord: saved ? saved.discord === true : using("discord"),
+      telegram: saved ? saved.telegram === true : using("telegram"),
+    },
   };
 }
 

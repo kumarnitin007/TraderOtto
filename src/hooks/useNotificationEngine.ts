@@ -227,8 +227,13 @@ export function NotificationEngine() {
         continue;
       }
       const event = preferences.events[draft.kind];
+      const channels = preferences.channels;
       const hasDestination =
-        event.inApp || event.browser || event.email || event.discord || event.telegram;
+        (channels.inApp && event.inApp) ||
+        (channels.browser && event.browser) ||
+        (channels.email && event.email) ||
+        (channels.discord && event.discord) ||
+        (channels.telegram && event.telegram);
       const cooldownMs =
         Math.max(1, preferences.repeatCooldownHours) * 3_600_000;
       const lastDispatched = dispatchedRef.current.get(draft.dedupeKey) ?? 0;
@@ -252,6 +257,7 @@ export function NotificationEngine() {
       dispatchedRef.current.set(draft.dedupeKey, Date.now());
       void fire(draft);
       if (
+        channels.browser &&
         event.browser &&
         typeof Notification !== "undefined" &&
         Notification.permission === "granted" &&
@@ -263,7 +269,7 @@ export function NotificationEngine() {
         new Notification(draft.title, { body: draft.message });
       }
       for (const channel of ["email", "discord", "telegram"] as NotificationChannel[]) {
-        if (!event[channel]) continue;
+        if (!channels[channel] || !event[channel]) continue;
         void deliver(channel, draft.kind, draft.title, draft.message);
       }
     }

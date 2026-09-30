@@ -17,6 +17,15 @@ export type EventPreference = {
   telegram: boolean;
 };
 
+/** Whether a delivery route is in use. The six alert types appear only while it is on. */
+export type NotificationChannels = {
+  inApp: boolean;
+  browser: boolean;
+  email: boolean;
+  discord: boolean;
+  telegram: boolean;
+};
+
 export type PositionRiskThresholds = {
   criticalStrikeDistancePct: number;
   watchStrikeDistancePct: number;
@@ -26,6 +35,7 @@ export type PositionRiskThresholds = {
 
 export type NotificationPreferences = {
   masterEnabled: boolean;
+  channels: NotificationChannels;
   /** Opens a deterministic risk review after a manual or screenshot trade entry. */
   riskAnalyzerEnabled: boolean;
   quietHours: {

@@ -35,9 +35,10 @@ export function NotificationInbox() {
   const visible = useMemo(
     () =>
       signals.filter(
-        (signal) => preferences.events[signal.kind]?.inApp !== false
+        (signal) =>
+          preferences.channels.inApp && preferences.events[signal.kind]?.inApp !== false
       ),
-    [preferences.events, signals]
+    [preferences.channels.inApp, preferences.events, signals]
   );
   const inbox = visible.filter((signal) => signal.status === "open");
   const archive = visible.filter((signal) => signal.status !== "open");

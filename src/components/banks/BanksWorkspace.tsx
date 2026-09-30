@@ -6,6 +6,7 @@ import {
   Bell,
   Check,
   Download,
+  Import,
   Landmark,
   Maximize2,
   Pencil,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { BanksActivity, BanksPerformance } from "@/components/banks/BanksInsights";
 import { SectionPreferences } from "@/components/settings/SectionPreferences";
+import { SettingsDetailScreen, SettingsRow } from "@/components/settings/SettingsPrimitives";
 import {
   DataTransferButton,
   DataTransferCard,
@@ -46,7 +48,7 @@ import {
   type HoldingSort,
 } from "@/lib/banks";
 import { readBanksPreferences, writeBanksPreferences, type BanksPreferences } from "@/lib/banksPreferences";
-import { accountMatchKey, depositMatchKey, ottoSheets, parseBankSheets, type ParsedTransfer } from "@/lib/banksTransfer";
+import { accountMatchKey, depositMatchKey, ottoSheets, parseBankSheets, planBankImport, type ParsedTransfer } from "@/lib/banksTransfer";
 import { fmtDate } from "@/lib/pnl";
 import {
   ACCOUNT_KINDS,
@@ -191,6 +193,7 @@ export function BanksWorkspace() {
         <Holdings
           accounts={banks.accounts}
           deposits={banks.deposits}
+          prefs={prefs}
           loading={banks.loading}
           onAdd={() => openEditor({ kind: "account" })}
           onOpenAccount={(id) => setSheet({ kind: "account", id })}
@@ -431,6 +434,7 @@ function Overview({
 function Holdings({
   accounts,
   deposits,
+  prefs,
   loading,
   onAdd,
   onOpenAccount,
@@ -438,6 +442,7 @@ function Holdings({
 }: {
   accounts: BankAccount[];
   deposits: BankDeposit[];
+  prefs: BanksPreferences;
   loading: boolean;
   onAdd: () => void;
   onOpenAccount: (id: string) => void;
@@ -456,11 +461,10 @@ function Holdings({
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState<HoldingSort>("group");
   const shown = filter === "all" ? groups : groups.filter((group) => group.id === filter);
-  const flat = sortHoldings(
-    shown.flatMap((group) => group.accounts),
-    shown.flatMap((group) => group.deposits),
-    sort
-  );
+  const shownAccounts = shown.flatMap((group) => group.accounts);
+  const shownDeposits = shown.flatMap((group) => group.deposits);
+  const flat = sortHoldings(shownAccounts, shownDeposits, sort);
+  const filterLabel = filter === "all" ? "All holdings" : (groups.find((group) => group.id === filter)?.label ?? "Holdings");
 
   return (
     <section>
@@ -469,21 +473,12 @@ function Holdings({
         <AddButton onClick={onAdd} />
       </div>
       {groups.length > 0 && (
-        <label className="mt-3 flex items-center justify-between gap-3 text-[13px] font-semibold">
-          Sort
-          <select
-            aria-label="Sort holdings"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as HoldingSort)}
-            className="rounded-full bg-otto-surface px-3 py-1.5 text-[12px] font-bold"
-          >
-            {HOLDING_SORTS.map(([id, label]) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <HoldingsTotal
+          label={filterLabel}
+          accounts={shownAccounts}
+          deposits={shownDeposits}
+          prefs={prefs}
+        />
       )}
       {groups.length > 1 && (
         <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
@@ -491,6 +486,16 @@ function Holdings({
           {groups.map((group) => (
             <FilterChip key={group.id} label={group.label} active={filter === group.id} onClick={() => setFilter(group.id)} />
           ))}
+        </div>
+      )}
+      {groups.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Sort</p>
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {HOLDING_SORTS.map(([id, label]) => (
+              <FilterChip key={id} label={label} active={sort === id} onClick={() => setSort(id)} />
+            ))}
+          </div>
         </div>
       )}
       {groups.length === 0 && (
@@ -524,6 +529,48 @@ function Holdings({
             </div>
           )}
     </section>
+  );
+}
+
+function HoldingsTotal({
+  label,
+  accounts,
+  deposits,
+  prefs,
+}: {
+  label: string;
+  accounts: BankAccount[];
+  deposits: BankDeposit[];
+  prefs: BanksPreferences;
+}) {
+  const shown = displayCurrency(accounts, deposits, prefs.home);
+  const worth = netWorth(accounts, deposits, shown, prefs.inrPerUsd);
+  const currencies = (["USD", "INR"] as const).filter((currency) =>
+    accounts.some((item) => item.currency === currency) ||
+    deposits.some((item) => !item.closed && item.currency === currency)
+  );
+  const count = accounts.length + deposits.filter((item) => !item.closed).length;
+  return (
+    <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4 text-center">
+      <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{label}</div>
+      <div className="mt-1 text-[28px] font-black">{worth.total == null ? "—" : money(worth.total, shown)}</div>
+      <p className="mt-1 text-[12px] text-otto-text-dim">
+        {count} open {count === 1 ? "holding" : "holdings"}
+      </p>
+      {currencies.length > 1 && (
+        <div className="mt-3 grid grid-cols-2 gap-2 text-left">
+          {currencies.map((currency) => (
+            <div key={currency} className="rounded-xl bg-otto-bg px-3 py-2">
+              <div className="text-[11px] font-bold text-otto-text-faint">{currency}</div>
+              <div className="text-[15px] font-extrabold">{money(nativeTotal(accounts, deposits, currency), currency)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {worth.total == null && (
+        <p className="mt-2 text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
+      )}
+    </div>
   );
 }
 
@@ -624,8 +671,10 @@ function BanksSettings({
   onImport: (parsed: ParsedTransfer) => Promise<void>;
 }) {
   const [rate, setRate] = useState(prefs.inrPerUsd ? String(prefs.inrPerUsd) : "");
+  const [transferOpen, setTransferOpen] = useState(false);
   const [preview, setPreview] = useState<ParsedTransfer | null>(null);
   const [transferNote, setTransferNote] = useState("");
+  const [clearNote, setClearNote] = useState("");
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   return (
@@ -666,6 +715,42 @@ function BanksSettings({
             </label>
           )}
         </div>
+        <div className="overflow-hidden rounded-2xl bg-otto-surface">
+          <SettingsRow
+            icon={Import}
+            label="Import & export"
+            detail="Workbook or CSV"
+            onClick={() => setTransferOpen(true)}
+          />
+        </div>
+        <DataTransferCard
+          icon={Trash2}
+          title="Delete all bank data"
+          description="Removes every account, deposit, and saved balance change. Use this to clear a test import and start again."
+        >
+          <button
+            type="button"
+            disabled={busy || readonly || (accounts.length === 0 && deposits.length === 0)}
+            onClick={() => {
+              if (!window.confirm("Delete all bank accounts, deposits, and balance history?")) return;
+              setBusy(true);
+              setClearNote("");
+              void onClear()
+                .then(() => setClearNote("All bank data was deleted."))
+                .catch((cause) => setClearNote(cause instanceof Error ? cause.message : "Could not delete bank data."))
+                .finally(() => setBusy(false));
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-otto-red-soft px-4 py-2.5 text-xs font-bold text-otto-red disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+            {busy ? "Deleting…" : "Delete everything"}
+          </button>
+        </DataTransferCard>
+        {clearNote && <p className="text-[13px] text-otto-text-dim">{clearNote}</p>}
+      </div>
+      {transferOpen && (
+        <SettingsDetailScreen title="Import & export" eyebrow="Banks data" onClose={() => setTransferOpen(false)}>
+          <div className="space-y-3">
         <DataTransferCard
           icon={Upload}
           title="Import accounts"
@@ -690,33 +775,23 @@ function BanksSettings({
             Choose file
           </DataTransferButton>
           {preview && (
-            <div className="mt-3">
-              <p className="text-[13px] font-bold">
-                {preview.accounts.length} accounts, {preview.deposits.length} deposits
-                {preview.skipped.length > 0 ? `, ${preview.skipped.length} skipped` : ""}
-              </p>
-              <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
-                Matching rows update. New rows are added. Full account numbers are stored as the last 4 only.
-              </p>
-              <div className="mt-3">
-                <DataTransferButton
-                  disabled={busy || (preview.accounts.length === 0 && preview.deposits.length === 0)}
-                  onClick={() => {
-                    setBusy(true);
-                    setTransferNote("");
-                    void onImport(preview)
-                      .then(() => {
-                        setTransferNote("Import saved.");
-                        setPreview(null);
-                      })
-                      .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not import."))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  {busy ? "Importing…" : "Import these rows"}
-                </DataTransferButton>
-              </div>
-            </div>
+            <ImportPreview
+              preview={preview}
+              accounts={accounts}
+              deposits={deposits}
+              busy={busy}
+              onImport={() => {
+                setBusy(true);
+                setTransferNote("");
+                void onImport(preview)
+                  .then(() => {
+                    setTransferNote("Import saved.");
+                    setPreview(null);
+                  })
+                  .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not import."))
+                  .finally(() => setBusy(false));
+              }}
+            />
           )}
         </DataTransferCard>
         <DataTransferCard
@@ -738,32 +813,67 @@ function BanksSettings({
         <DataTransferNotice>
           Files stay on this device. Household sheets are read when a row has a type and an amount. Trading balances here are approximate totals for net worth.
         </DataTransferNotice>
-        <DataTransferCard
-          icon={Trash2}
-          title="Delete all bank data"
-          description="Removes every account, deposit, and saved balance change. Use this to clear a test import and start again."
-        >
-          <button
-            type="button"
-            disabled={busy || readonly || (accounts.length === 0 && deposits.length === 0)}
-            onClick={() => {
-              if (!window.confirm("Delete all bank accounts, deposits, and balance history?")) return;
-              setBusy(true);
-              setTransferNote("");
-              void onClear()
-                .then(() => setTransferNote("All bank data was deleted."))
-                .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not delete bank data."))
-                .finally(() => setBusy(false));
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-otto-red-soft px-4 py-2.5 text-xs font-bold text-otto-red disabled:opacity-40"
-          >
-            <Trash2 size={14} />
-            {busy ? "Deleting…" : "Delete everything"}
-          </button>
-        </DataTransferCard>
         {transferNote && <p className="text-[13px] text-otto-text-dim">{transferNote}</p>}
-      </div>
+          </div>
+        </SettingsDetailScreen>
+      )}
     </section>
+  );
+}
+
+function ImportPreview({
+  preview,
+  accounts,
+  deposits,
+  busy,
+  onImport,
+}: {
+  preview: ParsedTransfer;
+  accounts: BankAccount[];
+  deposits: BankDeposit[];
+  busy: boolean;
+  onImport: () => void;
+}) {
+  const plan = planBankImport(preview, accounts, deposits);
+  return (
+    <div className="mt-3">
+      <p className="text-[13px] font-bold">
+        {plan.created.length} new, {plan.updated.length} updated, {plan.skipped.length} skipped
+      </p>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
+        Matching rows update. New rows are added. Full account numbers stay as the last 4 only.
+      </p>
+      <PreviewGroup title="New" rows={plan.created} />
+      <PreviewGroup title="Updated" rows={plan.updated} />
+      {plan.unchanged.length > 0 && (
+        <p className="mt-3 text-[12px] text-otto-text-dim">{plan.unchanged.length} already saved with no changes.</p>
+      )}
+      <PreviewGroup title="Skipped" rows={plan.skipped.map((row) => ({ label: row.label, detail: row.reason }))} />
+      <div className="mt-3">
+        <DataTransferButton disabled={busy || (plan.created.length === 0 && plan.updated.length === 0)} onClick={onImport}>
+          {busy ? "Importing…" : "Import these rows"}
+        </DataTransferButton>
+      </div>
+    </div>
+  );
+}
+
+function PreviewGroup({ title, rows }: { title: string; rows: { label: string; detail: string }[] }) {
+  if (!rows.length) return null;
+  return (
+    <div className="mt-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">
+        {title} · {rows.length}
+      </p>
+      <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl bg-otto-bg">
+        {rows.map((row, index) => (
+          <li key={`${row.label}-${index}`} className="border-t border-otto-divider px-3 py-2 first:border-t-0">
+            <span className="block text-[12.5px] font-bold">{row.label}</span>
+            <span className="block text-[11px] text-otto-text-faint">{row.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

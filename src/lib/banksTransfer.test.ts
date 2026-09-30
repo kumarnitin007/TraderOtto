@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asDate, ottoSheets, parseBankSheets } from "@/lib/banksTransfer";
+import { asDate, ottoSheets, parseBankSheets, planBankImport } from "@/lib/banksTransfer";
 import type { BankAccount, BankDeposit } from "@/types/bank";
 
 const account: BankAccount = {
@@ -91,5 +91,24 @@ describe("bank transfer", () => {
     expect(parsed.deposits[0].payout).toBe("quarterly");
     expect(asDate(serial)).toBe("2026-01-15");
     expect(parsed.deposits[1]).toMatchObject({ institution: "Post office", principal: 1200, owner: "Alex" });
+  });
+
+  it("explains skipped rows and which saved rows would update", () => {
+    const parsed = parseBankSheets([
+      {
+        name: "Banks",
+        rows: [
+          ["Source", "Amount", "Type", "Currency"],
+          ["Credit union", 250, "Checking", "USD"],
+          ["State bank", "", "FD", "INR"],
+          ["Broker", 40, "Stock grant", "USD"],
+        ],
+      },
+    ]);
+    expect(parsed.skipped.map((row) => row.reason)).toEqual(["No amount", "Unrecognized type “Stock grant”"]);
+    const plan = planBankImport(parsed, [{ ...account, last4: "" }], []);
+    expect(plan.updated.map((row) => row.label)).toEqual(["Credit union · Checking · USD"]);
+    expect(plan.updated[0].detail).toContain("Balance");
+    expect(plan.created).toEqual([]);
   });
 });

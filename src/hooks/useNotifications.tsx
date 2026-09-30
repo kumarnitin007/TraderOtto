@@ -216,6 +216,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           .filter(
             (signal) =>
               signal.status === "open" &&
+              preferences.channels.inApp &&
               preferences.events[signal.kind]?.inApp !== false
           )
           .map(notificationGroupKey)

@@ -18,7 +18,7 @@ Deno.serve(async (request) => {
   const settings = data?.settings && typeof data.settings === "object" ? data.settings : {};
   const preferences = notificationPreferences(settings.notifications, auth.user.email ?? "");
   const event = preferences.events[body.kind];
-  if (!body.test && (!preferences.masterEnabled || !event?.enabled || !event[body.channel])) {
+  if (!body.test && (!preferences.masterEnabled || preferences.channels?.[body.channel] !== true || !event?.enabled || !event[body.channel])) {
     return json({ skipped: true });
   }
   if (body.channel === "discord") {

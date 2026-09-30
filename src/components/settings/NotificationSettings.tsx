@@ -193,6 +193,7 @@ export function NotificationSettings({
           </div>
           <div className="grid grid-cols-3 gap-2 desk:grid-cols-5">
             {CHANNELS.map((channel) => {
+              const on = preferences.channels[channel.id];
               const count = (Object.keys(EVENT_LABELS) as NotificationEventKind[]).filter(
                 (kind) =>
                   preferences.events[kind].enabled &&
@@ -212,7 +213,7 @@ export function NotificationSettings({
                 >
                   <span className="block text-xs font-bold">{channel.label}</span>
                   <span className="mt-0.5 block text-[9.5px] text-otto-text-faint">
-                    {count} type{count === 1 ? "" : "s"}
+                    {on ? `${count} type${count === 1 ? "" : "s"}` : "Off"}
                   </span>
                 </button>
               );
@@ -220,45 +221,72 @@ export function NotificationSettings({
           </div>
         </div>
 
-        <ChannelConfiguration
-          channel={selectedChannel}
-          preferences={preferences}
-          save={save}
-          test={test}
-          testing={testing}
-          enableChannelOnLiveAlerts={enableChannelOnLiveAlerts}
-          setNotice={setNotice}
-        />
+        <div className="flex items-center justify-between rounded-2xl bg-otto-surface px-4 py-3.5">
+          <span>
+            <span className="block text-sm font-bold">
+              {CHANNELS.find((item) => item.id === selectedChannel)?.label}
+            </span>
+            <span className="mt-0.5 block text-[11.5px] text-otto-text-faint">
+              {preferences.channels[selectedChannel]
+                ? "Choose which alerts this channel sends."
+                : "Off. Alert types stay hidden until you turn it on."}
+            </span>
+          </span>
+          <Switch
+            checked={preferences.channels[selectedChannel]}
+            label={`${preferences.channels[selectedChannel] ? "Turn off" : "Turn on"} ${selectedChannel}`}
+            onChange={(checked) =>
+              void save({
+                ...preferences,
+                channels: { ...preferences.channels, [selectedChannel]: checked },
+              })
+            }
+          />
+        </div>
 
-        <div>
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-otto-text-faint">
-            2 · Choose alerts for {CHANNELS.find((item) => item.id === selectedChannel)?.label}
-          </div>
-          <div className="overflow-hidden rounded-2xl bg-otto-surface">
-            {(Object.keys(EVENT_LABELS) as NotificationEventKind[]).map((kind, index) => {
-              const event = preferences.events[kind];
-              const checked = event.enabled && Boolean(event[selectedChannel]);
-              return (
-                <div key={kind}>
-                  {index > 0 && <div className="mx-4 border-t border-otto-divider" />}
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-bold">{EVENT_LABELS[kind].label}</div>
-                      <div className="mt-0.5 text-[10.5px] leading-relaxed text-otto-text-faint">
-                        {EVENT_LABELS[kind].description}
+        {preferences.channels[selectedChannel] && (
+          <>
+            <ChannelConfiguration
+              channel={selectedChannel}
+              preferences={preferences}
+              save={save}
+              test={test}
+              testing={testing}
+              enableChannelOnLiveAlerts={enableChannelOnLiveAlerts}
+              setNotice={setNotice}
+            />
+
+            <div>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-otto-text-faint">
+                Alerts for {CHANNELS.find((item) => item.id === selectedChannel)?.label}
+              </div>
+              <div className="overflow-hidden rounded-2xl bg-otto-surface">
+                {(Object.keys(EVENT_LABELS) as NotificationEventKind[]).map((kind, index) => {
+                  const event = preferences.events[kind];
+                  const checked = event.enabled && Boolean(event[selectedChannel]);
+                  return (
+                    <div key={kind}>
+                      {index > 0 && <div className="mx-4 border-t border-otto-divider" />}
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-bold">{EVENT_LABELS[kind].label}</div>
+                          <div className="mt-0.5 text-[10.5px] leading-relaxed text-otto-text-faint">
+                            {EVENT_LABELS[kind].description}
+                          </div>
+                        </div>
+                        <Switch
+                          checked={checked}
+                          label={`${checked ? "Disable" : "Enable"} ${EVENT_LABELS[kind].label} for ${selectedChannel}`}
+                          onChange={(next) => setEventChannel(kind, selectedChannel, next)}
+                        />
                       </div>
                     </div>
-                    <Switch
-                      checked={checked}
-                      label={`${checked ? "Disable" : "Enable"} ${EVENT_LABELS[kind].label} for ${selectedChannel}`}
-                      onChange={(next) => setEventChannel(kind, selectedChannel, next)}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </section>
       )}
 
