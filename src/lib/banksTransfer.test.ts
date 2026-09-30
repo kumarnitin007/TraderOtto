@@ -105,10 +105,44 @@ describe("bank transfer", () => {
         ],
       },
     ]);
-    expect(parsed.skipped.map((row) => row.reason)).toEqual(["No amount", "Unrecognized type “Stock grant”"]);
+    expect(parsed.accounts.some((item) => item.kind === "trading" && item.institution === "Broker")).toBe(true);
+    expect(parsed.skipped.map((row) => row.reason)).toEqual(["No amount"]);
     const plan = planBankImport(parsed, [{ ...account, last4: "" }], []);
     expect(plan.updated.map((row) => row.label)).toEqual(["Credit union · Checking · USD"]);
     expect(plan.updated[0].detail).toContain("Balance");
-    expect(plan.created).toEqual([]);
+    expect(plan.created.map((row) => row.label)).toEqual(["Broker · Trading · USD"]);
+  });
+
+  it("reads household deposit names and every funded deposits-sheet row as a deposit", () => {
+    const parsed = parseBankSheets([
+      {
+        name: "Banks",
+        rows: [
+          ["Source", "Amount", "Type", "Currency"],
+          ["Post office", 500, "Sukanya", "INR"],
+          ["Employer", 800, "PF-Pension", "INR"],
+          ["Credit union", 200, "Deposit", "USD"],
+        ],
+      },
+      {
+        name: "Deposits",
+        rows: [
+          ["Bank", "Type", "Deposit", "Currency"],
+          ["Post office", "PO-PF", 1200, "INR"],
+          ["State bank", "Standard FD", 3000, "INR"],
+          ["Branch", "", 400, "INR"],
+          ["Old", "Paid by Employer", "", "INR"],
+        ],
+      },
+    ]);
+    expect(parsed.deposits.map((item) => [item.nickname || item.institution, item.kind])).toEqual([
+      ["Sukanya", "other"],
+      ["PF-Pension", "other"],
+      ["Credit union", "other"],
+      ["PO-PF", "other"],
+      ["State bank", "fd"],
+      ["Branch", "other"],
+    ]);
+    expect(parsed.skipped.map((row) => row.reason)).toEqual(["No amount"]);
   });
 });

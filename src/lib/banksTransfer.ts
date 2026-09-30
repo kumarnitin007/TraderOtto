@@ -132,15 +132,24 @@ function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): P
   rows.slice(headerIndex + 1).forEach((row, offset) => {
     const typeText = textAt(row, columns.get("type"));
     const record = textAt(row, columns.get("record")).toLowerCase();
-    const grouped = classify(typeText, sheetName, record);
     const amount = numberAt(row, columns.get("amount"));
+    const grouped = classify(typeText, sheetName, record, amount != null);
     const label = rowLabel(row, columns, typeText, sheetTitle, headerIndex + offset + 2);
+    if (/^total\b/i.test(typeText)) {
+      skipped.push({ label, reason: "Total row" });
+      return;
+    }
     if (!grouped || amount == null) {
       if (!typeText && amount == null && !textAt(row, columns.get("institution"))) return;
-      skipped.push({
-        label,
-        reason: !typeText ? "No type" : !grouped ? `Unrecognized type “${typeText}”` : "No amount",
-      });
+      const reason =
+        amount == null && (grouped || sheetName === "deposits")
+          ? "No amount"
+          : !typeText
+            ? "No type"
+            : !grouped
+              ? `Unrecognized type “${typeText}”`
+              : "No amount";
+      skipped.push({ label, reason });
       return;
     }
     const currency = currencyAt(row, columns.get("currency"), grouped.kind);
@@ -148,7 +157,7 @@ function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): P
     const owner = textAt(row, columns.get("owner"));
     const nominee = textAt(row, columns.get("nominee"));
     const notes = [textAt(row, columns.get("notes")), textAt(row, columns.get("action"))].filter(Boolean).join(" · ");
-    const nickname = textAt(row, columns.get("nickname"));
+    const nickname = textAt(row, columns.get("nickname")) || schemeName(typeText, grouped.kind);
     if (grouped.group === "account" && isAccountKind(grouped.kind)) {
       accounts.push({
         country: countryFromCurrency(currency),
@@ -275,9 +284,19 @@ function notesOrAction(text: string) {
   return text === "next action" ? "action" : "notes";
 }
 
-function classify(typeText: string, sheetName: string, record: string): { group: "account" | "deposit"; kind: AccountKind | DepositKind } | null {
+function classify(
+  typeText: string,
+  sheetName: string,
+  record: string,
+  hasAmount: boolean
+): { group: "account" | "deposit"; kind: AccountKind | DepositKind } | null {
   const text = typeText.trim().toLowerCase();
+  if (/^total\b/.test(text)) return null;
   const kind = kindFromLabel(text);
+  if (sheetName === "deposits" && hasAmount) {
+    if (kind && isDepositKind(kind)) return { group: "deposit", kind };
+    return { group: "deposit", kind: "other" };
+  }
   if (record === "account" && kind && isAccountKind(kind)) return { group: "account", kind };
   if (record === "deposit" && kind && isDepositKind(kind)) return { group: "deposit", kind };
   if (kind && isAccountKind(kind)) return { group: "account", kind };
@@ -286,19 +305,25 @@ function classify(typeText: string, sheetName: string, record: string): { group:
   return null;
 }
 
+function schemeName(typeText: string, kind: AccountKind | DepositKind) {
+  const text = typeText.trim();
+  if (kind !== "other" || !text || /^(other|deposit)$/i.test(text) || /^\d+(\.\d+)?$/.test(text)) return "";
+  return text;
+}
+
 function kindFromLabel(text: string): AccountKind | DepositKind | null {
-  if (/401|trading|broker/.test(text)) return "trading";
+  if (/401|trading|broker|stock|equit/.test(text)) return "trading";
   if (/check/.test(text)) return "checking";
   if (/sav/.test(text)) return "savings";
   if (/card|credit/.test(text)) return "card";
   if (/loan/.test(text)) return "loan";
   if (text === "cd" || /certificate/.test(text)) return "cd";
-  if (text === "fd" || /fixed/.test(text)) return "fd";
+  if (text === "fd" || /fixed|\bfdr?\b/.test(text)) return "fd";
   if (text === "rd" || /recurring/.test(text)) return "rd";
   if (text === "ppf") return "ppf";
   if (text === "scss") return "scss";
   if (text === "po" || /post office/.test(text)) return "po";
-  if (text === "other") return "other";
+  if (/sukanya|pension|po-pf|\bpf\b|^deposit$/.test(text) || text === "other") return "other";
   return null;
 }
 
