@@ -6,6 +6,7 @@ import {
   ArrowUp,
   BookOpen,
   CalendarDays,
+  Maximize2,
   NotebookPen,
   Pencil,
   Pin,
@@ -13,8 +14,11 @@ import {
   Settings,
   Star,
   StickyNote,
+  Trash2,
+  X,
   type LucideIcon,
 } from "lucide-react";
+import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { SectionPreferences } from "@/components/settings/SectionPreferences";
 import { useJournal } from "@/hooks/useJournal";
 import { useLife } from "@/hooks/useLife";
@@ -78,6 +82,8 @@ export function JournalWorkspace() {
   const journal = useJournal();
   const life = useLife();
   const [editing, setEditing] = useState<JournalEntry | null>(null);
+  const [picked, setPicked] = useState<JournalEntry | null>(null);
+  const [viewing, setViewing] = useState<JournalEntry | null>(null);
   const [tab, setTab] = useScreenOption("journalTab");
   const [prefs, setPrefs] = useState<JournalPrefs>(readPrefs);
   const [booksPrefs, setBooksPrefs] = useState<BooksPreferences>(() =>
@@ -104,6 +110,15 @@ export function JournalWorkspace() {
     writeBooksPreferences(next);
   }
 
+  function move(note: JournalEntry, direction: -1 | 1) {
+    const group = notes.filter((item) => item.pinned === note.pinned && item.favorite === note.favorite);
+    const index = group.findIndex((item) => item.id === note.id);
+    const neighbor = group[index + direction];
+    if (!neighbor) return;
+    void journal.update(note.id, { sortOrder: neighbor.sortOrder });
+    void journal.update(neighbor.id, { sortOrder: note.sortOrder });
+  }
+
   return (
     <div className="mx-auto max-w-[720px] pb-28">
       {journal.error && (
@@ -111,25 +126,7 @@ export function JournalWorkspace() {
           {journal.error}
         </p>
       )}
-      {tab === "entries" && (
-        <EntriesScreen
-          entries={entries}
-          today={today}
-          streak={streak}
-          showStreak={prefs.showStreak}
-          loading={journal.loading}
-        />
-      )}
-      {tab === "notes" && !editing && (
-        <NotesScreen
-          notes={notes}
-          loading={journal.loading}
-          readonly={journal.readonly}
-          onUpdate={(id, patch) => void journal.update(id, patch)}
-          onEdit={setEditing}
-        />
-      )}
-      {tab === "notes" && editing && (
+      {editing ? (
         <Composer
           initial={editing}
           tags={prefs.suggestTags ? tags : []}
@@ -146,8 +143,24 @@ export function JournalWorkspace() {
             setEditing(null);
           }}
         />
+      ) : tab === "entries" && (
+        <EntriesScreen
+          entries={entries}
+          today={today}
+          streak={streak}
+          showStreak={prefs.showStreak}
+          loading={journal.loading}
+          onOpen={setPicked}
+        />
       )}
-      {tab === "add" && (
+      {tab === "notes" && !editing && (
+        <NotesScreen
+          notes={notes}
+          loading={journal.loading}
+          onOpen={setPicked}
+        />
+      )}
+      {tab === "add" && !editing && (
         <Composer
           tags={prefs.suggestTags ? tags : []}
           showPrompt={prefs.promptOfDay}
@@ -158,14 +171,15 @@ export function JournalWorkspace() {
           }}
         />
       )}
-      {tab === "day" && (
+      {tab === "day" && !editing && (
         <OnThisDay
           entries={onThisDay(journal.entries, today)}
           occasions={lifeOnThisDay(life.items, today)}
           today={today}
+          onOpen={setPicked}
         />
       )}
-      {tab === "settings" && (
+      {tab === "settings" && !editing && (
         <JournalSettings
           prefs={prefs}
           books={booksPrefs}
@@ -193,6 +207,51 @@ export function JournalWorkspace() {
           ))}
         </div>
       </nav>
+      {picked && (
+        <ActionSheet
+          title={noteTitle(picked.body).title}
+          subtitle={`${picked.kind === "note" ? "Note" : "Entry"} · ${fmtDate(picked.entryDate)}`}
+          icon={picked.kind === "note" ? StickyNote : NotebookPen}
+          onClose={() => setPicked(null)}
+        >
+          <SheetAction icon={Maximize2} label="View" onClick={() => { setViewing(picked); setPicked(null); }} />
+          <SheetAction icon={Pencil} label="Edit" onClick={() => { setEditing(picked); setPicked(null); }} />
+          {picked.kind === "note" && (
+            <>
+              <SheetAction icon={Pin} label={picked.pinned ? "Unpin" : "Pin"} filled={picked.pinned} onClick={() => { void journal.update(picked.id, { pinned: !picked.pinned }); setPicked(null); }} />
+              <SheetAction icon={Star} label={picked.favorite ? "Unfavorite" : "Favorite"} filled={picked.favorite} onClick={() => { void journal.update(picked.id, { favorite: !picked.favorite }); setPicked(null); }} />
+              <SheetAction icon={ArrowUp} label="Move up" onClick={() => { move(picked, -1); setPicked(null); }} />
+              <SheetAction icon={ArrowDown} label="Move down" onClick={() => { move(picked, 1); setPicked(null); }} />
+            </>
+          )}
+          <SheetAction
+            icon={Trash2}
+            label="Remove"
+            tone="danger"
+            onClick={() => {
+              if (window.confirm("Remove this?")) void journal.remove(picked.id);
+              setPicked(null);
+            }}
+          />
+        </ActionSheet>
+      )}
+      {viewing && (
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-otto-bg">
+          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-otto-divider bg-otto-bg/95 px-3 py-3 backdrop-blur">
+            <button type="button" onClick={() => setViewing(null)} className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface" aria-label="Close">
+              <X size={18} />
+            </button>
+            <b className="text-[15px]">{viewing.kind === "note" ? "Note" : "Entry"}</b>
+            <button type="button" onClick={() => { setEditing(viewing); setViewing(null); }} className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface" aria-label="Edit">
+              <Pencil size={16} />
+            </button>
+          </header>
+          <main className="mx-auto w-full max-w-[720px] px-[18px] py-7 pb-12">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-otto-text-faint">{fmtDate(viewing.entryDate)}</p>
+            <p className="mt-3 whitespace-pre-wrap text-[16px] leading-relaxed">{viewing.body}</p>
+          </main>
+        </div>
+      )}
     </div>
   );
 }
@@ -203,12 +262,14 @@ function EntriesScreen({
   streak,
   showStreak,
   loading,
+  onOpen,
 }: {
   entries: JournalEntry[];
   today: string;
   streak: number;
   showStreak: boolean;
   loading: boolean;
+  onOpen: (entry: JournalEntry) => void;
 }) {
   const weekStart = mondayOf(today);
   const week = entries.filter((entry) => entry.entryDate >= weekStart);
@@ -237,8 +298,8 @@ function EntriesScreen({
           </div>
         </div>
       )}
-      <EntryGroup title="This week" entries={week} empty={loading ? "Loading entries…" : "Nothing written this week yet."} />
-      {earlier.length > 0 && <EntryGroup title="Earlier" entries={earlier} />}
+      <EntryGroup title="This week" entries={week} empty={loading ? "Loading entries…" : "Nothing written this week yet."} onOpen={onOpen} />
+      {earlier.length > 0 && <EntryGroup title="Earlier" entries={earlier} onOpen={onOpen} />}
     </section>
   );
 }
@@ -247,10 +308,12 @@ function EntryGroup({
   title,
   entries,
   empty,
+  onOpen,
 }: {
   title: string;
   entries: JournalEntry[];
   empty?: string;
+  onOpen: (entry: JournalEntry) => void;
 }) {
   return (
     <div className="mt-5">
@@ -264,7 +327,7 @@ function EntryGroup({
         {entries.map((entry) => {
           const { title, rest } = noteTitle(entry.body);
           return (
-            <article key={entry.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
+            <button key={entry.id} type="button" onClick={() => onOpen(entry)} className="block w-full rounded-2xl bg-otto-surface px-4 py-3.5 text-left">
               <div className="text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">
                 {fmtDate(entry.entryDate)}
               </div>
@@ -287,7 +350,7 @@ function EntryGroup({
                   ))}
                 </div>
               )}
-            </article>
+            </button>
           );
         })}
       </div>
@@ -298,27 +361,12 @@ function EntryGroup({
 function NotesScreen({
   notes,
   loading,
-  readonly,
-  onUpdate,
-  onEdit,
+  onOpen,
 }: {
   notes: JournalEntry[];
   loading: boolean;
-  readonly: boolean;
-  onUpdate: (id: string, patch: Partial<JournalEntry>) => void;
-  onEdit: (note: JournalEntry) => void;
+  onOpen: (note: JournalEntry) => void;
 }) {
-  function move(note: JournalEntry, direction: -1 | 1) {
-    const group = notes.filter(
-      (item) => item.pinned === note.pinned && item.favorite === note.favorite
-    );
-    const index = group.findIndex((item) => item.id === note.id);
-    const neighbor = group[index + direction];
-    if (!neighbor) return;
-    onUpdate(note.id, { sortOrder: neighbor.sortOrder });
-    onUpdate(neighbor.id, { sortOrder: note.sortOrder });
-  }
-
   return (
     <section>
       <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Notes</h1>
@@ -334,7 +382,7 @@ function NotesScreen({
         {notes.map((note) => {
           const { title, rest } = noteTitle(note.body);
           return (
-          <article key={note.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
+          <button key={note.id} type="button" onClick={() => onOpen(note)} className="block w-full rounded-2xl bg-otto-surface px-4 py-3.5 text-left">
             <h2 className="text-[15px] font-extrabold leading-snug">{title}</h2>
             {rest && (
               <p className="mt-1 line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-otto-text-dim">
@@ -349,53 +397,11 @@ function NotesScreen({
                 </span>
               )}
             </div>
-            <div className="mt-2 flex gap-1">
-              <NoteAction label="Edit" onClick={() => onEdit(note)} disabled={readonly}>
-                <Pencil size={14} />
-              </NoteAction>
-              <NoteAction label={note.pinned ? "Unpin" : "Pin"} onClick={() => onUpdate(note.id, { pinned: !note.pinned })} disabled={readonly}>
-                <Pin size={14} className={note.pinned ? "text-otto-green" : ""} />
-              </NoteAction>
-              <NoteAction label={note.favorite ? "Unfavorite" : "Favorite"} onClick={() => onUpdate(note.id, { favorite: !note.favorite })} disabled={readonly}>
-                <Star size={14} className={note.favorite ? "fill-current text-otto-amber" : ""} />
-              </NoteAction>
-              <NoteAction label="Move up" onClick={() => move(note, -1)} disabled={readonly}>
-                <ArrowUp size={14} />
-              </NoteAction>
-              <NoteAction label="Move down" onClick={() => move(note, 1)} disabled={readonly}>
-                <ArrowDown size={14} />
-              </NoteAction>
-            </div>
-          </article>
+          </button>
           );
         })}
       </div>
     </section>
-  );
-}
-
-function NoteAction({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-full bg-otto-bg text-otto-text-dim disabled:opacity-40"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -544,10 +550,12 @@ function OnThisDay({
   entries,
   occasions,
   today,
+  onOpen,
 }: {
   entries: JournalEntry[];
   occasions: ReturnType<typeof lifeOnThisDay>;
   today: string;
+  onOpen: (entry: JournalEntry) => void;
 }) {
   const todayDate = new Date(`${today}T00:00:00`);
   return (
@@ -587,7 +595,7 @@ function OnThisDay({
           {entries.map((entry) => {
             const { title, rest } = noteTitle(entry.body);
             return (
-              <article key={entry.id} className="rounded-2xl bg-otto-surface px-4 py-3.5">
+              <button key={entry.id} type="button" onClick={() => onOpen(entry)} className="block w-full rounded-2xl bg-otto-surface px-4 py-3.5 text-left">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">
                   {entry.entryDate.slice(0, 4)}
                   {entry.kind === "note" ? " · Note" : ""}
@@ -598,7 +606,7 @@ function OnThisDay({
                     {rest}
                   </p>
                 )}
-              </article>
+              </button>
             );
           })}
         </div>

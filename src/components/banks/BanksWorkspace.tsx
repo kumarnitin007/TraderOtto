@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
+  BarChart3,
+  Bell,
   Check,
   Landmark,
   Maximize2,
@@ -13,6 +15,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { BanksActivity, BanksPerformance } from "@/components/banks/BanksInsights";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { useBanks } from "@/hooks/useBanks";
 import { useScreenOption } from "@/hooks/useScreenOption";
@@ -32,6 +35,7 @@ import {
   usesMultipleCurrencies,
 } from "@/lib/banks";
 import { readBanksPreferences, writeBanksPreferences, type BanksPreferences } from "@/lib/banksPreferences";
+import { accountMatchKey, depositMatchKey, ottoSheets, parseBankSheets, type ParsedTransfer } from "@/lib/banksTransfer";
 import { fmtDate } from "@/lib/pnl";
 import {
   ACCOUNT_KINDS,
@@ -48,13 +52,15 @@ import {
   type DepositRenew,
 } from "@/types/bank";
 
-type BanksTab = "overview" | "holdings" | "settings";
+type BanksTab = "overview" | "holdings" | "activity" | "performance" | "settings";
 type HoldingRef = { kind: "account"; id: string } | { kind: "deposit"; id: string };
 type EditorState = { kind: "account" | "deposit"; id?: string };
 
 const TABS: { id: BanksTab; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "Overview", icon: Wallet },
   { id: "holdings", label: "Holdings", icon: Landmark },
+  { id: "activity", label: "Activity", icon: Bell },
+  { id: "performance", label: "Performance", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -180,6 +186,24 @@ export function BanksWorkspace() {
           onOpenDeposit={(id) => setSheet({ kind: "deposit", id })}
         />
       )}
+      {tab === "activity" && (
+        <BanksActivity
+          accounts={banks.accounts}
+          deposits={banks.deposits}
+          snapshots={banks.snapshots}
+          loading={banks.loading}
+          onOpenDeposit={(id) => openDetail({ kind: "deposit", id })}
+        />
+      )}
+      {tab === "performance" && (
+        <BanksPerformance
+          accounts={banks.accounts}
+          deposits={banks.deposits}
+          snapshots={banks.snapshots}
+          prefs={prefs}
+          historyNote={banks.historyNote}
+        />
+      )}
       {tab === "settings" && (
         <BanksSettings
           prefs={prefs}
@@ -187,6 +211,16 @@ export function BanksWorkspace() {
           accounts={banks.accounts}
           deposits={banks.deposits}
           onPrefs={savePrefs}
+          onImport={async (parsed) => {
+            for (const account of parsed.accounts) {
+              const existing = banks.accounts.find((item) => accountMatchKey(item) === accountMatchKey(account));
+              await banks.saveAccount(account, existing?.id);
+            }
+            for (const deposit of parsed.deposits) {
+              const existing = banks.deposits.find((item) => depositMatchKey(item) === depositMatchKey(deposit));
+              await banks.saveDeposit(deposit, existing?.id);
+            }
+          }}
         />
       )}
       <nav
@@ -213,7 +247,7 @@ export function BanksWorkspace() {
       {sheetAccount && (
         <ActionSheet
           title={sheetAccount.nickname || sheetAccount.institution}
-          subtitle={`${ACCOUNT_KIND_LABEL[sheetAccount.kind]} · ${money(sheetAccount.balance, sheetAccount.currency)}`}
+          subtitle={`${ACCOUNT_KIND_LABEL[sheetAccount.kind]} · ${sheetAccount.currency} · ${money(sheetAccount.balance, sheetAccount.currency)}`}
           icon={Landmark}
           onClose={() => setSheet(null)}
         >
@@ -233,7 +267,7 @@ export function BanksWorkspace() {
       {sheetDeposit && (
         <ActionSheet
           title={sheetDeposit.nickname || sheetDeposit.institution}
-          subtitle={`${DEPOSIT_TREATMENT[sheetDeposit.kind].label} · ${money(sheetDeposit.principal, sheetDeposit.currency)}`}
+          subtitle={`${DEPOSIT_TREATMENT[sheetDeposit.kind].label} · ${sheetDeposit.currency} · ${money(sheetDeposit.principal, sheetDeposit.currency)}`}
           icon={Landmark}
           onClose={() => setSheet(null)}
         >
@@ -262,7 +296,6 @@ export function BanksWorkspace() {
       {detailAccount && (
         <AccountDetail
           account={detailAccount}
-          multi={multi}
           onClose={() => setDetail(null)}
           onEdit={() => openEditor({ kind: "account", id: detailAccount.id })}
         />
@@ -270,7 +303,6 @@ export function BanksWorkspace() {
       {detailDeposit && (
         <DepositDetail
           deposit={detailDeposit}
-          multi={multi}
           onClose={() => setDetail(null)}
           onEdit={() => openEditor({ kind: "deposit", id: detailDeposit.id })}
         />
@@ -440,6 +472,7 @@ function Holdings({
                 title={item.nickname || item.institution}
                 detail={accountDetail(item)}
                 amount={money(item.balance, item.currency)}
+                currency={item.currency}
                 onClick={() => onOpenAccount(item.id)}
               />
             ))}
@@ -449,6 +482,7 @@ function Holdings({
                 title={item.nickname || item.institution}
                 detail={`${DEPOSIT_TREATMENT[item.kind].label}${item.rate != null ? ` · ${item.rate}%` : ""} · ${depositWhen(item, today)}`}
                 amount={money(item.principal, item.currency)}
+                currency={item.currency}
                 onClick={() => onOpenDeposit(item.id)}
               />
             ))}
@@ -465,14 +499,29 @@ function accountDetail(account: BankAccount) {
   return ACCOUNT_KIND_LABEL[account.kind];
 }
 
-function HoldingRow({ title, detail, amount, onClick }: { title: string; detail: string; amount: string; onClick: () => void }) {
+function HoldingRow({
+  title,
+  detail,
+  amount,
+  currency,
+  onClick,
+}: {
+  title: string;
+  detail: string;
+  amount: string;
+  currency: BankCurrency;
+  onClick: () => void;
+}) {
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-2xl bg-otto-surface px-4 py-3 text-left">
       <span className="min-w-0">
         <span className="block truncate text-[15px] font-extrabold">{title}</span>
         <span className="block truncate text-[12px] text-otto-text-dim">{detail}</span>
       </span>
-      <span className="shrink-0 text-[14px] font-bold">{amount}</span>
+      <span className="shrink-0 text-right">
+        <span className="block text-[14px] font-bold">{amount}</span>
+        <span className="block text-[10px] font-bold uppercase tracking-wide text-otto-text-faint">{currency}</span>
+      </span>
     </button>
   );
 }
@@ -503,14 +552,20 @@ function BanksSettings({
   accounts,
   deposits,
   onPrefs,
+  onImport,
 }: {
   prefs: BanksPreferences;
   multi: boolean;
   accounts: BankAccount[];
   deposits: BankDeposit[];
   onPrefs: (next: BanksPreferences) => void;
+  onImport: (parsed: ParsedTransfer) => Promise<void>;
 }) {
   const [rate, setRate] = useState(prefs.inrPerUsd ? String(prefs.inrPerUsd) : "");
+  const [preview, setPreview] = useState<ParsedTransfer | null>(null);
+  const [transferNote, setTransferNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   return (
     <section>
       <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Banks settings</h1>
@@ -546,13 +601,67 @@ function BanksSettings({
         )}
         <button
           type="button"
+          onClick={() => void exportWorkbook(accounts, deposits)}
+          className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
+        >
+          Export workbook
+        </button>
+        <button
+          type="button"
           onClick={() => downloadBanksCsv(accounts, deposits)}
           className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
         >
-          Export accounts and deposits
+          Export CSV
         </button>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="w-full rounded-2xl bg-otto-surface px-4 py-3 text-left text-[14px] font-bold"
+        >
+          Import workbook or CSV
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv,text/csv"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            void readTransferFile(file).then(setPreview).catch(() => setTransferNote("Could not read that file."));
+          }}
+        />
+        {preview && (
+          <div className="rounded-2xl bg-otto-surface px-4 py-3">
+            <p className="text-[14px] font-bold">
+              {preview.accounts.length} accounts, {preview.deposits.length} deposits
+              {preview.skipped > 0 ? `, ${preview.skipped} skipped` : ""}
+            </p>
+            <p className="mt-1 text-[12px] text-otto-text-dim">Matching rows update. New rows are added. Full account numbers are stored as the last 4 only.</p>
+            <button
+              type="button"
+              disabled={busy || (preview.accounts.length === 0 && preview.deposits.length === 0)}
+              onClick={() => {
+                setBusy(true);
+                setTransferNote("");
+                void onImport(preview)
+                  .then(() => {
+                    setTransferNote("Import saved.");
+                    setPreview(null);
+                  })
+                  .catch((cause) => setTransferNote(cause instanceof Error ? cause.message : "Could not import."))
+                  .finally(() => setBusy(false));
+              }}
+              className="mt-3 w-full rounded-full bg-otto-green py-2.5 text-[14px] font-bold text-black disabled:opacity-40"
+            >
+              {busy ? "Importing…" : "Import these rows"}
+            </button>
+          </div>
+        )}
+        {transferNote && <p className="px-1 text-[12px] text-otto-text-dim">{transferNote}</p>}
         <p className="px-1 text-[12px] leading-relaxed text-otto-text-dim">
-          Balances are typed in by hand. Trading here is an approximate account total. Day-to-day trades stay in Trader. Full account numbers are not stored.
+          The workbook export can be imported back. Household Banks, Deposits, and post office sheets are read when they have a type and an amount. Trading here is an approximate total. Full account numbers are not stored.
         </p>
       </div>
     </section>
@@ -801,12 +910,10 @@ function DepositForm({
 
 function AccountDetail({
   account,
-  multi,
   onClose,
   onEdit,
 }: {
   account: BankAccount;
-  multi: boolean;
   onClose: () => void;
   onEdit: () => void;
 }) {
@@ -817,14 +924,11 @@ function AccountDetail({
         {account.nickname ? account.institution : ACCOUNT_KIND_LABEL[account.kind]}
       </p>
       <p className="mt-3 text-[28px] font-black">{money(account.balance, account.currency)}</p>
+      <p className="mt-1 text-[12px] font-bold uppercase tracking-wide text-otto-text-faint">{account.currency}</p>
       <div className="mt-6 overflow-hidden rounded-2xl bg-otto-surface">
         <DetailRow label="Type" value={account.kind === "trading" ? "Trading · approximate balance" : accountBucket(account.kind) === "liabilities" ? `${ACCOUNT_KIND_LABEL[account.kind]} · owed` : ACCOUNT_KIND_LABEL[account.kind]} />
-        {multi && (
-          <>
-            <Divider />
-            <DetailRow label="Currency" value={account.currency} />
-          </>
-        )}
+        <Divider />
+        <DetailRow label="Currency" value={account.currency} />
         {account.owner && (
           <>
             <Divider />
@@ -854,12 +958,10 @@ function AccountDetail({
 
 function DepositDetail({
   deposit,
-  multi,
   onClose,
   onEdit,
 }: {
   deposit: BankDeposit;
-  multi: boolean;
   onClose: () => void;
   onEdit: () => void;
 }) {
@@ -873,6 +975,7 @@ function DepositDetail({
         {deposit.nickname ? ` · ${deposit.institution}` : ""}
       </p>
       <p className="mt-3 text-[28px] font-black">{money(deposit.principal, deposit.currency)}</p>
+      <p className="mt-1 text-[12px] font-bold uppercase tracking-wide text-otto-text-faint">{deposit.currency}</p>
       <p className="mt-1 text-[13px] text-otto-text-dim">{depositWhen(deposit)}</p>
       <div className="mt-6 overflow-hidden rounded-2xl bg-otto-surface">
         {deposit.rate != null && (
@@ -896,12 +999,8 @@ function DepositDetail({
         )}
         <Divider />
         <DetailRow label="At maturity" value={maturityOutlook(deposit.kind, deposit.renew)} />
-        {multi && (
-          <>
-            <Divider />
-            <DetailRow label="Currency" value={deposit.currency} />
-          </>
-        )}
+        <Divider />
+        <DetailRow label="Currency" value={deposit.currency} />
         {deposit.owner && (
           <>
             <Divider />
@@ -1030,22 +1129,39 @@ function Field({
 }
 
 function downloadBanksCsv(accounts: BankAccount[], deposits: BankDeposit[]) {
+  const header = ["record", "type", "institution", "nickname", "owner", "currency", "amount", "rate", "payout", "started", "matures", "renew", "closed", "last4", "nominee", "notes"];
   const lines = [
-    "kind,country,type,institution,nickname,owner,currency,amount,rate,started,matures,last4",
-    ...accounts.map((item) =>
-      ["account", item.country, item.kind, item.institution, item.nickname, item.owner, item.currency, item.balance, "", "", "", item.last4].map(csv).join(",")
-    ),
-    ...deposits.map((item) =>
-      ["deposit", item.country, item.kind, item.institution, item.nickname, item.owner, item.currency, item.principal, item.rate ?? "", item.startedOn ?? "", item.maturesOn ?? "", ""].map(csv).join(",")
-    ),
-  ];
+    header,
+    ...accounts.map((item) => ["account", item.kind, item.institution, item.nickname, item.owner, item.currency, item.balance, "", "", "", "", "", "", item.last4, item.nominee, item.notes]),
+    ...deposits.map((item) => ["deposit", item.kind, item.institution, item.nickname, item.owner, item.currency, item.principal, item.rate ?? "", item.payout, item.startedOn ?? "", item.maturesOn ?? "", item.renew, item.closed ? "yes" : "no", "", item.nominee, item.notes]),
+  ].map((row) => row.map(csv).join(","));
   const blob = new Blob([lines.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "banks.csv";
+  link.download = "otto-banks.csv";
   link.click();
   URL.revokeObjectURL(url);
+}
+
+async function exportWorkbook(accounts: BankAccount[], deposits: BankDeposit[]) {
+  const XLSX = await import("xlsx");
+  const book = XLSX.utils.book_new();
+  for (const sheet of ottoSheets(accounts, deposits)) {
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(sheet.rows), sheet.name);
+  }
+  XLSX.writeFile(book, "otto-banks.xlsx");
+}
+
+async function readTransferFile(file: File) {
+  const XLSX = await import("xlsx");
+  const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  return parseBankSheets(
+    book.SheetNames.map((name) => ({
+      name,
+      rows: XLSX.utils.sheet_to_json(book.Sheets[name], { header: 1, raw: true, defval: "" }) as unknown[][],
+    }))
+  );
 }
 
 function csv(value: string | number) {

@@ -35,7 +35,7 @@ export type ScreenOptions = {
   booksOpenLibraryEnabled: boolean;
   lifeTab: "today" | "dates" | "tasks" | "lists" | "bills" | "settings";
   journalTab: "entries" | "notes" | "add" | "day" | "settings";
-  banksTab: "overview" | "holdings" | "settings";
+  banksTab: "overview" | "holdings" | "activity" | "performance" | "settings";
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -105,6 +105,8 @@ function isPnlRange(value: unknown): value is PnlRange {
 
 function readBanksTab(value: unknown): ScreenOptions["banksTab"] {
   if (value === "settings") return "settings";
+  if (value === "performance") return "performance";
+  if (value === "activity") return "activity";
   if (value === "holdings" || value === "accounts" || value === "add" || value === "deposits") return "holdings";
   return "overview";
 }

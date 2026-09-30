@@ -52,3 +52,12 @@ export type BankDeposit = {
 };
 
 export type BankDepositInput = Omit<BankDeposit, "id">;
+
+export type BankSnapshot = {
+  holdingKind: "account" | "deposit";
+  holdingId: string;
+  amount: number;
+  currency: BankCurrency;
+  recordedOn: string;
+  createdAt: string;
+};

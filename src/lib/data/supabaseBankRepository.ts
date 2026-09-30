@@ -15,6 +15,7 @@ import {
   type BankDepositInput,
   type DepositKind,
   type DepositPayout,
+  type BankSnapshot,
   type DepositRenew,
 } from "@/types/bank";
 
@@ -152,6 +153,36 @@ export function createSupabaseBankRepository(client: SupabaseClient, userId: str
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id)
         .eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    },
+    async listSnapshots(): Promise<BankSnapshot[]> {
+      const { data, error } = await client
+        .from("nw_snapshots")
+        .select("holding_kind,holding_id,amount,currency,recorded_on,created_at")
+        .eq("user_id", userId)
+        .order("recorded_on");
+      if (error) throw new Error(error.message);
+      return (data as Record<string, unknown>[]).map((row) => ({
+        holdingKind: row.holding_kind === "deposit" ? "deposit" : "account",
+        holdingId: String(row.holding_id),
+        amount: Number(row.amount ?? 0),
+        currency: String(row.currency) === "INR" ? "INR" : "USD",
+        recordedOn: String(row.recorded_on).slice(0, 10),
+        createdAt: String(row.created_at ?? ""),
+      }));
+    },
+    async addSnapshots(rows: Omit<BankSnapshot, "createdAt">[]): Promise<void> {
+      if (!rows.length) return;
+      const { error } = await client.from("nw_snapshots").insert(
+        rows.map((row) => ({
+          user_id: userId,
+          holding_kind: row.holdingKind,
+          holding_id: row.holdingId,
+          amount: row.amount,
+          currency: row.currency,
+          recorded_on: row.recordedOn,
+        }))
+      );
       if (error) throw new Error(error.message);
     },
   };
