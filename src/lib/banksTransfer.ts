@@ -134,12 +134,7 @@ function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): P
     const record = textAt(row, columns.get("record")).toLowerCase();
     const amount = numberAt(row, columns.get("amount"));
     const label = rowLabel(row, columns, typeText, sheetTitle, headerIndex + offset + 2);
-    if (markedSkip(row, columns.get("status"))) {
-      if (typeText || amount != null || textAt(row, columns.get("institution"))) {
-        skipped.push({ label, reason: "Marked SKIP" });
-      }
-      return;
-    }
+    if (markedSkip(row, columns.get("status"))) return;
     const grouped = classify(typeText, sheetName, record, amount != null);
     if (/^total\b/i.test(typeText)) {
       skipped.push({ label, reason: "Total row" });

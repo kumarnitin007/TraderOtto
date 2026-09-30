@@ -168,6 +168,6 @@ describe("bank transfer", () => {
     ]);
     expect(parsed.accounts.map((item) => item.institution)).toEqual(["Credit union"]);
     expect(parsed.deposits.map((item) => item.nickname || item.institution)).toEqual(["PO-PF"]);
-    expect(parsed.skipped.map((row) => row.reason)).toEqual(["Marked SKIP", "Marked SKIP", "Marked SKIP"]);
+    expect(parsed.skipped).toEqual([]);
   });
 });
