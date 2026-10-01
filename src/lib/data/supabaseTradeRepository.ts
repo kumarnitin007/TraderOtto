@@ -9,7 +9,7 @@ import type {
   TradeUpdate,
 } from "@/types/trade";
 import { realizedPnl } from "@/lib/pnl";
-import { isDuplicateClosedTrade } from "@/lib/tradeDuplicate";
+import { isDuplicateClosedTrade, matchTradesForImport } from "@/lib/tradeDuplicate";
 
 type TradeRow = {
   id: string;
@@ -239,27 +239,139 @@ export function createSupabaseTradeRepository(
       if (!items.length) return [];
       const { data: current, error: readError } = await supabase
         .from("tr_trades")
-        .select("details")
+        .select("*")
         .eq("user_id", userId)
         .is("deleted_at", null);
       if (readError) throw new Error(readError.message);
-      const existing = new Set(
-        (current ?? [])
-          .map((row) => {
-            const details =
-              row.details && typeof row.details === "object"
-                ? (row.details as Record<string, unknown>)
-                : {};
-            return typeof details.importFingerprint === "string"
-              ? details.importFingerprint
-              : null;
-          })
+      const raw = (current ?? []) as TradeRow[];
+      const existingTrades = raw.map(mapRow);
+      const importMatches = matchTradesForImport(existingTrades, items);
+      const seen = new Set(
+        existingTrades
+          .map((trade) => trade.importFingerprint)
           .filter((value): value is string => Boolean(value))
       );
-      const seen = new Set(existing);
       const results: TradeImportResult[] = [];
       const pending: TradeImport[] = [];
-      for (const item of items) {
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        const match = importMatches[index];
+        if (match) {
+          const rawRow = raw.find((row) => row.id === match.id);
+          const existingDetails = rawRow?.details ?? {};
+          const useImportedOpening = !item.openingMissing;
+          const premiumOpen = useImportedOpening
+            ? item.premiumOpen
+            : match.premiumOpen;
+          const commissionOpen = useImportedOpening
+            ? item.commissionOpen
+            : match.commissionOpen ?? 0;
+          const contracts = useImportedOpening ? item.contracts : match.contracts;
+          const strategy = useImportedOpening ? item.strategy : match.strategy;
+          const closed =
+            item.status === "closed" &&
+            Boolean(item.closeDate) &&
+            item.premiumClose != null;
+          const details = {
+            ...existingDetails,
+            shortStrike: item.shortStrike,
+            longStrike: item.longStrike,
+            callShortStrike: item.callShortStrike,
+            callLongStrike: item.callLongStrike,
+            stockPriceOpen: item.stockPriceOpen || match.stockPriceOpen,
+            iv: item.iv || match.iv,
+            delta: item.delta || match.delta,
+            sigma: item.sigma || match.sigma,
+            theta: item.theta || match.theta,
+            commissionOpen,
+            importSource: item.importSource,
+            importFingerprint: item.importFingerprint,
+            notes: [
+              match.notes
+                .replace("Imported from Robinhood activity CSV.", "")
+                .replace("Closed from Robinhood activity CSV.", "")
+                .trim(),
+              closed
+                ? "Closed from Robinhood activity CSV."
+                : "Updated from Robinhood activity CSV.",
+            ]
+              .filter(Boolean)
+              .join(" "),
+            ...(closed
+              ? {
+                  stockPriceClose: item.stockPriceClose ?? 0,
+                  commissionClose: item.commissionClose ?? 0,
+                  closeReason: item.closeReason ?? "closed",
+                }
+              : {}),
+          };
+          const patch: Record<string, unknown> = {
+            ticker: item.ticker.toUpperCase(),
+            strategy,
+            status: closed ? "closed" : "open",
+            contracts,
+            expiry: item.expiry,
+            open_date: useImportedOpening ? item.openDate : match.openDate,
+            close_date: closed ? item.closeDate : null,
+            premium_open: premiumOpen,
+            premium_close: closed ? item.premiumClose : null,
+            pnl: closed
+              ? realizedPnl(
+                  premiumOpen,
+                  item.premiumClose!,
+                  contracts,
+                  strategy,
+                  {
+                    commissionOpen,
+                    commissionClose: item.commissionClose,
+                  }
+                )
+              : null,
+            details,
+          };
+          const { data, error } = await supabase
+            .from("tr_trades")
+            .update(patch)
+            .eq("id", match.id)
+            .eq("user_id", userId)
+            .select()
+            .single();
+          if (error || !data) {
+            results.push({
+              fingerprint: item.importFingerprint,
+              status: "failed",
+              error: error?.message ?? "Could not update the existing trade.",
+            });
+          } else {
+            const duplicateCopy = existingTrades.find(
+              (trade) =>
+                trade.id !== match.id &&
+                trade.importFingerprint === item.importFingerprint
+            );
+            if (duplicateCopy) {
+              const cleanup = await supabase
+                .from("tr_trades")
+                .delete()
+                .eq("id", duplicateCopy.id)
+                .eq("user_id", userId);
+              if (cleanup.error) {
+                results.push({
+                  fingerprint: item.importFingerprint,
+                  status: "failed",
+                  error: `Trade updated, but the earlier duplicate could not be removed: ${cleanup.error.message}`,
+                });
+                continue;
+              }
+            }
+            seen.add(item.importFingerprint);
+            results.push({
+              fingerprint: item.importFingerprint,
+              status: "updated",
+              trade: mapRow(data as TradeRow),
+            });
+          }
+          continue;
+        }
         if (seen.has(item.importFingerprint)) {
           results.push({
             fingerprint: item.importFingerprint,

@@ -103,11 +103,18 @@ export function TradesProvider({ children }: { children: ReactNode }) {
   const importTrades = useCallback(async (items: TradeImport[]) => {
     if (!repository) throw new Error("Sign in to import trades.");
     const results = await repository.importMany(items);
-    const created = results.flatMap((result) =>
-      result.status === "imported" && result.trade ? [result.trade] : []
+    const saved = results.flatMap((result) =>
+      (result.status === "imported" || result.status === "updated") && result.trade
+        ? [result.trade]
+        : []
     );
-    if (created.length) {
-      setTrades((previous) => [...created, ...previous]);
+    if (saved.length) {
+      setTrades((previous) => {
+        const updates = new Map(saved.map((trade) => [trade.id, trade]));
+        const merged = previous.map((trade) => updates.get(trade.id) ?? trade);
+        const known = new Set(previous.map((trade) => trade.id));
+        return [...saved.filter((trade) => !known.has(trade.id)), ...merged];
+      });
     }
     return results;
   }, [repository]);

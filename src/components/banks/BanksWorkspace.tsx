@@ -451,7 +451,13 @@ function Holdings({
   const shown = filter === "all" ? groups : groups.filter((group) => group.id === filter);
   const shownAccounts = shown.flatMap((group) => group.accounts);
   const shownDeposits = shown.flatMap((group) => group.deposits);
-  const flat = sortHoldings(shownAccounts, shownDeposits, sort);
+  const flat = sortHoldings(
+    shownAccounts,
+    shownDeposits,
+    sort,
+    prefs.home,
+    prefs.inrPerUsd
+  );
   const filterLabel = filter === "all" ? "All holdings" : (groups.find((group) => group.id === filter)?.label ?? "Holdings");
 
   return (

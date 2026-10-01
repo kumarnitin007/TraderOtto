@@ -16,14 +16,20 @@ import {
   type RobinhoodParseResult,
   type RobinhoodTradeCandidate,
 } from "@/lib/robinhoodCsv";
-import { matchImportedTradeDuplicates } from "@/lib/tradeDuplicate";
+import {
+  closedImportCopy,
+  matchImportedTradeDuplicates,
+  matchTradesForImport,
+} from "@/lib/tradeDuplicate";
 import { fmtDate, fmtMoney, realizedPnl } from "@/lib/pnl";
-import type { TradeImport, TradeImportResult } from "@/types/trade";
+import type { Trade, TradeImport, TradeImportResult } from "@/types/trade";
 
 type ReviewItem = {
   candidate: RobinhoodTradeCandidate;
   trade: TradeImport;
   duplicate: boolean;
+  openMatch: Trade | null;
+  closedCopy: Trade | null;
 };
 
 export function RobinhoodCsvImport() {
@@ -40,20 +46,33 @@ export function RobinhoodCsvImport() {
   const items = useMemo<ReviewItem[]>(() => {
     if (!result) return [];
     const imports = result.candidates.map(robinhoodCandidateToTradeImport);
+    const openMatches = matchTradesForImport(trades, imports);
     const duplicates = matchImportedTradeDuplicates(trades, imports);
-    return result.candidates.map((candidate, index) => ({
-      candidate,
-      trade: imports[index],
-      duplicate: Boolean(duplicates[index]),
-    }));
+    return result.candidates.map((candidate, index) => {
+      const openMatch = openMatches[index];
+      return {
+        candidate,
+        trade: imports[index],
+        openMatch,
+        duplicate: !openMatch && Boolean(duplicates[index]),
+        closedCopy: openMatch
+          ? closedImportCopy(trades, imports[index], openMatch.id)
+          : null,
+      };
+    });
   }, [result, trades]);
 
+  const closing = items.filter((item) => item.openMatch && !item.duplicate);
   const ready = items.filter(
-    (item) => item.candidate.confidence === "ready" && !item.duplicate
+    (item) =>
+      item.candidate.confidence === "ready" && !item.duplicate && !item.openMatch
   );
   const duplicates = items.filter((item) => item.duplicate);
   const review = items.filter(
-    (item) => item.candidate.confidence === "needs_review" && !item.duplicate
+    (item) =>
+      item.candidate.confidence === "needs_review" &&
+      !item.duplicate &&
+      !item.openMatch
   );
 
   async function readFile(file?: File) {
@@ -65,10 +84,17 @@ export function RobinhoodCsvImport() {
       const parsed = parseRobinhoodCsv(await file.text());
       setResult(parsed);
       setFileName(file.name);
+      const imports = parsed.candidates.map(robinhoodCandidateToTradeImport);
+      const openMatches = matchTradesForImport(trades, imports);
+      const duplicates = matchImportedTradeDuplicates(trades, imports);
       setSelected(
         new Set(
           parsed.candidates
-            .filter((candidate) => candidate.confidence === "ready")
+            .filter(
+              (candidate, index) =>
+                Boolean(openMatches[index]) ||
+                (candidate.confidence === "ready" && !duplicates[index])
+            )
             .map((candidate) => candidate.sourceFingerprint)
         )
       );
@@ -136,7 +162,7 @@ export function RobinhoodCsvImport() {
       !saved.has(item.candidate.sourceFingerprint)
   ).length;
   const importedCount = Array.from(saved.values()).filter(
-    (outcome) => outcome.status === "imported"
+    (outcome) => outcome.status === "imported" || outcome.status === "updated"
   ).length;
 
   return (
@@ -249,6 +275,16 @@ export function RobinhoodCsvImport() {
               </details>
 
               <ReviewGroup
+                title="Updates an existing trade"
+                subtitle="Matching positions are updated instead of duplicated"
+                items={closing}
+                selected={selected}
+                expanded={expanded}
+                saved={saved}
+                onToggle={toggle}
+                onExpand={setExpanded}
+              />
+              <ReviewGroup
                 title="Ready"
                 subtitle="High-confidence reconstructed trades"
                 items={ready}
@@ -302,7 +338,7 @@ export function RobinhoodCsvImport() {
               )}
               {importedCount > 0 && (
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-otto-green">
-                  <Check size={13} /> Imported {importedCount} trade
+                  <Check size={13} /> Saved {importedCount} trade
                   {importedCount === 1 ? "" : "s"}.
                 </div>
               )}
@@ -372,9 +408,14 @@ function ReviewGroup({
                   className="h-4 w-4 shrink-0"
                   checked={
                     outcome?.status === "imported" ||
+                    outcome?.status === "updated" ||
                     (!disabled && selected.has(fingerprint))
                   }
-                  disabled={disabled || outcome?.status === "imported"}
+                  disabled={
+                    disabled ||
+                    outcome?.status === "imported" ||
+                    outcome?.status === "updated"
+                  }
                   onChange={() => onToggle(fingerprint)}
                   aria-label={`Select ${item.candidate.ticker} ${item.candidate.strategy}`}
                 />
@@ -394,7 +435,7 @@ function ReviewGroup({
                   </span>
                   <span className="shrink-0 text-xs font-bold">
                     {item.candidate.status === "closed"
-                      ? signedMoney(candidatePnl(item.candidate))
+                      ? signedMoney(displayPnl(item))
                       : fmtMoney(
                           item.candidate.premiumOpen *
                             item.candidate.contracts *
@@ -404,7 +445,7 @@ function ReviewGroup({
                   {item.candidate.confidence === "needs_review" && (
                     <AlertTriangle size={13} className="shrink-0 text-otto-amber" />
                   )}
-                  {outcome?.status === "imported" && (
+                  {(outcome?.status === "imported" || outcome?.status === "updated") && (
                     <Check size={13} className="shrink-0 text-otto-green" />
                   )}
                   <ChevronDown
@@ -433,11 +474,14 @@ function CandidateDetails({
   return (
     <div className="border-t border-otto-divider bg-otto-surface px-3 py-3">
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 desk:grid-cols-4">
-        <Detail label="Opened" value={fmtDate(candidate.openDate)} />
+        <Detail
+          label="Opened"
+          value={fmtDate(item.openMatch?.openDate ?? candidate.openDate)}
+        />
         <Detail label="Expiry" value={fmtDate(candidate.expiry)} />
         <Detail
           label="Open premium"
-          value={`${fmtMoney(candidate.premiumOpen)} / contract`}
+          value={`${fmtMoney(item.openMatch?.premiumOpen ?? candidate.premiumOpen)} / contract`}
         />
         <Detail
           label="Open fees"
@@ -464,6 +508,19 @@ function CandidateDetails({
           </>
         )}
       </div>
+      {item.openMatch && (
+        <div className="mt-3 rounded-lg border border-otto-divider px-3 py-2 text-[10.5px] text-otto-text-dim">
+          {candidate.status === "closed" ? "Closes" : "Updates"} the existing{" "}
+          {item.openMatch.ticker} {item.openMatch.strategy} from{" "}
+          {fmtDate(item.openMatch.openDate)}.
+          {candidate.status === "closed"
+            ? " Realized profit uses the reconciled Robinhood opening and closing values."
+            : " Robinhood opening values replace the manually entered transaction values."}
+          {item.closedCopy
+            ? " The separate copy created by the earlier import will be removed automatically."
+            : ""}
+        </div>
+      )}
       {candidate.issues.length > 0 && (
         <div className="mt-3 rounded-lg bg-otto-amber-soft px-3 py-2 text-[10.5px] text-otto-amber">
           {candidate.issues.map((issue) => issue.message).join(" ")}
@@ -533,6 +590,22 @@ function strikeLabel(candidate: RobinhoodTradeCandidate) {
     return `${candidate.shortStrike}/${candidate.longStrike}`;
   }
   return String(candidate.shortStrike ?? "—");
+}
+
+function displayPnl(item: ReviewItem) {
+  if (item.openMatch && item.candidate.premiumClose != null) {
+    return realizedPnl(
+      item.openMatch.premiumOpen,
+      item.candidate.premiumClose,
+      item.openMatch.contracts,
+      item.openMatch.strategy,
+      {
+        commissionOpen: item.openMatch.commissionOpen,
+        commissionClose: item.candidate.commissionClose,
+      }
+    );
+  }
+  return candidatePnl(item.candidate);
 }
 
 function candidatePnl(candidate: RobinhoodTradeCandidate) {

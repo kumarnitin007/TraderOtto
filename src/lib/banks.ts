@@ -326,18 +326,38 @@ export type SortedHolding =
   | { kind: "account"; account: BankAccount }
   | { kind: "deposit"; deposit: BankDeposit };
 
-export function sortHoldings(accounts: BankAccount[], deposits: BankDeposit[], sort: HoldingSort): SortedHolding[] {
+export function sortHoldings(
+  accounts: BankAccount[],
+  deposits: BankDeposit[],
+  sort: HoldingSort,
+  home?: BankCurrency,
+  inrPerUsd?: number | null
+): SortedHolding[] {
   const rows: SortedHolding[] = [
     ...accounts.map((account) => ({ kind: "account" as const, account })),
     ...deposits.map((deposit) => ({ kind: "deposit" as const, deposit })),
   ];
   if (sort === "group") return rows;
-  return rows.sort((left, right) => compareHoldings(left, right, sort) || holdingName(left).localeCompare(holdingName(right)));
+  return rows.sort(
+    (left, right) =>
+      compareHoldings(left, right, sort, home, inrPerUsd) ||
+      holdingName(left).localeCompare(holdingName(right))
+  );
 }
 
-function compareHoldings(left: SortedHolding, right: SortedHolding, sort: HoldingSort) {
-  if (sort === "amount-desc") return holdingAmount(right) - holdingAmount(left);
-  if (sort === "amount-asc") return holdingAmount(left) - holdingAmount(right);
+function compareHoldings(
+  left: SortedHolding,
+  right: SortedHolding,
+  sort: HoldingSort,
+  home?: BankCurrency,
+  inrPerUsd?: number | null
+) {
+  if (sort === "amount-desc") {
+    return holdingAmount(right, home, inrPerUsd) - holdingAmount(left, home, inrPerUsd);
+  }
+  if (sort === "amount-asc") {
+    return holdingAmount(left, home, inrPerUsd) - holdingAmount(right, home, inrPerUsd);
+  }
   if (sort === "type") return holdingType(left).localeCompare(holdingType(right));
   if (sort === "currency") return holdingCurrency(left).localeCompare(holdingCurrency(right));
   if (sort === "owner") return holdingOwner(left).localeCompare(holdingOwner(right));
@@ -349,8 +369,15 @@ function holdingName(row: SortedHolding) {
   return item.nickname || item.institution;
 }
 
-function holdingAmount(row: SortedHolding) {
-  return row.kind === "account" ? row.account.balance : row.deposit.principal;
+function holdingAmount(
+  row: SortedHolding,
+  home?: BankCurrency,
+  inrPerUsd?: number | null
+) {
+  const item = row.kind === "account" ? row.account : row.deposit;
+  const amount = row.kind === "account" ? row.account.balance : row.deposit.principal;
+  if (!home) return amount;
+  return toHome(amount, item.currency, home, inrPerUsd ?? null) ?? amount;
 }
 
 function holdingType(row: SortedHolding) {

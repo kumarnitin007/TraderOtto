@@ -127,4 +127,20 @@ describe("banks", () => {
     expect(ids("type")).toEqual(["cash", "fd", "loan"]);
     expect(ids("owner")).toEqual(["cash", "fd", "loan"]);
   });
+
+  it("sorts mixed currencies by their converted home-currency amounts", () => {
+    const accounts = [
+      account({ id: "usd", institution: "US bank", balance: 3, currency: "USD" }),
+      account({ id: "inr", institution: "India bank", balance: 160, currency: "INR" }),
+    ];
+    const sorted = sortHoldings(
+      accounts,
+      [],
+      "amount-desc",
+      "USD",
+      80
+    ).map((row) => (row.kind === "account" ? row.account.id : row.deposit.id));
+
+    expect(sorted).toEqual(["usd", "inr"]);
+  });
 });

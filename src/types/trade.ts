@@ -117,11 +117,13 @@ export type TradeImport = NewTrade & Partial<ClosePayload> & {
   status: TradeStatus;
   importSource: string;
   importFingerprint: string;
+  /** True when this CSV only contained closing fills for the position. */
+  openingMissing?: boolean;
 };
 
 export type TradeImportResult = {
   fingerprint: string;
-  status: "imported" | "duplicate" | "failed";
+  status: "imported" | "updated" | "duplicate" | "failed";
   trade?: Trade;
   error?: string;
 };

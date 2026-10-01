@@ -54,6 +54,8 @@ export type RobinhoodTradeCandidate = {
   commissionClose?: number;
   closeReason?: CloseReason;
   notes: string;
+  /** Closing fills are in the file and the opening fills are not. */
+  openingMissing?: boolean;
 };
 
 export type RobinhoodImportSummary = {
@@ -111,6 +113,7 @@ export function robinhoodCandidateToTradeImport(
     closeReason: candidate.closeReason,
     importSource: "robinhood_csv",
     importFingerprint: candidate.sourceFingerprint,
+    openingMissing: candidate.openingMissing,
   };
 }
 
@@ -969,6 +972,173 @@ function finalizeCandidate(
   };
 }
 
+function emitOrphanClose(candidates: RobinhoodTradeCandidate[], leg: PendingCloseLeg) {
+  const orphanBase: CandidateBase = {
+    issues: [
+      {
+        code: "orphan_close",
+        message: `Close without matching open: ${leg.description.split(/\r?\n/)[0]}`,
+        severity: "warning",
+      },
+    ],
+    rawEventRefs: [],
+    ticker: leg.ticker,
+    strategy: inferStrategyFromCloseLeg(leg.transCode, leg.right),
+    contracts: leg.contracts,
+    expiry: leg.expiry,
+    openDate: leg.activityDate,
+    shortStrike: leg.strike,
+    longStrike: null,
+    callShortStrike: null,
+    callLongStrike: null,
+    stockPriceOpen: 0,
+    iv: 0,
+    delta: 0,
+    sigma: 0,
+    theta: 0,
+    premiumOpen: 0,
+    commissionOpen: 0,
+    notes: "Orphan close — opening activity missing or already consumed.",
+  };
+  emitClosed(
+    candidates,
+    orphanBase,
+    leg.activityDate,
+    leg.price ?? 0,
+    leg.price != null ? commissionFromFill(leg.price, leg.contracts, leg.amount) : 0,
+    closeReasonForCode(leg.transCode),
+    [
+      {
+        rowIndex: leg.rowIndex,
+        activityDate: leg.activityDate,
+        transCode: leg.transCode,
+        description: leg.description.split(/\r?\n/)[0] ?? leg.description,
+      },
+    ],
+    "needs_review"
+  );
+}
+
+/** Pair leftover BTC/STC legs into a vertical when the opening fills are not in this file. */
+function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeCandidate[]) {
+  const groups = new Map<string, PendingCloseLeg[]>();
+  for (const leg of legs) {
+    const key = `${leg.ticker}|${leg.expiry}|${leg.right}`;
+    const list = groups.get(key) ?? [];
+    list.push(leg);
+    groups.set(key, list);
+  }
+
+  for (const group of groups.values()) {
+    const btcs = group.filter((leg) => leg.transCode === "BTC");
+    const stcs = group.filter((leg) => leg.transCode === "STC");
+    const other = group.filter((leg) => leg.transCode !== "BTC" && leg.transCode !== "STC");
+    for (const leg of other) emitOrphanClose(candidates, leg);
+    if (!btcs.length || !stcs.length) {
+      for (const leg of [...btcs, ...stcs]) emitOrphanClose(candidates, leg);
+      continue;
+    }
+
+    const right = group[0].right;
+    const stoShaped: LegOpenSlice[] = btcs.map((leg) => ({
+      rowIndex: leg.rowIndex,
+      activityDate: leg.activityDate,
+      transCode: "STO",
+      contracts: leg.contracts,
+      price: leg.price ?? 0,
+      amount: leg.amount,
+      description: leg.description,
+      strike: leg.strike,
+    }));
+    const btoShaped: LegOpenSlice[] = stcs.map((leg) => ({
+      rowIndex: leg.rowIndex,
+      activityDate: leg.activityDate,
+      transCode: "BTO",
+      contracts: leg.contracts,
+      price: leg.price ?? 0,
+      amount: leg.amount,
+      description: leg.description,
+      strike: leg.strike,
+    }));
+    const matching =
+      btcs.length === stcs.length
+        ? uniqueSpreadMatching(stoShaped, btoShaped, right)
+        : validPairings(stoShaped, btoShaped, right).length === 1
+          ? validPairings(stoShaped, btoShaped, right)
+          : "ambiguous";
+
+    if (!matching || matching === "ambiguous") {
+      for (const leg of group) {
+        if (leg.transCode === "BTC" || leg.transCode === "STC") emitOrphanClose(candidates, leg);
+      }
+      continue;
+    }
+
+    const usedBtc = new Set<number>();
+    const usedStc = new Set<number>();
+    for (const edge of matching) {
+      usedBtc.add(edge.stoIndex);
+      usedStc.add(edge.btoIndex);
+      const shortLeg = btcs[edge.stoIndex];
+      const longLeg = stcs[edge.btoIndex];
+      const shortPx = shortLeg.price ?? 0;
+      const longPx = longLeg.price ?? 0;
+      const take = Math.min(shortLeg.contracts, longLeg.contracts);
+      const base: CandidateBase = {
+        issues: [
+          {
+            code: "close_without_open",
+            message:
+              "Closing fills have no opening fills in this file. A matching open trade will be closed.",
+            severity: "warning",
+          },
+        ],
+        rawEventRefs: [],
+        ticker: shortLeg.ticker,
+        strategy: edge.strategy,
+        contracts: take,
+        expiry: shortLeg.expiry,
+        openDate: shortLeg.activityDate,
+        shortStrike: shortLeg.strike,
+        longStrike: longLeg.strike,
+        callShortStrike: null,
+        callLongStrike: null,
+        stockPriceOpen: 0,
+        iv: 0,
+        delta: 0,
+        sigma: 0,
+        theta: 0,
+        premiumOpen: 0,
+        commissionOpen: 0,
+        notes: "",
+      };
+      const closed = finalizeCandidate(
+        base,
+        "closed",
+        shortLeg.activityDate,
+        netSpreadPremium(edge.strategy, shortPx, longPx),
+        commissionFromFill(shortPx, take, shortLeg.amount) +
+          commissionFromFill(longPx, take, longLeg.amount),
+        "closed",
+        [shortLeg, longLeg].map((leg) => ({
+          rowIndex: leg.rowIndex,
+          activityDate: leg.activityDate,
+          transCode: leg.transCode,
+          description: leg.description.split(/\r?\n/)[0] ?? leg.description,
+        })),
+        "needs_review"
+      );
+      candidates.push({ ...closed, openingMissing: true });
+    }
+    btcs.forEach((leg, index) => {
+      if (!usedBtc.has(index)) emitOrphanClose(candidates, leg);
+    });
+    stcs.forEach((leg, index) => {
+      if (!usedStc.has(index)) emitOrphanClose(candidates, leg);
+    });
+  }
+}
+
 function reconstructTrades(
   openRows: ParsedOptionRow[],
   allEvents: ParsedOptionRow[],
@@ -1031,6 +1201,7 @@ function reconstructTrades(
     if (!legs.length) return;
 
     const used = new Set<number>();
+    const unpaired: PendingCloseLeg[] = [];
 
     for (let i = 0; i < legs.length; i++) {
       if (used.has(i)) continue;
@@ -1040,46 +1211,9 @@ function reconstructTrades(
       while (qtyLeft > 0) {
         const openPositions = fifoPositionsForLeg(leg);
         if (!openPositions.length) {
-          const orphanBase: CandidateBase = {
-            issues: [
-              {
-                code: "orphan_close",
-                message: `Close without matching open: ${leg.description.split(/\r?\n/)[0]}`,
-                severity: "warning",
-              },
-            ],
-            rawEventRefs: [],
-            ticker: leg.ticker,
-            strategy: inferStrategyFromCloseLeg(leg.transCode, leg.right),
-            contracts: qtyLeft,
-            expiry: leg.expiry,
-            openDate: leg.activityDate,
-            shortStrike: leg.strike,
-            longStrike: null,
-            callShortStrike: null,
-            callLongStrike: null,
-            stockPriceOpen: 0,
-            iv: 0,
-            delta: 0,
-            sigma: 0,
-            theta: 0,
-            premiumOpen: 0,
-            commissionOpen: 0,
-            notes: "Orphan close — opening activity missing or already consumed.",
-          };
-          emitClosed(
-            candidates,
-            orphanBase,
-            leg.activityDate,
-            leg.price ?? 0,
-            leg.price != null
-              ? commissionFromFill(leg.price, qtyLeft, leg.amount)
-              : 0,
-            closeReasonForCode(leg.transCode),
-            [closeRef(leg)],
-            "needs_review"
-          );
+          unpaired.push({ ...leg, contracts: qtyLeft });
           qtyLeft = 0;
+          used.add(i);
           break;
         }
 
@@ -1198,6 +1332,8 @@ function reconstructTrades(
         if (qtyLeft <= 0) used.add(i);
       }
     }
+
+    pairUnpairedCloses(unpaired, candidates);
   }
 
   const closeDates = [...new Set(closes.map((c) => c.activityDate))].sort();
@@ -1260,7 +1396,7 @@ export function summarizeRobinhoodCandidates(
     else if (c.confidence === "needs_review") needsReviewCount++;
     else unsupportedCount++;
 
-    if (c.status === "closed" && c.closeDate && c.premiumClose != null) {
+    if (c.status === "closed" && c.closeDate && c.premiumClose != null && !c.openingMissing) {
       const pnl = realizedPnl(
         c.premiumOpen,
         c.premiumClose,

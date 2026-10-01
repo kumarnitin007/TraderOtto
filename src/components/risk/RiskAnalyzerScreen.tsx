@@ -78,7 +78,7 @@ export function RiskAnalyzerScreen() {
         <div className="relative px-5 py-6 desk:px-8 desk:py-8">
           <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-otto-green/10 blur-3xl" />
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-otto-text-faint">
-            New trade review
+            Open position review
           </p>
           <div className="mt-2 flex flex-col gap-6 desk:flex-row desk:items-center desk:justify-between">
             <div>
@@ -163,7 +163,7 @@ export function RiskAnalyzerScreen() {
       </div>
 
       <div className="mt-5 rounded-2xl border border-otto-divider px-4 py-3 text-[11px] leading-relaxed text-otto-text-faint">
-        This is a deterministic pre-trade checklist, not investment advice. Scores can
+        This is a deterministic position-risk checklist, not investment advice. Scores can
         change as price, earnings dates, volatility, and time change.
       </div>
       <button

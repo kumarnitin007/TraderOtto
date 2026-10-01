@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Trash2 } from "lucide-react";
+import { ChevronDown, ShieldCheck, Trash2 } from "lucide-react";
 import type { ClosePayload, CloseReason, Trade } from "@/types/trade";
 import type { LiveQuote } from "@/hooks/useLiveQuotes";
 import type { OptionMark } from "@/hooks/useOptionMarks";
@@ -329,20 +329,32 @@ export function TradeRow({
           </div>
 
           {!closing && (
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2 desk:flex">
               {t.status === "open" && (
-                <button
-                  type="button"
-                  onClick={onStartClose}
-                  className="flex-[2] rounded-full border border-otto-divider bg-transparent py-[11px] text-[13.5px] font-semibold text-otto-text"
-                >
-                  Close position
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/risk-analyzer?trade=${encodeURIComponent(t.id)}`)
+                    }
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-otto-divider bg-transparent py-[11px] text-[13.5px] font-semibold text-otto-text"
+                  >
+                    <ShieldCheck size={15} />
+                    Risk score
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onStartClose}
+                    className="rounded-full border border-otto-divider bg-transparent py-[11px] text-[13.5px] font-semibold text-otto-text desk:flex-[2]"
+                  >
+                    Close position
+                  </button>
+                </>
               )}
               <button
                 type="button"
                 onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-[11px] text-[13.5px] font-semibold ${
+                className={`col-span-2 flex items-center justify-center gap-1.5 rounded-full py-[11px] text-[13.5px] font-semibold desk:col-span-1 desk:flex-1 ${
                   confirmDelete
                     ? "border border-otto-red bg-otto-red-soft text-otto-red"
                     : "border border-otto-divider bg-transparent text-otto-text-dim"
