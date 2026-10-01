@@ -40,18 +40,22 @@ export function toHome(
   return amount * inrPerUsd;
 }
 
-export function money(amount: number, currency: BankCurrency) {
-  const formatted = Math.abs(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+function groupedAmount(amount: number, currency: BankCurrency, digits: number) {
+  return Math.abs(amount).toLocaleString(currency === "INR" ? "en-IN" : "en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   });
+}
+
+export function money(amount: number, currency: BankCurrency) {
   const sign = amount < 0 ? "-" : "";
+  const formatted = groupedAmount(amount, currency, 2);
   return currency === "INR" ? `${sign}₹${formatted}` : `${sign}$${formatted}`;
 }
 
 export function moneyWhole(amount: number, currency: BankCurrency) {
-  const formatted = Math.abs(Math.round(amount)).toLocaleString(undefined, { maximumFractionDigits: 0 });
   const sign = amount < 0 ? "-" : "";
+  const formatted = groupedAmount(Math.round(amount), currency, 0);
   return currency === "INR" ? `${sign}₹${formatted}` : `${sign}$${formatted}`;
 }
 
@@ -127,6 +131,20 @@ export function displayCurrency(
 ): BankCurrency {
   const currencies = activeCurrencies(accounts, deposits);
   return currencies.length === 1 ? currencies[0] : home;
+}
+
+/** ECB daily rate, rounded to paise. Approximate, and close enough for net-worth totals. */
+export function inrPerUsdFromRatePayload(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+  const rate = Number((payload as { rates?: { INR?: unknown } }).rates?.INR);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  return Math.round(rate * 100) / 100;
+}
+
+export async function fetchApproxInrPerUsd(): Promise<number | null> {
+  const response = await fetch("https://api.frankfurter.app/latest?from=USD&to=INR");
+  if (!response.ok) return null;
+  return inrPerUsdFromRatePayload(await response.json());
 }
 
 export const DEPOSIT_TREATMENT: Record<
@@ -242,7 +260,7 @@ export function depositReference(notes: string) {
 
 export function notesWithDepositReference(notes: string, number: string) {
   const rest = notes.replace(/^No\. [^·]+?(?: · |$)/, "").trim();
-  const label = number.trim().slice(0, 24);
+  const label = number.trim().slice(0, 64);
   return label ? (rest ? `No. ${label} · ${rest}` : `No. ${label}`) : rest;
 }
 

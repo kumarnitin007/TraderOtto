@@ -54,8 +54,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-otto-bg text-otto-text">
       <div className="mx-auto flex max-w-[1180px]">
         <aside className="hidden min-h-screen w-[236px] shrink-0 flex-col border-r border-otto-divider px-5 py-7 desk:flex">
-          <div className="text-[19px] font-extrabold tracking-[-0.3px]">
-            {product.product}
+          <div className="flex items-center gap-2.5">
+            <img src="/icon.png" alt="" className="h-9 w-9 rounded-2xl" />
+            <div className="text-[19px] font-extrabold tracking-[-0.3px]">
+              {product.product}
+            </div>
           </div>
           <div className="mb-[30px] mt-[3px] text-[12.5px] text-otto-text-faint">
             {product.tagline}
@@ -113,8 +116,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="min-w-0 flex-1 pb-24 desk:px-2 desk:pt-7">
           <header className="sticky top-0 z-30 bg-otto-bg px-[18px] pb-2.5 pt-4 desk:hidden">
             <div className="flex items-center justify-between gap-2">
-              <div className="truncate text-[17px] font-bold tracking-[-0.2px]">
-                {product.product}
+              <div className="flex min-w-0 items-center gap-2">
+                <img src="/icon.png" alt="" className="h-7 w-7 rounded-lg" />
+                <div className="truncate text-[17px] font-bold tracking-[-0.2px]">
+                  {product.product}
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {trading && <AlpacaStatus compact />}

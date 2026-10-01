@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   BarChart3,
   Bell,
@@ -40,6 +40,7 @@ import {
   depositReference,
   depositWhen,
   displayCurrency,
+  fetchApproxInrPerUsd,
   HOLDING_SORTS,
   maturityOutlook,
   money,
@@ -128,13 +129,19 @@ const EMPTY_DEPOSIT: BankDepositInput = {
 export function BanksWorkspace() {
   const banks = useBanks();
   const [tab, setTab] = useScreenOption("banksTab");
-  const [prefs, setPrefs] = useState<BanksPreferences>(readBanksPreferences);
+  const [prefsReady, setPrefsReady] = useState(false);
+  const [prefs, setPrefs] = useState<BanksPreferences>({ home: "USD", inrPerUsd: null });
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [sheet, setSheet] = useState<HoldingRef | null>(null);
   const [detail, setDetail] = useState<HoldingRef | null>(null);
   const [notice, setNotice] = useState("");
   const multi = usesMultipleCurrencies(banks.accounts, banks.deposits);
   const entryCurrency = displayCurrency(banks.accounts, banks.deposits, prefs.home);
+
+  useEffect(() => {
+    setPrefs(readBanksPreferences());
+    setPrefsReady(true);
+  }, []);
 
   function savePrefs(next: BanksPreferences) {
     setPrefs(next);
@@ -183,6 +190,18 @@ export function BanksWorkspace() {
 
   return (
     <div className="mx-auto max-w-[720px] pb-28">
+      {prefsReady && multi && prefs.inrPerUsd == null && tab !== "settings" && (
+        <button
+          type="button"
+          onClick={() => setTab("settings")}
+          className="mb-3 block w-full rounded-2xl bg-otto-amber-soft px-4 py-3 text-left"
+        >
+          <span className="block text-[13px] font-bold text-otto-amber">Exchange rate required</span>
+          <span className="mt-0.5 block text-[12px] text-otto-text-dim">
+            You have both dollars and rupees. Add how many rupees equal 1 dollar so totals and sorting use one currency.
+          </span>
+        </button>
+      )}
       {banks.error && <p className="mb-3 rounded-xl bg-otto-red-soft px-3.5 py-3 text-[12px] text-otto-red">{banks.error}</p>}
       {notice && <p className="mb-3 rounded-xl bg-otto-red-soft px-3.5 py-3 text-[12px] text-otto-red">{notice}</p>}
       {tab === "overview" && (
@@ -387,7 +406,7 @@ function Overview({
           {(["USD", "INR"] as const).map((currency) => (
             <div key={currency} className="rounded-2xl bg-otto-surface px-3 py-3">
               <div className="text-[12px] font-bold">{currency}</div>
-              <div className="mt-1 text-[16px] font-extrabold">{money(nativeTotal(accounts, deposits, currency), currency)}</div>
+              <div className="mt-1 text-[16px] font-extrabold">{moneyWhole(nativeTotal(accounts, deposits, currency), currency)}</div>
             </div>
           ))}
         </div>
@@ -458,31 +477,32 @@ function Holdings({
     prefs.home,
     prefs.inrPerUsd
   );
-  const filterLabel = filter === "all" ? "All holdings" : (groups.find((group) => group.id === filter)?.label ?? "Holdings");
-
   return (
     <section>
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Holdings</h1>
-        <div className="flex items-center gap-1">
-          {groups.length > 0 && <HoldingSortMenu sort={sort} onSort={setSort} />}
-          <AddButton onClick={onAdd} />
-        </div>
+        <AddButton onClick={onAdd} />
       </div>
       {groups.length > 0 && (
         <HoldingsTotal
-          label={filterLabel}
           accounts={shownAccounts}
           deposits={shownDeposits}
           prefs={prefs}
         />
       )}
-      {groups.length > 1 && (
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
-          <FilterChip label="All" active={filter === "all"} onClick={() => setFilter("all")} />
-          {groups.map((group) => (
-            <FilterChip key={group.id} label={group.label} active={filter === group.id} onClick={() => setFilter(group.id)} />
-          ))}
+      {groups.length > 0 && (
+        <div className="mt-3 flex items-center gap-2">
+          {groups.length > 1 && (
+            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1">
+              <FilterChip label="All" active={filter === "all"} onClick={() => setFilter("all")} />
+              {groups.map((group) => (
+                <FilterChip key={group.id} label={group.label} active={filter === group.id} onClick={() => setFilter(group.id)} />
+              ))}
+            </div>
+          )}
+          <div className="ml-auto">
+            <HoldingSortMenu sort={sort} onSort={setSort} />
+          </div>
         </div>
       )}
       {groups.length === 0 && (
@@ -520,44 +540,25 @@ function Holdings({
 }
 
 function HoldingsTotal({
-  label,
   accounts,
   deposits,
   prefs,
 }: {
-  label: string;
   accounts: BankAccount[];
   deposits: BankDeposit[];
   prefs: BanksPreferences;
 }) {
-  const shown = displayCurrency(accounts, deposits, prefs.home);
+  const shown = prefs.inrPerUsd ? prefs.home : displayCurrency(accounts, deposits, prefs.home);
   const worth = netWorth(accounts, deposits, shown, prefs.inrPerUsd);
-  const currencies = (["USD", "INR"] as const).filter((currency) =>
-    accounts.some((item) => item.currency === currency) ||
-    deposits.some((item) => !item.closed && item.currency === currency)
-  );
-  const assets = worth.cash + worth.deposits + worth.investments;
-  const both = assets > 0 && worth.liabilities > 0;
   const count = accounts.length + deposits.filter((item) => !item.closed).length;
   return (
-    <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4">
-      {both && <div className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{label}</div>}
-      <WorthSplit worth={worth} currency={shown} caption={both ? undefined : label} />
-      <p className="mt-1 text-center text-[12px] text-otto-text-dim">
+    <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4 text-center">
+      <div className="text-[28px] font-black">{worth.total == null ? "—" : moneyWhole(worth.total, shown)}</div>
+      <p className="mt-1 text-[12px] text-otto-text-dim">
         {count} open {count === 1 ? "holding" : "holdings"}
       </p>
-      {currencies.length > 1 && (
-        <div className="mt-3 grid grid-cols-2 gap-2 text-left">
-          {currencies.map((currency) => (
-            <div key={currency} className="rounded-xl bg-otto-bg px-3 py-2">
-              <div className="text-[11px] font-bold text-otto-text-faint">{currency}</div>
-              <div className="text-[15px] font-extrabold">{money(nativeTotal(accounts, deposits, currency), currency)}</div>
-            </div>
-          ))}
-        </div>
-      )}
       {worth.total == null && (
-        <p className="mt-2 text-center text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
+        <p className="mt-2 text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
       )}
     </div>
   );
@@ -572,17 +573,17 @@ function WorthSplit({ worth, currency, caption }: { worth: WorthBuckets; currenc
         <div className="flex items-end justify-between gap-2">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Assets</div>
-            <div className="mt-0.5 text-[20px] font-black">{money(assets, currency)}</div>
+            <div className="mt-0.5 text-[20px] font-black">{moneyWhole(assets, currency)}</div>
           </div>
           <span className="pb-1 text-[18px] font-bold text-otto-text-faint">−</span>
           <div className="text-right">
             <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Liabilities</div>
-            <div className="mt-0.5 text-[20px] font-black">{money(owed, currency)}</div>
+            <div className="mt-0.5 text-[20px] font-black">{moneyWhole(owed, currency)}</div>
           </div>
         </div>
         <div className="mt-3 border-t border-otto-divider pt-3 text-center">
           <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">Net</div>
-          <div className="mt-0.5 text-[28px] font-black">{worth.total == null ? "—" : money(worth.total, currency)}</div>
+          <div className="mt-0.5 text-[28px] font-black">{worth.total == null ? "—" : moneyWhole(worth.total, currency)}</div>
         </div>
       </div>
     );
@@ -591,7 +592,7 @@ function WorthSplit({ worth, currency, caption }: { worth: WorthBuckets; currenc
   return (
     <div className="text-center">
       {caption && <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{caption}</div>}
-      <div className="mt-1 text-[28px] font-black">{amount == null ? "—" : money(amount, currency)}</div>
+      <div className="mt-1 text-[28px] font-black">{amount == null ? "—" : moneyWhole(amount, currency)}</div>
     </div>
   );
 }
@@ -667,15 +668,10 @@ function HoldingRow({
 }
 
 function HoldingAmount({ amount, currency, prefs }: { amount: number; currency: BankCurrency; prefs: BanksPreferences }) {
-  const native = moneyWhole(amount, currency);
-  const converted = currency === prefs.home ? null : toHome(amount, currency, prefs.home, prefs.inrPerUsd);
-  if (converted == null) return <span className="shrink-0 text-[15px] font-bold tabular-nums">{native}</span>;
-  return (
-    <span className="shrink-0 text-right">
-      <span className="text-[15px] font-bold tabular-nums">{moneyWhole(converted, prefs.home)}</span>
-      <span className="ml-1.5 text-[11px] font-semibold text-otto-text-faint tabular-nums">{native}</span>
-    </span>
-  );
+  const converted = currency === prefs.home ? amount : toHome(amount, currency, prefs.home, prefs.inrPerUsd);
+  const shown = converted == null ? amount : converted;
+  const shownCurrency = converted == null ? currency : prefs.home;
+  return <span className="shrink-0 text-[15px] font-bold tabular-nums">{moneyWhole(shown, shownCurrency)}</span>;
 }
 
 function HoldingSortMenu({ sort, onSort }: { sort: HoldingSort; onSort: (sort: HoldingSort) => void }) {
@@ -757,6 +753,31 @@ function BanksSettings({
   onImport: (parsed: ParsedTransfer) => Promise<void>;
 }) {
   const [rate, setRate] = useState(prefs.inrPerUsd ? String(prefs.inrPerUsd) : "");
+  const [rateNote, setRateNote] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
+  const parsedRate = Number(rate);
+  const rateValid = Number.isFinite(parsedRate) && parsedRate > 0;
+  useEffect(() => {
+    setRate(prefs.inrPerUsd ? String(prefs.inrPerUsd) : "");
+  }, [prefs.inrPerUsd]);
+  useEffect(() => {
+    if (!multi || prefs.inrPerUsd) return;
+    let cancel = false;
+    setLookingUp(true);
+    void fetchApproxInrPerUsd()
+      .then((next) => {
+        if (cancel || next == null) return;
+        setRate((current) => (current.trim() ? current : String(next)));
+        setRateNote("Today's approximate rate. Save it to use it.");
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancel) setLookingUp(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [multi, prefs.inrPerUsd]);
   const [transferOpen, setTransferOpen] = useState(false);
   const [preview, setPreview] = useState<ParsedTransfer | null>(null);
   const [transferNote, setTransferNote] = useState("");
@@ -783,22 +804,69 @@ function BanksSettings({
               : "Totals stay in the currency you actually hold. The exchange rate appears once an entry uses the other one."}
           </p>
           {multi && (
-            <label className="mt-3 block text-[13px] font-semibold">
-              Exchange rate
-              <span className="mt-0.5 block text-[11.5px] font-normal text-otto-text-faint">1 US dollar equals this many rupees.</span>
-              <input
-                value={rate}
-                inputMode="decimal"
-                placeholder="For example 83"
-                aria-label="Rupees per US dollar"
-                onChange={(event) => setRate(event.target.value)}
-                onBlur={() => {
-                  const next = Number(rate);
-                  onPrefs({ ...prefs, inrPerUsd: Number.isFinite(next) && next > 0 ? next : null });
-                }}
-                className="mt-2 w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px] font-normal"
-              />
-            </label>
+            <form
+              className="mt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!rateValid || readonly) return;
+                onPrefs({ ...prefs, inrPerUsd: parsedRate });
+                setRateNote("Exchange rate saved.");
+              }}
+            >
+              <label className="block text-[13px] font-semibold">
+                Exchange rate
+                <span className="mt-0.5 block text-[11.5px] font-normal text-otto-text-faint">
+                  Required while you hold both currencies. 1 US dollar equals this many rupees.
+                </span>
+                <input
+                  value={rate}
+                  inputMode="decimal"
+                  placeholder="For example 83"
+                  aria-label="Rupees per US dollar"
+                  required
+                  onChange={(event) => {
+                    setRate(event.target.value);
+                    setRateNote("");
+                  }}
+                  className="mt-2 w-full rounded-xl bg-otto-bg px-3 py-2.5 text-[14px] font-normal"
+                />
+              </label>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  disabled={lookingUp}
+                  onClick={() => {
+                    setLookingUp(true);
+                    setRateNote("");
+                    void fetchApproxInrPerUsd()
+                      .then((next) => {
+                        if (next == null) {
+                          setRateNote("Today's rate is unavailable. Type one and save it.");
+                          return;
+                        }
+                        setRate(String(next));
+                        setRateNote("Today's approximate rate. Save it to use it.");
+                      })
+                      .catch(() => setRateNote("Today's rate is unavailable. Type one and save it."))
+                      .finally(() => setLookingUp(false));
+                  }}
+                  className="flex-1 rounded-full border border-otto-divider py-2.5 text-[13px] font-bold text-otto-text-dim disabled:opacity-40"
+                >
+                  {lookingUp ? "Looking up…" : "Use today's rate"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={readonly || !rateValid}
+                  className="flex-1 rounded-full bg-otto-green py-2.5 text-[13px] font-bold text-black disabled:opacity-40"
+                >
+                  Save exchange rate
+                </button>
+              </div>
+              {prefs.inrPerUsd == null && (
+                <p className="mt-2 text-[12px] font-semibold text-otto-amber">Add a rate before combined totals can be shown.</p>
+              )}
+              {rateNote && <p className="mt-2 text-[12px] text-otto-text-dim">{rateNote}</p>}
+            </form>
           )}
         </div>
         <div className="overflow-hidden rounded-2xl bg-otto-surface">

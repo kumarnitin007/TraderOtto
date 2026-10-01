@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankFocus, daysUntil, displayCurrency, nativeTotal, netWorth, nextPayoutOn, sortHoldings, toHome } from "@/lib/banks";
+import { bankFocus, daysUntil, displayCurrency, inrPerUsdFromRatePayload, moneyWhole, nativeTotal, netWorth, nextPayoutOn, sortHoldings, toHome } from "@/lib/banks";
 import type { BankAccount, BankDeposit } from "@/types/bank";
 
 function account(patch: Partial<BankAccount>): BankAccount {
@@ -142,5 +142,12 @@ describe("banks", () => {
     ).map((row) => (row.kind === "account" ? row.account.id : row.deposit.id));
 
     expect(sorted).toEqual(["usd", "inr"]);
+  });
+
+  it("reads an approximate rupee rate from a daily quote", () => {
+    expect(inrPerUsdFromRatePayload({ rates: { INR: 83.456 } })).toBe(83.46);
+    expect(inrPerUsdFromRatePayload({ rates: {} })).toBeNull();
+    expect(moneyWhole(112233000, "INR")).toBe("₹11,22,33,000");
+    expect(moneyWhole(1111222, "USD")).toBe("$1,111,222");
   });
 });

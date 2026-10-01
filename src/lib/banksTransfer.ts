@@ -325,14 +325,9 @@ function schemeName(typeText: string, kind: AccountKind | DepositKind) {
   return text;
 }
 
-/** Short label from a deposit id. Long all-digit account numbers stay as the last 4. */
+/** Full deposit id or account number, trimmed for the list row. */
 function depositNumber(value: string) {
-  const text = value.trim();
-  if (!text) return "";
-  const compact = text.replace(/[\s-]/g, "");
-  const digits = compact.replace(/\D/g, "");
-  if (digits.length > 6 && digits.length >= compact.length - 1) return digits.slice(-4);
-  return text.slice(0, 24);
+  return value.trim().slice(0, 64);
 }
 
 function kindFromLabel(text: string): AccountKind | DepositKind | null {
