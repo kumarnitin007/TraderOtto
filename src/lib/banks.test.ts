@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankFocus, daysUntil, displayCurrency, inrPerUsdFromRatePayload, moneyWhole, nativeTotal, netWorth, nextPayoutOn, sortHoldings, toHome } from "@/lib/banks";
+import { bankFocus, daysUntil, displayCurrency, duplicateHoldingIds, FALLBACK_INR_PER_USD, inrPerUsdFromRatePayload, moneyWhole, nativeTotal, netWorth, nextPayoutOn, sortHoldings, toHome, totalsRate } from "@/lib/banks";
 import type { BankAccount, BankDeposit } from "@/types/bank";
 
 function account(patch: Partial<BankAccount>): BankAccount {
@@ -142,6 +142,29 @@ describe("banks", () => {
     ).map((row) => (row.kind === "account" ? row.account.id : row.deposit.id));
 
     expect(sorted).toEqual(["usd", "inr"]);
+  });
+
+  it("uses 100 rupees per dollar only when both currencies have no saved rate", () => {
+    const mixedAccounts = [account({ id: "usd" })];
+    const mixedDeposits = [deposit()];
+    expect(totalsRate(mixedAccounts, mixedDeposits, null)).toEqual({ rate: FALLBACK_INR_PER_USD, fallback: true });
+    expect(totalsRate(mixedAccounts, mixedDeposits, 83)).toEqual({ rate: 83, fallback: false });
+    expect(totalsRate([account({})], [], null)).toEqual({ rate: null, fallback: false });
+  });
+
+  it("marks two holdings with the same name, and keeps numbered deposits apart", () => {
+    const ids = duplicateHoldingIds(
+      [
+        account({ id: "a", institution: "PF Pension", kind: "trading" }),
+        account({ id: "b", institution: "PF Pension", kind: "trading" }),
+        account({ id: "c", nickname: "Empower RET", institution: "Empower", kind: "trading" }),
+      ],
+      [
+        deposit({ id: "d1", notes: "No. 111" }),
+        deposit({ id: "d2", notes: "No. 222" }),
+      ]
+    );
+    expect([...ids].sort()).toEqual(["a", "b"]);
   });
 
   it("reads an approximate rupee rate from a daily quote", () => {

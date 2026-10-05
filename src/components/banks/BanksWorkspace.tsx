@@ -40,6 +40,8 @@ import {
   depositReference,
   depositWhen,
   displayCurrency,
+  duplicateHoldingIds,
+  FALLBACK_INR_PER_USD,
   fetchApproxInrPerUsd,
   HOLDING_SORTS,
   maturityOutlook,
@@ -50,6 +52,7 @@ import {
   notesWithDepositReference,
   sortHoldings,
   toHome,
+  totalsRate,
   usesMultipleCurrencies,
   type HoldingSort,
   type WorthBuckets,
@@ -129,7 +132,6 @@ const EMPTY_DEPOSIT: BankDepositInput = {
 export function BanksWorkspace() {
   const banks = useBanks();
   const [tab, setTab] = useScreenOption("banksTab");
-  const [prefsReady, setPrefsReady] = useState(false);
   const [prefs, setPrefs] = useState<BanksPreferences>({ home: "USD", inrPerUsd: null });
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [sheet, setSheet] = useState<HoldingRef | null>(null);
@@ -140,7 +142,6 @@ export function BanksWorkspace() {
 
   useEffect(() => {
     setPrefs(readBanksPreferences());
-    setPrefsReady(true);
   }, []);
 
   function savePrefs(next: BanksPreferences) {
@@ -190,18 +191,6 @@ export function BanksWorkspace() {
 
   return (
     <div className="mx-auto max-w-[720px] pb-28">
-      {prefsReady && multi && prefs.inrPerUsd == null && tab !== "settings" && (
-        <button
-          type="button"
-          onClick={() => setTab("settings")}
-          className="mb-3 block w-full rounded-2xl bg-otto-amber-soft px-4 py-3 text-left"
-        >
-          <span className="block text-[13px] font-bold text-otto-amber">Exchange rate required</span>
-          <span className="mt-0.5 block text-[12px] text-otto-text-dim">
-            You have both dollars and rupees. Add how many rupees equal 1 dollar so totals and sorting use one currency.
-          </span>
-        </button>
-      )}
       {banks.error && <p className="mb-3 rounded-xl bg-otto-red-soft px-3.5 py-3 text-[12px] text-otto-red">{banks.error}</p>}
       {notice && <p className="mb-3 rounded-xl bg-otto-red-soft px-3.5 py-3 text-[12px] text-otto-red">{notice}</p>}
       {tab === "overview" && (
@@ -212,6 +201,7 @@ export function BanksWorkspace() {
           loading={banks.loading}
           onAdd={() => openEditor({ kind: "account" })}
           onOpenDeposit={(id) => openDetail({ kind: "deposit", id })}
+          onOpenSettings={() => setTab("settings")}
         />
       )}
       {tab === "holdings" && (
@@ -223,6 +213,7 @@ export function BanksWorkspace() {
           onAdd={() => openEditor({ kind: "account" })}
           onOpenAccount={(id) => setSheet({ kind: "account", id })}
           onOpenDeposit={(id) => setSheet({ kind: "deposit", id })}
+          onOpenSettings={() => setTab("settings")}
         />
       )}
       {tab === "activity" && (
@@ -241,6 +232,7 @@ export function BanksWorkspace() {
           snapshots={banks.snapshots}
           prefs={prefs}
           historyNote={banks.historyNote}
+          onOpenSettings={() => setTab("settings")}
         />
       )}
       {tab === "settings" && (
@@ -372,6 +364,7 @@ function Overview({
   loading,
   onAdd,
   onOpenDeposit,
+  onOpenSettings,
 }: {
   accounts: BankAccount[];
   deposits: BankDeposit[];
@@ -379,10 +372,12 @@ function Overview({
   loading: boolean;
   onAdd: () => void;
   onOpenDeposit: (id: string) => void;
+  onOpenSettings: () => void;
 }) {
   const multi = usesMultipleCurrencies(accounts, deposits);
+  const { rate, fallback } = totalsRate(accounts, deposits, prefs.inrPerUsd);
   const shown = displayCurrency(accounts, deposits, prefs.home);
-  const worth = netWorth(accounts, deposits, shown, prefs.inrPerUsd);
+  const worth = netWorth(accounts, deposits, shown, rate);
   const focus = bankFocus(deposits).slice(0, 6);
   const empty = accounts.length === 0 && deposits.length === 0;
 
@@ -394,12 +389,10 @@ function Overview({
       </div>
       <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4">
         <WorthSplit worth={worth} currency={shown} />
-        {multi && worth.unconverted > 0 && (
-          <p className="mt-2 text-center text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
-        )}
-        {multi && worth.total != null && prefs.inrPerUsd && (
+        {multi && !fallback && prefs.inrPerUsd && (
           <p className="mt-1 text-center text-[12px] text-otto-text-dim">Combined at 1 USD = {prefs.inrPerUsd} INR</p>
         )}
+        <FallbackRateNote show={fallback} onOpen={onOpenSettings} />
       </div>
       {multi && (
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -446,6 +439,7 @@ function Holdings({
   onAdd,
   onOpenAccount,
   onOpenDeposit,
+  onOpenSettings,
 }: {
   accounts: BankAccount[];
   deposits: BankDeposit[];
@@ -454,6 +448,7 @@ function Holdings({
   onAdd: () => void;
   onOpenAccount: (id: string) => void;
   onOpenDeposit: (id: string) => void;
+  onOpenSettings: () => void;
 }) {
   const today = new Date();
   const openDeposits = deposits
@@ -470,13 +465,9 @@ function Holdings({
   const shown = filter === "all" ? groups : groups.filter((group) => group.id === filter);
   const shownAccounts = shown.flatMap((group) => group.accounts);
   const shownDeposits = shown.flatMap((group) => group.deposits);
-  const flat = sortHoldings(
-    shownAccounts,
-    shownDeposits,
-    sort,
-    prefs.home,
-    prefs.inrPerUsd
-  );
+  const { rate, fallback } = totalsRate(accounts, deposits, prefs.inrPerUsd);
+  const duplicates = duplicateHoldingIds(accounts, deposits);
+  const flat = sortHoldings(shownAccounts, shownDeposits, sort, prefs.home, rate);
   return (
     <section>
       <div className="flex items-center justify-between gap-3">
@@ -488,6 +479,9 @@ function Holdings({
           accounts={shownAccounts}
           deposits={shownDeposits}
           prefs={prefs}
+          rate={rate}
+          fallback={fallback}
+          onOpenSettings={onOpenSettings}
         />
       )}
       {groups.length > 0 && (
@@ -513,13 +507,19 @@ function Holdings({
       {sort === "group"
         ? shown.map((group) => (
             <div key={group.id} className="mt-4">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{group.label}</p>
+              <GroupHeading
+                label={group.label}
+                accounts={group.accounts}
+                deposits={group.deposits}
+                prefs={prefs}
+                rate={rate}
+              />
               <div className="space-y-2">
                 {group.accounts.map((item) => (
-                  <AccountHolding key={item.id} item={item} prefs={prefs} onOpen={onOpenAccount} />
+                  <AccountHolding key={item.id} item={item} prefs={prefs} rate={rate} duplicate={duplicates.has(item.id)} onOpen={onOpenAccount} />
                 ))}
                 {group.deposits.map((item) => (
-                  <DepositHolding key={item.id} item={item} prefs={prefs} onOpen={onOpenDeposit} />
+                  <DepositHolding key={item.id} item={item} prefs={prefs} rate={rate} duplicate={duplicates.has(item.id)} onOpen={onOpenDeposit} />
                 ))}
               </div>
             </div>
@@ -528,9 +528,9 @@ function Holdings({
             <div className="mt-4 space-y-2">
               {flat.map((row) =>
                 row.kind === "account" ? (
-                  <AccountHolding key={row.account.id} item={row.account} prefs={prefs} onOpen={onOpenAccount} />
+                  <AccountHolding key={row.account.id} item={row.account} prefs={prefs} rate={rate} duplicate={duplicates.has(row.account.id)} onOpen={onOpenAccount} />
                 ) : (
-                  <DepositHolding key={row.deposit.id} item={row.deposit} prefs={prefs} onOpen={onOpenDeposit} />
+                  <DepositHolding key={row.deposit.id} item={row.deposit} prefs={prefs} rate={rate} duplicate={duplicates.has(row.deposit.id)} onOpen={onOpenDeposit} />
                 )
               )}
             </div>
@@ -543,13 +543,19 @@ function HoldingsTotal({
   accounts,
   deposits,
   prefs,
+  rate,
+  fallback,
+  onOpenSettings,
 }: {
   accounts: BankAccount[];
   deposits: BankDeposit[];
   prefs: BanksPreferences;
+  rate: number | null;
+  fallback: boolean;
+  onOpenSettings: () => void;
 }) {
-  const shown = prefs.inrPerUsd ? prefs.home : displayCurrency(accounts, deposits, prefs.home);
-  const worth = netWorth(accounts, deposits, shown, prefs.inrPerUsd);
+  const shown = rate ? prefs.home : displayCurrency(accounts, deposits, prefs.home);
+  const worth = netWorth(accounts, deposits, shown, rate);
   const count = accounts.length + deposits.filter((item) => !item.closed).length;
   return (
     <div className="mt-4 rounded-2xl bg-otto-surface px-4 py-4 text-center">
@@ -557,9 +563,50 @@ function HoldingsTotal({
       <p className="mt-1 text-[12px] text-otto-text-dim">
         {count} open {count === 1 ? "holding" : "holdings"}
       </p>
-      {worth.total == null && (
-        <p className="mt-2 text-[12px] text-otto-text-dim">Set the exchange rate in Settings to combine both currencies.</p>
+      <FallbackRateNote show={fallback} onOpen={onOpenSettings} />
+    </div>
+  );
+}
+
+function FallbackRateNote({ show, onOpen }: { show: boolean; onOpen?: () => void }) {
+  if (!show) return null;
+  return (
+    <p className="mt-2 text-center text-[11px] leading-snug text-otto-text-dim">
+      Using 1 USD = {FALLBACK_INR_PER_USD} INR until you save a rate{" "}
+      {onOpen ? (
+        <button type="button" onClick={onOpen} className="font-bold text-otto-amber">
+          in Settings
+        </button>
+      ) : (
+        "in Settings"
       )}
+      .
+    </p>
+  );
+}
+
+function GroupHeading({
+  label,
+  accounts,
+  deposits,
+  prefs,
+  rate,
+}: {
+  label: string;
+  accounts: BankAccount[];
+  deposits: BankDeposit[];
+  prefs: BanksPreferences;
+  rate: number | null;
+}) {
+  const shown = rate ? prefs.home : displayCurrency(accounts, deposits, prefs.home);
+  const worth = netWorth(accounts, deposits, shown, rate);
+  const owed = accounts.some((item) => accountBucket(item.kind) === "liabilities");
+  return (
+    <div className="mb-2 flex items-baseline justify-between gap-3">
+      <p className="text-[13px] font-bold">{label}</p>
+      <p className={`text-[13px] font-bold tabular-nums ${owed ? "text-otto-red" : ""}`}>
+        {worth.total == null ? "—" : moneyWhole(worth.total, shown)}
+      </p>
     </div>
   );
 }
@@ -597,43 +644,75 @@ function WorthSplit({ worth, currency, caption }: { worth: WorthBuckets; currenc
   );
 }
 
-function AccountHolding({ item, prefs, onOpen }: { item: BankAccount; prefs: BanksPreferences; onOpen: (id: string) => void }) {
+function AccountHolding({
+  item,
+  prefs,
+  rate,
+  duplicate,
+  onOpen,
+}: {
+  item: BankAccount;
+  prefs: BanksPreferences;
+  rate: number | null;
+  duplicate: boolean;
+  onOpen: (id: string) => void;
+}) {
+  const title = item.nickname || item.institution;
+  const named = item.nickname.trim().toLowerCase() !== item.institution.trim().toLowerCase() && item.nickname.trim();
+  const detail = [named ? item.institution : ACCOUNT_KIND_LABEL[item.kind], item.last4 ? `··${item.last4}` : ""]
+    .filter((part, index, parts) => part && parts.indexOf(part) === index)
+    .join(" · ");
+  const owed = accountBucket(item.kind) === "liabilities";
   return (
     <HoldingRow
-      title={accountTitle(item)}
-      amount={item.balance}
+      title={title}
+      detail={detail || ACCOUNT_KIND_LABEL[item.kind]}
+      mark={title}
+      tone={owed ? "liabilities" : item.kind === "trading" ? "trading" : "cash"}
+      amount={owed ? -Math.abs(item.balance) : item.balance}
       currency={item.currency}
       prefs={prefs}
+      rate={rate}
+      duplicate={duplicate}
+      negative={owed}
       onClick={() => onOpen(item.id)}
     />
   );
 }
 
-function DepositHolding({ item, prefs, onOpen }: { item: BankDeposit; prefs: BanksPreferences; onOpen: (id: string) => void }) {
+function DepositHolding({
+  item,
+  prefs,
+  rate,
+  duplicate,
+  onOpen,
+}: {
+  item: BankDeposit;
+  prefs: BanksPreferences;
+  rate: number | null;
+  duplicate: boolean;
+  onOpen: (id: string) => void;
+}) {
+  const title = item.nickname || item.institution || shortDepositKind(item.kind);
+  const named = item.nickname.trim().toLowerCase() !== item.institution.trim().toLowerCase() && item.nickname.trim();
+  const number = depositReference(item.notes);
+  const detail = [named ? item.institution : "", shortDepositKind(item.kind), number ? `No. ${number}` : "", item.closed ? "Closed" : depositWhen(item)]
+    .filter((part, index, parts) => part && parts.indexOf(part) === index)
+    .join(" · ");
   return (
     <HoldingRow
-      title={depositTitle(item)}
+      title={title}
+      detail={detail}
+      mark={title}
+      tone="deposits"
       amount={item.principal}
       currency={item.currency}
       prefs={prefs}
+      rate={rate}
+      duplicate={duplicate}
       onClick={() => onOpen(item.id)}
     />
   );
-}
-
-function accountTitle(account: BankAccount) {
-  const name = account.nickname || account.institution;
-  const kind = ACCOUNT_KIND_LABEL[account.kind];
-  return name.toLowerCase().includes(kind.toLowerCase()) ? name : `${name} · ${kind}`;
-}
-
-function depositTitle(deposit: BankDeposit) {
-  const kind = shortDepositKind(deposit.kind);
-  const bank = deposit.institution.trim();
-  const named = deposit.nickname.trim();
-  const number = depositReference(deposit.notes);
-  const identity = named && named.toLowerCase() !== bank.toLowerCase() ? named : kind;
-  return [bank, identity, number].filter((part, index, parts) => part && parts.indexOf(part) === index).join(" · ");
 }
 
 function shortDepositKind(kind: BankDeposit["kind"]) {
@@ -648,30 +727,86 @@ function shortDepositKind(kind: BankDeposit["kind"]) {
 
 function HoldingRow({
   title,
+  detail,
+  mark,
+  tone,
   amount,
   currency,
   prefs,
+  rate,
+  duplicate,
+  negative,
   onClick,
 }: {
   title: string;
+  detail: string;
+  mark: string;
+  tone: HoldingTone;
   amount: number;
   currency: BankCurrency;
   prefs: BanksPreferences;
+  rate: number | null;
+  duplicate: boolean;
+  negative?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-3 rounded-2xl bg-otto-surface px-4 py-3 text-left">
-      <span className="min-w-0 truncate text-[15px] font-extrabold">{title}</span>
-      <HoldingAmount amount={amount} currency={currency} prefs={prefs} />
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl bg-otto-surface px-3 py-3 text-left">
+      <HoldingMark label={mark} tone={tone} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-extrabold">{title}</span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[12px] text-otto-text-dim">{detail}</span>
+          {duplicate && (
+            <span className="shrink-0 rounded-full bg-otto-amber-soft px-1.5 py-0.5 text-[10px] font-bold text-otto-amber">
+              Looks like a duplicate
+            </span>
+          )}
+        </span>
+      </span>
+      <HoldingAmount amount={amount} currency={currency} prefs={prefs} rate={rate} negative={negative} />
     </button>
   );
 }
 
-function HoldingAmount({ amount, currency, prefs }: { amount: number; currency: BankCurrency; prefs: BanksPreferences }) {
-  const converted = currency === prefs.home ? amount : toHome(amount, currency, prefs.home, prefs.inrPerUsd);
+type HoldingTone = "cash" | "deposits" | "trading" | "liabilities";
+
+function HoldingMark({ label, tone }: { label: string; tone: HoldingTone }) {
+  const letter = (label.trim()[0] || "?").toUpperCase();
+  const toneClass = {
+    cash: "bg-otto-green-soft text-otto-green",
+    deposits: "bg-otto-amber-soft text-otto-amber",
+    trading: "bg-otto-surface-raise text-otto-text",
+    liabilities: "bg-otto-red-soft text-otto-red",
+  }[tone];
+  return (
+    <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-black ${toneClass}`}>
+      {letter}
+    </span>
+  );
+}
+
+function HoldingAmount({
+  amount,
+  currency,
+  prefs,
+  rate,
+  negative,
+}: {
+  amount: number;
+  currency: BankCurrency;
+  prefs: BanksPreferences;
+  rate: number | null;
+  negative?: boolean;
+}) {
+  const converted = currency === prefs.home ? amount : toHome(amount, currency, prefs.home, rate);
   const shown = converted == null ? amount : converted;
   const shownCurrency = converted == null ? currency : prefs.home;
-  return <span className="shrink-0 text-[15px] font-bold tabular-nums">{moneyWhole(shown, shownCurrency)}</span>;
+  return (
+    <span className={`shrink-0 text-[15px] font-bold tabular-nums ${negative || shown < 0 ? "text-otto-red" : ""}`}>
+      {moneyWhole(shown, shownCurrency)}
+    </span>
+  );
 }
 
 function HoldingSortMenu({ sort, onSort }: { sort: HoldingSort; onSort: (sort: HoldingSort) => void }) {
@@ -816,7 +951,7 @@ function BanksSettings({
               <label className="block text-[13px] font-semibold">
                 Exchange rate
                 <span className="mt-0.5 block text-[11.5px] font-normal text-otto-text-faint">
-                  Required while you hold both currencies. 1 US dollar equals this many rupees.
+                  1 US dollar equals this many rupees. Until you save one, totals use 1 USD = {FALLBACK_INR_PER_USD} INR.
                 </span>
                 <input
                   value={rate}
@@ -863,7 +998,7 @@ function BanksSettings({
                 </button>
               </div>
               {prefs.inrPerUsd == null && (
-                <p className="mt-2 text-[12px] font-semibold text-otto-amber">Add a rate before combined totals can be shown.</p>
+                <p className="mt-2 text-[12px] text-otto-text-dim">Totals are using the standby rate of 1 USD = {FALLBACK_INR_PER_USD} INR.</p>
               )}
               {rateNote && <p className="mt-2 text-[12px] text-otto-text-dim">{rateNote}</p>}
             </form>

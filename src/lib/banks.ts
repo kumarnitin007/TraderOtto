@@ -133,6 +133,44 @@ export function displayCurrency(
   return currencies.length === 1 ? currencies[0] : home;
 }
 
+/** Used only when Settings has no saved rate and both currencies are present. */
+export const FALLBACK_INR_PER_USD = 100;
+
+export function totalsRate(
+  accounts: BankAccount[],
+  deposits: BankDeposit[],
+  saved: number | null
+): { rate: number | null; fallback: boolean } {
+  if (saved != null && saved > 0) return { rate: saved, fallback: false };
+  if (usesMultipleCurrencies(accounts, deposits)) return { rate: FALLBACK_INR_PER_USD, fallback: true };
+  return { rate: null, fallback: false };
+}
+
+/** Same visible name, kind, and currency. A deposit number keeps two certificates apart. */
+export function duplicateHoldingIds(accounts: BankAccount[], deposits: BankDeposit[]) {
+  const ids = new Set<string>();
+  const seen = new Map<string, string>();
+  function consider(id: string, key: string) {
+    const prior = seen.get(key);
+    if (!prior) {
+      seen.set(key, id);
+      return;
+    }
+    ids.add(prior);
+    ids.add(id);
+  }
+  for (const account of accounts) {
+    const name = (account.nickname || account.institution).trim().toLowerCase();
+    consider(account.id, `account|${account.kind}|${account.currency}|${name}`);
+  }
+  for (const deposit of deposits) {
+    if (deposit.closed) continue;
+    const name = (deposit.nickname || deposit.institution).trim().toLowerCase();
+    consider(deposit.id, `deposit|${deposit.kind}|${deposit.currency}|${name}|${depositReference(deposit.notes).toLowerCase()}`);
+  }
+  return ids;
+}
+
 /** ECB daily rate, rounded to paise. Approximate, and close enough for net-worth totals. */
 export function inrPerUsdFromRatePayload(payload: unknown): number | null {
   if (!payload || typeof payload !== "object") return null;
