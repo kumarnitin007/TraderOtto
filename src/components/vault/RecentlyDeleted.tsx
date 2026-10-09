@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ArchiveRestore, Trash2, X } from "lucide-react";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import type { VaultItem } from "@/lib/vaultRepository";
+import { canRestoreVaultItem, trashTimeLeft } from "@/lib/vaultTrash";
 
 export function RecentlyDeleted({
   items,
@@ -71,8 +72,7 @@ export function RecentlyDeleted({
         </p>
         <h1 className="mb-4 text-[24px] font-extrabold">Recently deleted</h1>
         <p className="mb-5 text-[14px] leading-relaxed text-otto-text-dim">
-          Deleted items stay here until you restore them to your vault or remove them
-          permanently. Permanent deletion cannot be undone.
+          Deleted items stay here for 30 days. Restore one before that time runs out, or delete it forever now.
         </p>
 
         <div className="flex flex-col gap-2">
@@ -138,6 +138,7 @@ function DeletedRow({
           </span>
           <small className="mt-1 block text-[12px] text-otto-text-faint">
             Deleted {deletedLabel}
+            {canRestoreVaultItem(item.deletedAt) ? ` · ${trashTimeLeft(item.deletedAt)}` : ""}
           </small>
         </div>
       </div>

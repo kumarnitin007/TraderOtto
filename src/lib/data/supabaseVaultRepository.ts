@@ -35,6 +35,7 @@ type ItemPayload = {
   website?: string;
   note?: string;
   customFields?: Record<string, string>;
+  barcodeEnabled?: boolean;
 };
 
 type ItemRow = {
@@ -133,6 +134,7 @@ function payloadFromItem(item: VaultItem): ItemPayload {
     website: item.website,
     note: item.note,
     customFields: item.customFields,
+    barcodeEnabled: item.barcodeEnabled,
   };
 }
 
@@ -223,6 +225,7 @@ function rowToItem(
     website: payload.website,
     note: payload.note,
     customFields: payload.customFields,
+    barcodeEnabled: payload.barcodeEnabled,
     tags: tagIds,
     favorite: row.favorite,
     color: row.color ?? "",

@@ -11,6 +11,7 @@ export const VAULT_CSV_HEADERS = [
   "note",
   "tags",
   "favorite",
+  "barcode_enabled",
   "color",
   "created_at",
   "updated_at",
@@ -30,6 +31,7 @@ type CanonicalField =
   | "note"
   | "tags"
   | "favorite"
+  | "barcodeEnabled"
   | "color"
   | "createdAt"
   | "updatedAt"
@@ -53,6 +55,9 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   notes: "note",
   tags: "tags",
   favorite: "favorite",
+  barcode_enabled: "barcodeEnabled",
+  barcodeenabled: "barcodeEnabled",
+  "barcode enabled": "barcodeEnabled",
   colour: "color",
   color: "color",
   created: "createdAt",
@@ -85,6 +90,7 @@ const FIELD_LABELS: Record<string, string> = {
   note: "Note",
   tags: "Tags",
   favorite: "Favorite",
+  barcodeEnabled: "Barcode enabled",
   color: "Color",
   createdAt: "Created",
   updatedAt: "Updated",
@@ -403,6 +409,7 @@ export function vaultItemsToCsv(items: VaultItem[], tags: VaultTag[]): string {
       item.note ?? "",
       tagCell,
       item.favorite ? "true" : "false",
+      item.barcodeEnabled ? "true" : "false",
       item.color,
       item.createdAt ?? "",
       item.updatedAt,
@@ -730,6 +737,7 @@ export function parseVaultCsv(
     }
 
     const favoriteParsed = parseBoolean(record.favorite);
+    const barcodeEnabledParsed = parseBoolean(record.barcodeEnabled);
     if (record.favorite?.trim() && favoriteParsed === undefined) {
       issues.push({
         row: rowNumber,
@@ -777,6 +785,9 @@ export function parseVaultCsv(
       note: columnMap.includes("note") ? optionalString(record.note) : existing?.note,
       tags: columnMap.includes("tags") ? tagIds : existing?.tags ?? [],
       favorite: favoriteParsed ?? existing?.favorite ?? false,
+      barcodeEnabled: columnMap.includes("barcodeEnabled")
+        ? barcodeEnabledParsed ?? false
+        : existing?.barcodeEnabled ?? false,
       color,
       createdAt: columnMap.includes("createdAt")
         ? optionalString(record.createdAt)

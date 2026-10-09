@@ -32,6 +32,7 @@ export interface VaultItem {
   createdAt?: string;
   updatedAt: string;
   customFields?: Record<string, string>;
+  barcodeEnabled?: boolean;
   deletedAt?: string;
 }
 

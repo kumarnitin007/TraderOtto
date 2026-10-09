@@ -35,6 +35,7 @@ export function ItemEditor({
   const [pickingTags, setPickingTags] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
   const [show, setShow] = useState(false);
+  const [barcodeEnabled, setBarcodeEnabled] = useState(item?.barcodeEnabled ?? false);
 
   const meta = kindMeta(kind);
   const KindIcon = meta.icon;
@@ -55,6 +56,7 @@ export function ItemEditor({
       password: password.trim() || undefined,
       website: website.trim() || undefined,
       note: note.trim() || undefined,
+      barcodeEnabled: barcodeEnabled && Boolean(username.trim()),
       tags: selectedTags,
       favorite: item?.favorite ?? false,
       color: item && item.kind === kind ? item.color : meta.color,
@@ -201,6 +203,24 @@ export function ItemEditor({
                 </div>
               </label>
             )}
+
+            <label className="flex items-start gap-3 rounded-xl bg-otto-surface p-3">
+              <input
+                type="checkbox"
+                checked={barcodeEnabled}
+                disabled={!username.trim()}
+                onChange={(event) => setBarcodeEnabled(event.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block text-[13px] font-semibold">Enable barcode</span>
+                <span className="mt-0.5 block text-[11.5px] leading-relaxed text-otto-text-dim">
+                  {kind === "wifi"
+                    ? "Adds barcodes for the network name, plus a Wi-Fi QR code that includes the password."
+                    : "Adds barcodes and a QR code generated on this device from the username."}
+                </span>
+              </span>
+            </label>
 
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-otto-text-dim">

@@ -6,8 +6,10 @@ import {
   Eye,
   EyeOff,
   History,
+  KeyRound,
   Maximize2,
   Pencil,
+  ScanBarcode,
   Share2,
   Star,
   Trash2,
@@ -15,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SheetAction } from "@/components/ui/ActionSheet";
+import { BarcodePanel, WifiQrPanel } from "@/components/vault/BarcodePanel";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import {
   type VaultHistoryEntry,
@@ -70,7 +73,9 @@ export function ItemSheet({
   onDelete: () => void;
   onFavorite: () => void;
 }) {
-  const [view, setView] = useState<"actions" | "details">("actions");
+  const [view, setView] = useState<"actions" | "credentials" | "barcodes" | "wifi" | "details">(
+    "actions"
+  );
   const [show, setShow] = useState(false);
   const [history, setHistory] = useState<VaultHistoryEntry[]>([]);
   const meta = kindMeta(item.kind);
@@ -139,18 +144,28 @@ export function ItemSheet({
                 onClick={() => window.open(launchUrl, "_blank", "noopener,noreferrer")}
               />
             )}
-            {item.username && (
+            {(item.username || item.password) && (
               <SheetAction
-                icon={Copy}
-                label="Copy username"
-                onClick={() => onCopy(item.username!, "Username copied")}
+                icon={KeyRound}
+                label="Username & password"
+                onClick={() => {
+                  setShow(false);
+                  setView("credentials");
+                }}
               />
             )}
-            {item.password && (
+            {item.barcodeEnabled && item.username && (
               <SheetAction
-                icon={Copy}
-                label="Copy password"
-                onClick={() => onCopy(item.password!, "Password copied")}
+                icon={ScanBarcode}
+                label="Show barcodes"
+                onClick={() => setView("barcodes")}
+              />
+            )}
+            {item.kind === "wifi" && item.barcodeEnabled && item.username && (
+              <SheetAction
+                icon={ScanBarcode}
+                label="Wi-Fi QR"
+                onClick={() => setView("wifi")}
               />
             )}
             <SheetAction
@@ -159,16 +174,6 @@ export function ItemSheet({
               onClick={() => setView("details")}
             />
             <SheetAction icon={Pencil} label="Edit" onClick={onEdit} />
-            {item.password && (
-              <SheetAction
-                icon={Eye}
-                label="Show password"
-                onClick={() => {
-                  setShow(true);
-                  setView("details");
-                }}
-              />
-            )}
             <SheetAction icon={Share2} label="Share" onClick={() => void shareItem()} />
             <SheetAction
               icon={Star}
@@ -185,6 +190,55 @@ export function ItemSheet({
               }}
             />
           </div>
+        ) : view === "credentials" ? (
+          <>
+            <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+              <Field label="Name" value={item.name} />
+              <Field
+                label={meta.detailLabel}
+                value={show ? item.username || "—" : "••••••••••••••"}
+                action={
+                  <>
+                    <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide credentials" : "Show credentials"}>
+                      {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                    {item.username && (
+                      <button type="button" onClick={() => onCopy(item.username!, "Username copied")} aria-label="Copy username">
+                        <Copy size={18} />
+                      </button>
+                    )}
+                  </>
+                }
+              />
+              <Field
+                label={meta.secretLabel ?? "Password"}
+                value={show ? item.password || "—" : "••••••••••••••"}
+                action={
+                  <>
+                    <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide credentials" : "Show credentials"}>
+                      {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                    {item.password && (
+                      <button type="button" onClick={() => onCopy(item.password!, "Password copied")} aria-label="Copy password">
+                        <Copy size={18} />
+                      </button>
+                    )}
+                  </>
+                }
+              />
+            </div>
+            <FocusedFooter onBack={() => setView("actions")} />
+          </>
+        ) : view === "barcodes" && item.username ? (
+          <>
+            <BarcodePanel value={item.username} />
+            <FocusedFooter onBack={() => setView("actions")} />
+          </>
+        ) : view === "wifi" && item.username ? (
+          <>
+            <WifiQrPanel ssid={item.username} password={item.password ?? ""} />
+            <FocusedFooter onBack={() => setView("actions")} />
+          </>
         ) : (
         <>
         <div className="overflow-y-auto pb-4">
@@ -327,10 +381,25 @@ export function ItemSheet({
   );
 }
 
+function FocusedFooter({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="border-t border-otto-divider px-4 py-3">
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full rounded-xl bg-otto-surface py-2.5 text-[13px] font-semibold"
+      >
+        Back to actions
+      </button>
+    </div>
+  );
+}
+
 function formatHistoryField(field: string): string {
   if (field === "kind") return "category";
   if (field === "customFields") return "additional fields";
   if (field === "deletedAt") return "deletion status";
+  if (field === "barcodeEnabled") return "barcode setting";
   return field.replace(/([A-Z])/g, " $1").toLowerCase();
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balanceChanges, dailySeries, growthSinceStart } from "@/lib/banksHistory";
+import { balanceChanges, bucketChanges, dailySeries, growthSinceStart, worthMilestone } from "@/lib/banksHistory";
 import type { BankAccount, BankDeposit, BankSnapshot } from "@/types/bank";
 
 function account(balance: number): BankAccount {
@@ -64,5 +64,26 @@ describe("bank history", () => {
     expect(growth.change).toBe(30);
     expect(dailySeries(snapshots, [account(130)], [deposit()], "USD", null)).toEqual([{ date: "2026-09-01", total: 180 }]);
     expect(balanceChanges(snapshots, [account(130)], [deposit()])[0]).toMatchObject({ before: 100, after: 130 });
+  });
+
+  it("splits a range change by where the money sits", () => {
+    const snapshots = [
+      shot({ amount: 100, recordedOn: "2026-09-01" }),
+      shot({ amount: 160, recordedOn: "2026-10-01" }),
+      shot({ holdingKind: "deposit", holdingId: "d", amount: 50, recordedOn: "2026-09-01" }),
+    ];
+    const split = bucketChanges(snapshots, [account(160)], [deposit()], "USD", null, "2026-09-15");
+    expect(split).toMatchObject({ cash: 60, deposits: 0, total: 60 });
+    expect(split?.start.cash).toBe(100);
+  });
+
+  it("notices a new high, a crossed milestone, and weekly gains in a row", () => {
+    const milestone = worthMilestone([
+      { date: "2026-09-14", total: 440_000 },
+      { date: "2026-09-21", total: 460_000 },
+      { date: "2026-09-28", total: 490_000 },
+      { date: "2026-10-05", total: 519_000 },
+    ]);
+    expect(milestone).toEqual({ newHigh: true, crossed: 500_000, weeksUp: 3 });
   });
 });

@@ -6,6 +6,7 @@ import { ItemEditor } from "@/components/vault/ItemEditor";
 import { ItemSheet } from "@/components/vault/ItemSheet";
 import { PasswordGenerator } from "@/components/vault/PasswordGenerator";
 import { RecentlyDeleted } from "@/components/vault/RecentlyDeleted";
+import { canRestoreVaultItem } from "@/lib/vaultTrash";
 import { SecurityScreen } from "@/components/vault/SecurityScreen";
 import { SettingsScreen } from "@/components/vault/SettingsScreen";
 import { TagManager } from "@/components/vault/TagManager";
@@ -68,9 +69,15 @@ export function VaultWorkspace() {
         repository.listDeleted(),
         repository.listTags(),
       ]);
+      const restorable = nextDeleted.filter((item) => canRestoreVaultItem(item.deletedAt));
       setItems(nextItems);
-      setDeletedItems(nextDeleted);
+      setDeletedItems(restorable);
       setTags(nextTags);
+      void Promise.all(
+        nextDeleted
+          .filter((item) => !canRestoreVaultItem(item.deletedAt))
+          .map((item) => repository.purge(item.id).catch(() => undefined))
+      );
       setDataError("");
     } catch {
       setItems([]);
@@ -188,7 +195,7 @@ export function VaultWorkspace() {
       ]);
     }
     setSelected(null);
-    setToast("Item deleted");
+    setToast("Deleted. You can restore it for 30 days.");
   }
 
   async function createTag(name: string): Promise<VaultTag> {
@@ -264,6 +271,11 @@ export function VaultWorkspace() {
 
   async function restoreItem(item: VaultItem) {
     if (!repository) return;
+    if (!canRestoreVaultItem(item.deletedAt)) {
+      setDeletedItems((current) => current.filter((candidate) => candidate.id !== item.id));
+      setDataError("This item has been deleted for more than 30 days and can no longer be restored.");
+      return;
+    }
     let restored: VaultItem | undefined;
     try {
       restored = await repository.restore(item.id);
