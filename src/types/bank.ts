@@ -26,6 +26,8 @@ export type BankAccount = {
   currency: BankCurrency;
   balance: number;
   last4: string;
+  accountNumber: string;
+  routing: string;
   nominee: string;
   notes: string;
 };

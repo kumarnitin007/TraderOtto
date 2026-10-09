@@ -34,6 +34,8 @@ function mapAccount(row: Record<string, unknown>): BankAccount {
     currency: oneOf(String(row.currency), BANK_CURRENCIES, "USD") as BankCurrency,
     balance: Number(row.balance ?? 0),
     last4: String(row.last4 ?? ""),
+    accountNumber: String(row.account_number ?? ""),
+    routing: String(row.routing ?? ""),
     nominee: String(row.nominee ?? ""),
     notes: String(row.notes ?? ""),
   };
@@ -60,8 +62,16 @@ function mapDeposit(row: Record<string, unknown>): BankDeposit {
   };
 }
 
-function accountBody(input: BankAccountInput) {
-  return {
+const ACCOUNT_COLUMNS = "id,country,kind,institution,nickname,owner_name,currency,balance,last4,nominee,notes";
+const ACCOUNT_INFO_COLUMNS = "id,country,kind,institution,nickname,owner_name,currency,balance,last4,nominee,notes,account_number,routing";
+
+function missingAccountColumns(message: string) {
+  return /account_number|routing/i.test(message);
+}
+
+function accountBody(input: BankAccountInput, withInfo: boolean) {
+  const number = input.accountNumber.replace(/[^0-9a-zA-Z]/g, "").slice(0, 34);
+  const body: Record<string, unknown> = {
     country: input.country,
     kind: input.kind,
     institution: input.institution.trim().slice(0, 80),
@@ -69,10 +79,25 @@ function accountBody(input: BankAccountInput) {
     owner_name: input.owner.trim().slice(0, 80),
     currency: input.currency,
     balance: input.balance,
-    last4: input.last4.replace(/\D/g, "").slice(0, 4),
+    last4: (number || input.last4).replace(/\D/g, "").slice(-4),
     nominee: input.nominee.trim().slice(0, 80),
     notes: input.notes.trim().slice(0, 500),
   };
+  if (withInfo) {
+    body.account_number = number;
+    body.routing = input.routing.replace(/[^0-9a-zA-Z]/g, "").toUpperCase().slice(0, 11);
+  }
+  return body;
+}
+
+function writeAccount(client: SupabaseClient, userId: string, input: BankAccountInput, id: string | undefined, withInfo: boolean) {
+  const body = accountBody(input, withInfo);
+  const query = id
+    ? client.from("nw_accounts").update(body).eq("id", id).eq("user_id", userId)
+    : client.from("nw_accounts").insert({ ...body, user_id: userId });
+  return withInfo
+    ? query.select(ACCOUNT_INFO_COLUMNS).single()
+    : query.select(ACCOUNT_COLUMNS).single();
 }
 
 function depositBody(input: BankDepositInput) {
@@ -98,25 +123,36 @@ function depositBody(input: BankDepositInput) {
 export function createSupabaseBankRepository(client: SupabaseClient, userId: string) {
   return {
     async listAccounts(): Promise<BankAccount[]> {
-      const { data, error } = await client
+      const listed = await client
         .from("nw_accounts")
-        .select("id,country,kind,institution,nickname,owner_name,currency,balance,last4,nominee,notes")
+        .select(ACCOUNT_INFO_COLUMNS)
         .eq("user_id", userId)
         .is("deleted_at", null)
         .order("institution");
-      if (error) throw new Error(error.message);
-      return (data as Record<string, unknown>[]).map(mapAccount);
+      if (!listed.error) return (listed.data as Record<string, unknown>[]).map(mapAccount);
+      if (!missingAccountColumns(listed.error.message)) throw new Error(listed.error.message);
+      const fallback = await client
+        .from("nw_accounts")
+        .select(ACCOUNT_COLUMNS)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .order("institution");
+      if (fallback.error) throw new Error(fallback.error.message);
+      return (fallback.data as Record<string, unknown>[]).map(mapAccount);
     },
     async saveAccount(input: BankAccountInput, id?: string): Promise<BankAccount> {
-      const body = accountBody(input);
-      const query = id
-        ? client.from("nw_accounts").update(body).eq("id", id).eq("user_id", userId)
-        : client.from("nw_accounts").insert({ ...body, user_id: userId });
-      const { data, error } = await query
-        .select("id,country,kind,institution,nickname,owner_name,currency,balance,last4,nominee,notes")
-        .single();
-      if (error) throw new Error(error.message);
-      return mapAccount(data as Record<string, unknown>);
+      const saved = await writeAccount(client, userId, input, id, true);
+      if (!saved.error) return mapAccount(saved.data as Record<string, unknown>);
+      if (!missingAccountColumns(saved.error.message) || input.accountNumber.trim() || input.routing.trim()) {
+        throw new Error(
+          missingAccountColumns(saved.error.message)
+            ? "Run the Banks account info script in Supabase, then save the account number again."
+            : saved.error.message
+        );
+      }
+      const fallback = await writeAccount(client, userId, input, id, false);
+      if (fallback.error) throw new Error(fallback.error.message);
+      return mapAccount(fallback.data as Record<string, unknown>);
     },
     async removeAccount(id: string): Promise<void> {
       const { error } = await client

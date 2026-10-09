@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  Banknote,
   BarChart3,
   Bell,
   Check,
+  Copy,
   Download,
   Import,
+  Info,
   Landmark,
   Maximize2,
   MoreHorizontal,
@@ -107,6 +110,8 @@ const EMPTY_ACCOUNT: BankAccountInput = {
   currency: "USD",
   balance: 0,
   last4: "",
+  accountNumber: "",
+  routing: "",
   nominee: "",
   notes: "",
 };
@@ -136,6 +141,8 @@ export function BanksWorkspace() {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [sheet, setSheet] = useState<HoldingRef | null>(null);
   const [detail, setDetail] = useState<HoldingRef | null>(null);
+  const [amountEdit, setAmountEdit] = useState<HoldingRef | null>(null);
+  const [info, setInfo] = useState<HoldingRef | null>(null);
   const [notice, setNotice] = useState("");
   const multi = usesMultipleCurrencies(banks.accounts, banks.deposits);
   const entryCurrency = displayCurrency(banks.accounts, banks.deposits, prefs.home);
@@ -186,6 +193,10 @@ export function BanksWorkspace() {
   const sheetDeposit = sheet?.kind === "deposit" ? banks.deposits.find((item) => item.id === sheet.id) : undefined;
   const detailAccount = detail?.kind === "account" ? banks.accounts.find((item) => item.id === detail.id) : undefined;
   const detailDeposit = detail?.kind === "deposit" ? banks.deposits.find((item) => item.id === detail.id) : undefined;
+  const amountAccount = amountEdit?.kind === "account" ? banks.accounts.find((item) => item.id === amountEdit.id) : undefined;
+  const amountDeposit = amountEdit?.kind === "deposit" ? banks.deposits.find((item) => item.id === amountEdit.id) : undefined;
+  const infoAccount = info?.kind === "account" ? banks.accounts.find((item) => item.id === info.id) : undefined;
+  const infoDeposit = info?.kind === "deposit" ? banks.deposits.find((item) => item.id === info.id) : undefined;
   const editingAccount = editor?.kind === "account" && editor.id ? banks.accounts.find((item) => item.id === editor.id) ?? null : null;
   const editingDeposit = editor?.kind === "deposit" && editor.id ? banks.deposits.find((item) => item.id === editor.id) ?? null : null;
 
@@ -284,6 +295,22 @@ export function BanksWorkspace() {
           icon={Landmark}
           onClose={() => setSheet(null)}
         >
+          <SheetAction
+            icon={Banknote}
+            label="Update balance"
+            onClick={() => {
+              setAmountEdit({ kind: "account", id: sheetAccount.id });
+              setSheet(null);
+            }}
+          />
+          <SheetAction
+            icon={Info}
+            label="Account info"
+            onClick={() => {
+              setInfo({ kind: "account", id: sheetAccount.id });
+              setSheet(null);
+            }}
+          />
           <SheetAction icon={Maximize2} label="View" onClick={() => openDetail({ kind: "account", id: sheetAccount.id })} />
           <SheetAction icon={Pencil} label="Edit" onClick={() => openEditor({ kind: "account", id: sheetAccount.id })} />
           <SheetAction
@@ -304,6 +331,22 @@ export function BanksWorkspace() {
           icon={Landmark}
           onClose={() => setSheet(null)}
         >
+          <SheetAction
+            icon={Banknote}
+            label="Update balance"
+            onClick={() => {
+              setAmountEdit({ kind: "deposit", id: sheetDeposit.id });
+              setSheet(null);
+            }}
+          />
+          <SheetAction
+            icon={Info}
+            label="Deposit info"
+            onClick={() => {
+              setInfo({ kind: "deposit", id: sheetDeposit.id });
+              setSheet(null);
+            }}
+          />
           <SheetAction icon={Maximize2} label="View" onClick={() => openDetail({ kind: "deposit", id: sheetDeposit.id })} />
           <SheetAction icon={Pencil} label="Edit" onClick={() => openEditor({ kind: "deposit", id: sheetDeposit.id })} />
           <SheetAction
@@ -326,6 +369,40 @@ export function BanksWorkspace() {
         </ActionSheet>
       )}
 
+      {amountAccount && (
+        <AmountUpdate
+          title={amountAccount.nickname || amountAccount.institution}
+          label="Balance"
+          hint={accountBucket(amountAccount.kind) === "liabilities" ? "Enter the amount still owed." : "This replaces the saved balance."}
+          currency={amountAccount.currency}
+          initial={String(amountAccount.balance)}
+          readonly={banks.readonly}
+          onClose={() => setAmountEdit(null)}
+          onSave={async (balance) => {
+            const { id, ...input } = amountAccount;
+            await banks.saveAccount({ ...input, balance }, id);
+            setAmountEdit(null);
+          }}
+        />
+      )}
+      {amountDeposit && (
+        <AmountUpdate
+          title={amountDeposit.nickname || amountDeposit.institution}
+          label="Principal"
+          hint="This replaces the saved principal."
+          currency={amountDeposit.currency}
+          initial={String(amountDeposit.principal)}
+          readonly={banks.readonly}
+          onClose={() => setAmountEdit(null)}
+          onSave={async (principal) => {
+            const { id, ...input } = amountDeposit;
+            await banks.saveDeposit({ ...input, principal }, id);
+            setAmountEdit(null);
+          }}
+        />
+      )}
+      {infoAccount && <AccountInfo account={infoAccount} onClose={() => setInfo(null)} onEdit={() => openEditor({ kind: "account", id: infoAccount.id })} />}
+      {infoDeposit && <DepositInfo deposit={infoDeposit} onClose={() => setInfo(null)} onEdit={() => openEditor({ kind: "deposit", id: infoDeposit.id })} />}
       {detailAccount && (
         <AccountDetail
           account={detailAccount}
@@ -1130,7 +1207,7 @@ function ImportPreview({
         {plan.created.length} new, {plan.updated.length} updated, {plan.skipped.length} skipped
       </p>
       <p className="mt-1 text-[11.5px] leading-relaxed text-otto-text-faint">
-        Matching rows update. New rows are added. Full account numbers stay as the last 4 only.
+        Matching rows update. New rows are added. An account number and routing number are saved with the account. The list still shows the last 4.
       </p>
       <PreviewGroup title="New" rows={plan.created} />
       <PreviewGroup title="Updated" rows={plan.updated} />
@@ -1244,7 +1321,9 @@ function AccountForm({
     initial ?? { ...EMPTY_ACCOUNT, currency: preferred, country: countryFromCurrency(preferred) }
   );
   const [balance, setBalance] = useState(initial ? String(initial.balance) : "");
-  const [more, setMore] = useState(Boolean(initial && (initial.owner || initial.last4 || initial.nominee || initial.notes || (!multi && initial.currency !== preferred))));
+  const [more, setMore] = useState(
+    Boolean(initial && (initial.owner || initial.last4 || initial.accountNumber || initial.routing || initial.nominee || initial.notes || (!multi && initial.currency !== preferred)))
+  );
   return (
     <form
       id={formId}
@@ -1287,7 +1366,9 @@ function AccountForm({
             />
           )}
           <Field label="Owner" value={draft.owner} onChange={(owner) => setDraft({ ...draft, owner })} placeholder="Optional, such as joint" />
-          <Field label="Last 4" value={draft.last4} onChange={(last4) => setDraft({ ...draft, last4 })} placeholder="Optional" />
+          <Field label="Account number" value={draft.accountNumber} onChange={(accountNumber) => setDraft({ ...draft, accountNumber })} placeholder="Optional" />
+          <Field label="Routing or IFSC" value={draft.routing} onChange={(routing) => setDraft({ ...draft, routing })} placeholder="Optional" />
+          <Field label="Last 4" value={draft.last4} onChange={(last4) => setDraft({ ...draft, last4 })} placeholder="Filled from the account number" />
           <Field label="Nominee" value={draft.nominee} onChange={(nominee) => setDraft({ ...draft, nominee })} placeholder="Optional" />
           <Field label="Notes" value={draft.notes} onChange={(notes) => setDraft({ ...draft, notes })} placeholder="Optional" />
         </>
@@ -1442,6 +1523,18 @@ function AccountDetail({
             <DetailRow label="Owner" value={account.owner} />
           </>
         )}
+        {account.accountNumber && (
+          <>
+            <Divider />
+            <DetailRow label="Account number" value={account.accountNumber} />
+          </>
+        )}
+        {account.routing && (
+          <>
+            <Divider />
+            <DetailRow label="Routing or IFSC" value={account.routing} />
+          </>
+        )}
         {account.last4 && (
           <>
             <Divider />
@@ -1535,6 +1628,165 @@ function DepositDetail({
       )}
       {notes && <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed">{notes}</p>}
     </DetailShell>
+  );
+}
+
+function AmountUpdate({
+  title,
+  label,
+  hint,
+  currency,
+  initial,
+  readonly,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  label: string;
+  hint: string;
+  currency: BankCurrency;
+  initial: string;
+  readonly: boolean;
+  onClose: () => void;
+  onSave: (amount: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initial);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-otto-bg">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-otto-divider bg-otto-bg/95 px-3 py-3 backdrop-blur">
+        <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface" aria-label="Close">
+          <X size={18} />
+        </button>
+        <b className="text-[15px]">Update balance</b>
+        <span className="w-9" />
+      </header>
+      <form
+        className="mx-auto w-full max-w-[720px] px-[18px] py-7"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (readonly || busy) return;
+          setBusy(true);
+          setError("");
+          void onSave(Number(value) || 0)
+            .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not save this balance."))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <h1 className="text-[22px] font-extrabold leading-tight">{title}</h1>
+        <p className="mt-1 text-[13px] text-otto-text-dim">{hint}</p>
+        <label className="mt-6 block text-[12px] font-semibold text-otto-text-dim">
+          {label} · {currency}
+          <input
+            value={value}
+            inputMode="decimal"
+            autoFocus
+            onChange={(event) => setValue(event.target.value)}
+            className="mt-1 w-full rounded-xl bg-otto-surface px-3 py-3 text-[22px] font-black text-otto-text"
+          />
+        </label>
+        {error && <p className="mt-3 text-[13px] text-otto-red">{error}</p>}
+        <button type="submit" disabled={readonly || busy} className="mt-6 w-full rounded-full bg-otto-green py-3 text-[15px] font-bold text-black disabled:opacity-40">
+          {busy ? "Saving…" : "Save balance"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function AccountInfo({ account, onClose, onEdit }: { account: BankAccount; onClose: () => void; onEdit: () => void }) {
+  return (
+    <DetailShell title="Account info" onClose={onClose} onEdit={onEdit}>
+      <h1 className="text-[22px] font-extrabold leading-tight">{account.nickname || account.institution}</h1>
+      <p className="mt-1 text-[13.5px] text-otto-text-dim">
+        {ACCOUNT_KIND_LABEL[account.kind]}
+        {account.nickname ? ` · ${account.institution}` : ""}
+      </p>
+      <div className="mt-6 overflow-hidden rounded-2xl bg-otto-surface">
+        <CopyRow label="Account number" value={account.accountNumber} empty="Not saved" />
+        <Divider />
+        <CopyRow label="Routing or IFSC" value={account.routing} empty="Not saved" />
+        <Divider />
+        <CopyRow label="Last 4" value={account.last4} empty="Not saved" />
+        {account.owner && (
+          <>
+            <Divider />
+            <CopyRow label="Owner" value={account.owner} />
+          </>
+        )}
+        {account.nominee && (
+          <>
+            <Divider />
+            <CopyRow label="Nominee" value={account.nominee} />
+          </>
+        )}
+      </div>
+      {!account.accountNumber && (
+        <p className="mt-4 text-[13px] leading-relaxed text-otto-text-dim">
+          Earlier imports kept only the last 4 digits. Add the full number with Edit, or import the sheet again after the account fields are in Supabase.
+        </p>
+      )}
+      {account.notes && <p className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed">{account.notes}</p>}
+    </DetailShell>
+  );
+}
+
+function DepositInfo({ deposit, onClose, onEdit }: { deposit: BankDeposit; onClose: () => void; onEdit: () => void }) {
+  const number = depositReference(deposit.notes);
+  return (
+    <DetailShell title="Deposit info" onClose={onClose} onEdit={onEdit}>
+      <h1 className="text-[22px] font-extrabold leading-tight">{deposit.nickname || deposit.institution}</h1>
+      <p className="mt-1 text-[13.5px] text-otto-text-dim">
+        {DEPOSIT_TREATMENT[deposit.kind].label}
+        {deposit.nickname ? ` · ${deposit.institution}` : ""}
+      </p>
+      <div className="mt-6 overflow-hidden rounded-2xl bg-otto-surface">
+        <CopyRow label="Deposit number" value={number} empty="Not saved" />
+        {deposit.owner && (
+          <>
+            <Divider />
+            <CopyRow label="Owner" value={deposit.owner} />
+          </>
+        )}
+        {deposit.nominee && (
+          <>
+            <Divider />
+            <CopyRow label="Nominee" value={deposit.nominee} />
+          </>
+        )}
+        <Divider />
+        <CopyRow label="Currency" value={deposit.currency} />
+      </div>
+    </DetailShell>
+  );
+}
+
+function CopyRow({ label, value, empty }: { label: string; value: string; empty?: string }) {
+  const [copied, setCopied] = useState(false);
+  const shown = value.trim();
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <div className="text-[12px] text-otto-text-dim">{label}</div>
+        <div className="mt-0.5 break-all text-[15px] font-semibold">{shown || empty || "—"}</div>
+      </div>
+      {shown && (
+        <button
+          type="button"
+          className="flex shrink-0 items-center gap-1 rounded-full bg-otto-bg px-2.5 py-1.5 text-[12px] font-bold text-otto-text-dim"
+          onClick={() => {
+            void navigator.clipboard.writeText(shown).then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1200);
+            });
+          }}
+        >
+          <Copy size={13} />
+          {copied ? "Copied" : "Copy"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1644,11 +1896,11 @@ function Field({
 }
 
 function downloadBanksCsv(accounts: BankAccount[], deposits: BankDeposit[]) {
-  const header = ["record", "type", "institution", "nickname", "owner", "currency", "amount", "rate", "payout", "started", "matures", "renew", "closed", "last4", "nominee", "notes"];
+  const header = ["record", "type", "institution", "nickname", "owner", "currency", "amount", "rate", "payout", "started", "matures", "renew", "closed", "account number", "routing", "last4", "nominee", "notes"];
   const lines = [
     header,
-    ...accounts.map((item) => ["account", item.kind, item.institution, item.nickname, item.owner, item.currency, item.balance, "", "", "", "", "", "", item.last4, item.nominee, item.notes]),
-    ...deposits.map((item) => ["deposit", item.kind, item.institution, item.nickname, item.owner, item.currency, item.principal, item.rate ?? "", item.payout, item.startedOn ?? "", item.maturesOn ?? "", item.renew, item.closed ? "yes" : "no", "", item.nominee, item.notes]),
+    ...accounts.map((item) => ["account", item.kind, item.institution, item.nickname, item.owner, item.currency, item.balance, "", "", "", "", "", "", item.accountNumber, item.routing, item.last4, item.nominee, item.notes]),
+    ...deposits.map((item) => ["deposit", item.kind, item.institution, item.nickname, item.owner, item.currency, item.principal, item.rate ?? "", item.payout, item.startedOn ?? "", item.maturesOn ?? "", item.renew, item.closed ? "yes" : "no", "", "", "", item.nominee, item.notes]),
   ].map((row) => row.map(csv).join(","));
   const blob = new Blob([lines.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);

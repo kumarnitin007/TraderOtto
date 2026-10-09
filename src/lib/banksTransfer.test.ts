@@ -12,6 +12,8 @@ const account: BankAccount = {
   currency: "USD",
   balance: 100,
   last4: "6789",
+  accountNumber: "",
+  routing: "",
   nominee: "",
   notes: "",
 };
@@ -43,13 +45,13 @@ describe("bank transfer", () => {
     expect(parsed.skipped).toEqual([]);
   });
 
-  it("reads a household banks sheet and keeps only the last 4", () => {
+  it("keeps the full account number, the last 4, and a routing number", () => {
     const parsed = parseBankSheets([
       {
         name: "Banks",
         rows: [
-          ["Status", "Updated On", "Source", "Amount", "Age since Updated", "Type", "Currency", "Next Action", "", "Account Owner", "Nominee", "Online", "ROI", "Limits", "Account Number"],
-          ["", "", "Credit union", 250, "", "Checking", "USD", "", "", "Alex", "", "", "", "", "123456789"],
+          ["Status", "Updated On", "Source", "Amount", "Age since Updated", "Type", "Currency", "Next Action", "", "Account Owner", "Nominee", "Online", "ROI", "Limits", "Account Number", "Routing"],
+          ["", "", "Credit union", 250, "", "Checking", "USD", "", "", "Alex", "", "", "", "", "123456789", "021000021"],
           ["", "", "State bank", 8000, "", "FD", "INR", "", "", "", "", "", 0.071, "", ""],
         ],
       },
@@ -63,6 +65,8 @@ describe("bank transfer", () => {
     ]);
     expect(parsed.accounts).toHaveLength(1);
     expect(parsed.accounts[0].last4).toBe("6789");
+    expect(parsed.accounts[0].accountNumber).toBe("123456789");
+    expect(parsed.accounts[0].routing).toBe("021000021");
     expect(parsed.accounts[0].balance).toBe(250);
     expect(parsed.deposits[0]).toMatchObject({ kind: "fd", principal: 8000, rate: 7.1, currency: "INR" });
     expect(parsed.accounts.some((item) => item.institution === "Water")).toBe(false);

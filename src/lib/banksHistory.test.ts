@@ -13,6 +13,8 @@ function account(balance: number): BankAccount {
     currency: "USD",
     balance,
     last4: "",
+    accountNumber: "",
+    routing: "",
     nominee: "",
     notes: "",
   };

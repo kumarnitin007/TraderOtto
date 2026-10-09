@@ -13,6 +13,8 @@ function account(patch: Partial<BankAccount>): BankAccount {
     currency: "USD",
     balance: 100,
     last4: "",
+    accountNumber: "",
+    routing: "",
     nominee: "",
     notes: "",
     ...patch,

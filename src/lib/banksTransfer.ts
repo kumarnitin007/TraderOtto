@@ -37,7 +37,7 @@ export type ImportPlan = {
   skipped: TransferSkip[];
 };
 
-const ACCOUNT_HEADERS = ["type", "institution", "nickname", "owner", "currency", "balance", "last4", "nominee", "notes"] as const;
+const ACCOUNT_HEADERS = ["type", "institution", "nickname", "owner", "currency", "balance", "account number", "routing", "last4", "nominee", "notes"] as const;
 const DEPOSIT_HEADERS = ["type", "institution", "nickname", "owner", "currency", "principal", "rate", "payout", "started", "matures", "renew", "closed", "nominee", "notes"] as const;
 
 export function ottoSheets(accounts: BankAccount[], deposits: BankDeposit[]): TransferSheet[] {
@@ -53,6 +53,8 @@ export function ottoSheets(accounts: BankAccount[], deposits: BankDeposit[]): Tr
           item.owner,
           item.currency,
           item.balance,
+          item.accountNumber,
+          item.routing,
           item.last4,
           item.nominee,
           item.notes,
@@ -168,7 +170,9 @@ function parseSheet(rows: unknown[][], sheetName: string, sheetTitle: string): P
         owner,
         currency,
         balance: amount,
-        last4: last4(textAt(row, columns.get("last4"))),
+        accountNumber: accountCode(textAt(row, columns.get("accountNumber"))),
+        routing: routingCode(textAt(row, columns.get("routing"))),
+        last4: last4(textAt(row, columns.get("accountNumber")) || textAt(row, columns.get("last4"))),
         nominee,
         notes: extra,
       });
@@ -247,6 +251,8 @@ function accountChanges(existing: BankAccount, input: BankAccountInput) {
   if (existing.balance !== input.balance) changes.push(`Balance ${money(existing.balance, existing.currency)} → ${money(input.balance, input.currency)}`);
   if (existing.currency !== input.currency) changes.push(`Currency ${existing.currency} → ${input.currency}`);
   if (existing.owner !== input.owner) changes.push("Owner");
+  if (existing.accountNumber !== input.accountNumber && input.accountNumber) changes.push("Account number");
+  if (existing.routing !== input.routing && input.routing) changes.push("Routing");
   if (existing.nominee !== input.nominee) changes.push("Nominee");
   if (existing.notes !== input.notes) changes.push("Notes");
   return changes;
@@ -282,7 +288,9 @@ function headerKind(value: unknown) {
   if (text === "payout") return "payout";
   if (text === "renew" || text === "at maturity") return "renew";
   if (text === "closed") return "closed";
-  if (text === "last4" || text === "last 4" || text === "account number") return "last4";
+  if (text === "account number" || text === "account no" || text === "account #") return "accountNumber";
+  if (text === "routing" || text === "routing number" || text === "aba" || text === "ifsc") return "routing";
+  if (text === "last4" || text === "last 4") return "last4";
   if (text === "deposit id" || text === "deposit number" || text === "reference") return "reference";
   if (text === "notes" || text === "note" || text === "next action") return notesOrAction(text);
   return null;
@@ -420,6 +428,14 @@ export function asDate(value: unknown): string | null {
   }
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function accountCode(value: string) {
+  return value.replace(/[^0-9a-zA-Z]/g, "").slice(0, 34);
+}
+
+function routingCode(value: string) {
+  return value.replace(/[^0-9a-zA-Z]/g, "").toUpperCase().slice(0, 11);
 }
 
 function last4(value: string) {

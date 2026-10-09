@@ -22,6 +22,8 @@ create table if not exists nw_accounts (
   currency text not null default 'USD',
   balance numeric not null default 0,
   last4 text not null default '',
+  account_number text not null default '',
+  routing text not null default '',
   nominee text not null default '',
   notes text not null default '',
   deleted_at timestamptz,
