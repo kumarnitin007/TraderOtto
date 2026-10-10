@@ -434,7 +434,8 @@ function ReviewGroup({
                       : `exp ${fmtDate(item.candidate.expiry)}`}
                   </span>
                   <span className="shrink-0 text-xs font-bold">
-                    {item.candidate.status === "closed"
+                    {item.candidate.status === "closed" ||
+                    item.openMatch?.status === "closed"
                       ? signedMoney(displayPnl(item))
                       : fmtMoney(
                           item.candidate.premiumOpen *
@@ -476,46 +477,66 @@ function CandidateDetails({
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 desk:grid-cols-4">
         <Detail
           label="Opened"
-          value={fmtDate(item.openMatch?.openDate ?? candidate.openDate)}
+          value={fmtDate(
+            item.openMatch?.status === "closed" && candidate.status === "open"
+              ? candidate.openDate
+              : item.openMatch?.openDate ?? candidate.openDate
+          )}
         />
         <Detail label="Expiry" value={fmtDate(candidate.expiry)} />
         <Detail
           label="Open premium"
-          value={`${fmtMoney(item.openMatch?.premiumOpen ?? candidate.premiumOpen)} / contract`}
+          value={`${fmtMoney(
+            item.openMatch?.status === "closed" && candidate.status === "open"
+              ? candidate.premiumOpen
+              : item.openMatch?.premiumOpen ?? candidate.premiumOpen
+          )} / contract`}
         />
         <Detail
           label="Open fees"
           value={fmtMoney(candidate.commissionOpen)}
         />
-        {candidate.status === "closed" && (
+        {(candidate.status === "closed" || item.openMatch?.status === "closed") && (
           <>
             <Detail
               label="Closed"
-              value={fmtDate(candidate.closeDate ?? "")}
+              value={fmtDate(
+                candidate.closeDate ?? item.openMatch?.closeDate ?? ""
+              )}
             />
             <Detail
               label="Close premium"
-              value={`${fmtMoney(candidate.premiumClose ?? 0)} / contract`}
+              value={`${fmtMoney(
+                candidate.premiumClose ?? item.openMatch?.premiumClose ?? 0
+              )} / contract`}
             />
             <Detail
               label="Close reason"
-              value={candidate.closeReason ?? "closed"}
+              value={candidate.closeReason ?? item.openMatch?.closeReason ?? "closed"}
             />
             <Detail
               label="Close fees"
-              value={fmtMoney(candidate.commissionClose ?? 0)}
+              value={fmtMoney(
+                candidate.status === "closed"
+                  ? candidate.commissionClose ?? 0
+                  : item.openMatch?.commissionClose ?? 0
+              )}
             />
           </>
         )}
       </div>
       {item.openMatch && (
         <div className="mt-3 rounded-lg border border-otto-divider px-3 py-2 text-[10.5px] text-otto-text-dim">
-          {candidate.status === "closed" ? "Closes" : "Updates"} the existing{" "}
-          {item.openMatch.ticker} {item.openMatch.strategy} from{" "}
-          {fmtDate(item.openMatch.openDate)}.
+          {item.openMatch.status === "closed" && candidate.status === "open"
+            ? `Adds the opening credit from this file to the closed ${item.openMatch.ticker} ${item.openMatch.strategy}.`
+            : candidate.status === "closed"
+              ? `Closes the existing ${item.openMatch.ticker} ${item.openMatch.strategy} from ${fmtDate(item.openMatch.openDate)}.`
+              : `Updates the existing ${item.openMatch.ticker} ${item.openMatch.strategy} from ${fmtDate(item.openMatch.openDate)}.`}
           {candidate.status === "closed"
             ? " Realized profit uses the reconciled Robinhood opening and closing values."
-            : " Robinhood opening values replace the manually entered transaction values."}
+            : item.openMatch.status === "closed"
+              ? " The close already saved is kept, and a close-only copy of this position is removed."
+              : " Robinhood opening values replace the manually entered transaction values."}
           {item.closedCopy
             ? " The separate copy created by the earlier import will be removed automatically."
             : ""}
@@ -593,6 +614,22 @@ function strikeLabel(candidate: RobinhoodTradeCandidate) {
 }
 
 function displayPnl(item: ReviewItem) {
+  if (
+    item.openMatch?.status === "closed" &&
+    item.candidate.status === "open" &&
+    item.openMatch.premiumClose != null
+  ) {
+    return realizedPnl(
+      item.candidate.premiumOpen,
+      item.openMatch.premiumClose,
+      item.candidate.contracts,
+      item.candidate.strategy,
+      {
+        commissionOpen: item.candidate.commissionOpen,
+        commissionClose: item.openMatch.commissionClose,
+      }
+    );
+  }
   if (item.openMatch && item.candidate.premiumClose != null) {
     return realizedPnl(
       item.openMatch.premiumOpen,

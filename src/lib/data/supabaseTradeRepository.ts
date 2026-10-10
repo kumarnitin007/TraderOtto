@@ -9,7 +9,13 @@ import type {
   TradeUpdate,
 } from "@/types/trade";
 import { realizedPnl } from "@/lib/pnl";
-import { isDuplicateClosedTrade, matchTradesForImport } from "@/lib/tradeDuplicate";
+import {
+  applyImportToTrade,
+  isDuplicateClosedTrade,
+  isDuplicateImportedTrade,
+  matchTradesForImport,
+  staleCloseCopies,
+} from "@/lib/tradeDuplicate";
 
 type TradeRow = {
   id: string;
@@ -259,19 +265,8 @@ export function createSupabaseTradeRepository(
         if (match) {
           const rawRow = raw.find((row) => row.id === match.id);
           const existingDetails = rawRow?.details ?? {};
-          const useImportedOpening = !item.openingMissing;
-          const premiumOpen = useImportedOpening
-            ? item.premiumOpen
-            : match.premiumOpen;
-          const commissionOpen = useImportedOpening
-            ? item.commissionOpen
-            : match.commissionOpen ?? 0;
-          const contracts = useImportedOpening ? item.contracts : match.contracts;
-          const strategy = useImportedOpening ? item.strategy : match.strategy;
-          const closed =
-            item.status === "closed" &&
-            Boolean(item.closeDate) &&
-            item.premiumClose != null;
+          const merged = applyImportToTrade(match, item);
+          const closed = merged.status === "closed";
           const details = {
             ...existingDetails,
             shortStrike: item.shortStrike,
@@ -283,47 +278,47 @@ export function createSupabaseTradeRepository(
             delta: item.delta || match.delta,
             sigma: item.sigma || match.sigma,
             theta: item.theta || match.theta,
-            commissionOpen,
+            commissionOpen: merged.commissionOpen,
             importSource: item.importSource,
             importFingerprint: item.importFingerprint,
             notes: [
               match.notes
                 .replace("Imported from Robinhood activity CSV.", "")
                 .replace("Closed from Robinhood activity CSV.", "")
+                .replace("Opening credit added from Robinhood activity CSV.", "")
+                .replace("Updated from Robinhood activity CSV.", "")
                 .trim(),
-              closed
-                ? "Closed from Robinhood activity CSV."
-                : "Updated from Robinhood activity CSV.",
+              merged.note,
             ]
               .filter(Boolean)
               .join(" "),
             ...(closed
               ? {
-                  stockPriceClose: item.stockPriceClose ?? 0,
-                  commissionClose: item.commissionClose ?? 0,
-                  closeReason: item.closeReason ?? "closed",
+                  stockPriceClose: merged.stockPriceClose ?? 0,
+                  commissionClose: merged.commissionClose,
+                  closeReason: merged.closeReason ?? "closed",
                 }
               : {}),
           };
           const patch: Record<string, unknown> = {
             ticker: item.ticker.toUpperCase(),
-            strategy,
-            status: closed ? "closed" : "open",
-            contracts,
+            strategy: merged.strategy,
+            status: merged.status,
+            contracts: merged.contracts,
             expiry: item.expiry,
-            open_date: useImportedOpening ? item.openDate : match.openDate,
-            close_date: closed ? item.closeDate : null,
-            premium_open: premiumOpen,
-            premium_close: closed ? item.premiumClose : null,
+            open_date: merged.openDate,
+            close_date: merged.closeDate,
+            premium_open: merged.premiumOpen,
+            premium_close: merged.premiumClose,
             pnl: closed
               ? realizedPnl(
-                  premiumOpen,
-                  item.premiumClose!,
-                  contracts,
-                  strategy,
+                  merged.premiumOpen,
+                  merged.premiumClose ?? 0,
+                  merged.contracts,
+                  merged.strategy,
                   {
-                    commissionOpen,
-                    commissionClose: item.commissionClose,
+                    commissionOpen: merged.commissionOpen,
+                    commissionClose: merged.commissionClose,
                   }
                 )
               : null,
@@ -343,36 +338,40 @@ export function createSupabaseTradeRepository(
               error: error?.message ?? "Could not update the existing trade.",
             });
           } else {
-            const duplicateCopy = existingTrades.find(
-              (trade) =>
-                trade.id !== match.id &&
-                trade.importFingerprint === item.importFingerprint
-            );
-            if (duplicateCopy) {
+            const duplicateCopies = staleCloseCopies(existingTrades, item, match);
+            let cleanupError = "";
+            for (const duplicateCopy of duplicateCopies) {
               const cleanup = await supabase
                 .from("tr_trades")
                 .delete()
                 .eq("id", duplicateCopy.id)
                 .eq("user_id", userId);
               if (cleanup.error) {
-                results.push({
-                  fingerprint: item.importFingerprint,
-                  status: "failed",
-                  error: `Trade updated, but the earlier duplicate could not be removed: ${cleanup.error.message}`,
-                });
-                continue;
+                cleanupError = cleanup.error.message;
+                break;
               }
             }
-            seen.add(item.importFingerprint);
-            results.push({
-              fingerprint: item.importFingerprint,
-              status: "updated",
-              trade: mapRow(data as TradeRow),
-            });
+            if (cleanupError) {
+              results.push({
+                fingerprint: item.importFingerprint,
+                status: "failed",
+                error: `Trade updated, but the earlier duplicate could not be removed: ${cleanupError}`,
+              });
+            } else {
+              seen.add(item.importFingerprint);
+              results.push({
+                fingerprint: item.importFingerprint,
+                status: "updated",
+                trade: mapRow(data as TradeRow),
+              });
+            }
           }
           continue;
         }
-        if (seen.has(item.importFingerprint)) {
+        if (
+          seen.has(item.importFingerprint) ||
+          existingTrades.some((trade) => isDuplicateImportedTrade(trade, item))
+        ) {
           results.push({
             fingerprint: item.importFingerprint,
             status: "duplicate",
@@ -564,6 +563,22 @@ export function createSupabaseTradeRepository(
         .eq("id", id)
         .eq("user_id", userId);
       if (error) throw new Error(error.message);
+    },
+
+    async removeAll(): Promise<number> {
+      let removed = 0;
+      for (let pass = 0; pass < 50; pass++) {
+        const { data, error } = await supabase
+          .from("tr_trades")
+          .delete()
+          .eq("user_id", userId)
+          .select("id");
+        if (error) throw new Error(error.message);
+        const count = data?.length ?? 0;
+        removed += count;
+        if (count < 1000) return removed;
+      }
+      throw new Error("Could not delete every trade. Try again.");
     },
   };
 }

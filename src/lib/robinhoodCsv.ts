@@ -518,6 +518,45 @@ function uniqueSpreadMatching(
   return "ambiguous";
 }
 
+/**
+ * When several verticals are valid, pair each leg with the next opposite leg
+ * in file order. Robinhood lists the two legs of one order together.
+ */
+function orderedSpreadMatching(
+  stos: LegOpenSlice[],
+  btos: LegOpenSlice[],
+  right: OptionRight
+): PairingEdge[] | null {
+  const events = [
+    ...stos.map((leg, index) => ({ side: "sto" as const, index, rowIndex: leg.rowIndex })),
+    ...btos.map((leg, index) => ({ side: "bto" as const, index, rowIndex: leg.rowIndex })),
+  ].sort((a, b) => a.rowIndex - b.rowIndex);
+  const stoUsed = new Set<number>();
+  const btoUsed = new Set<number>();
+  const pairs: PairingEdge[] = [];
+
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    if (event.side === "sto" ? stoUsed.has(event.index) : btoUsed.has(event.index)) continue;
+    for (let j = i + 1; j < events.length; j++) {
+      const other = events[j];
+      if (other.side === event.side) continue;
+      if (other.side === "sto" ? stoUsed.has(other.index) : btoUsed.has(other.index)) continue;
+      const stoIndex = event.side === "sto" ? event.index : other.index;
+      const btoIndex = event.side === "bto" ? event.index : other.index;
+      if (stos[stoIndex].contracts !== btos[btoIndex].contracts) continue;
+      const strategy = verticalStrategy(right, stos[stoIndex].strike, btos[btoIndex].strike);
+      if (!strategy) continue;
+      stoUsed.add(stoIndex);
+      btoUsed.add(btoIndex);
+      pairs.push({ stoIndex, btoIndex, strategy });
+      break;
+    }
+  }
+
+  return pairs.length ? pairs : null;
+}
+
 function bundleFromVerticalPair(
   sto: LegOpenSlice,
   bto: LegOpenSlice,
@@ -1060,12 +1099,16 @@ function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeC
       description: leg.description,
       strike: leg.strike,
     }));
-    const matching =
+    const unique =
       btcs.length === stcs.length
         ? uniqueSpreadMatching(stoShaped, btoShaped, right)
         : validPairings(stoShaped, btoShaped, right).length === 1
           ? validPairings(stoShaped, btoShaped, right)
           : "ambiguous";
+    const pairedByFileOrder = unique === "ambiguous";
+    const matching = pairedByFileOrder
+      ? orderedSpreadMatching(stoShaped, btoShaped, right) ?? "ambiguous"
+      : unique;
 
     if (!matching || matching === "ambiguous") {
       for (const leg of group) {
@@ -1092,6 +1135,16 @@ function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeC
               "Closing fills have no opening fills in this file. A matching open trade will be closed.",
             severity: "warning",
           },
+          ...(pairedByFileOrder
+            ? [
+                {
+                  code: "paired_by_file_order",
+                  message:
+                    "Several spreads closed the same day. Legs were paired in the order Robinhood listed them.",
+                  severity: "info" as const,
+                },
+              ]
+            : []),
         ],
         rawEventRefs: [],
         ticker: shortLeg.ticker,

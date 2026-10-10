@@ -120,4 +120,65 @@ describe("robinhood csv spreads", () => {
 
     expect(matchTradesForImport([manual], [imported])[0]?.id).toBe(manual.id);
   });
+
+  it("pairs two same-day put credit spread closes in file order", () => {
+    const parsed = parseRobinhoodCsv(
+      [
+        "Activity Date,Process Date,Settle Date,Instrument,Description,Trans Code,Quantity,Price,Amount",
+        '10/9/2026,10/9/2026,10/13/2026,GOOG,GOOG 10/16/2026 Put $310.00,STC,1,$0.10,$9.95',
+        '10/9/2026,10/9/2026,10/13/2026,GOOG,GOOG 10/16/2026 Put $330.00,BTC,1,$0.51,($51.04)',
+        '10/9/2026,10/9/2026,10/13/2026,GOOG,GOOG 10/16/2026 Put $305.00,STC,1,$0.07,$6.95',
+        '10/9/2026,10/9/2026,10/13/2026,GOOG,GOOG 10/16/2026 Put $325.00,BTC,1,$0.29,($29.04)',
+      ].join("\n")
+    );
+    const spreads = parsed.candidates.map((item) => ({
+      strategy: item.strategy,
+      status: item.status,
+      shortStrike: item.shortStrike,
+      longStrike: item.longStrike,
+      closeDate: item.closeDate,
+      openingMissing: Boolean(item.openingMissing),
+    }));
+
+    expect(spreads).toEqual([
+      {
+        strategy: "Put Credit Spread",
+        status: "closed",
+        shortStrike: 330,
+        longStrike: 310,
+        closeDate: "2026-10-09",
+        openingMissing: true,
+      },
+      {
+        strategy: "Put Credit Spread",
+        status: "closed",
+        shortStrike: 325,
+        longStrike: 305,
+        closeDate: "2026-10-09",
+        openingMissing: true,
+      },
+    ]);
+
+    const imports = parsed.candidates.map(robinhoodCandidateToTradeImport);
+    const opens = [
+      openTrade({
+        id: "wide",
+        ticker: "GOOG",
+        expiry: "2026-10-16",
+        shortStrike: 330,
+        longStrike: 310,
+      }),
+      openTrade({
+        id: "tight",
+        ticker: "GOOG",
+        expiry: "2026-10-16",
+        shortStrike: 325,
+        longStrike: 305,
+      }),
+    ];
+    expect(matchOpenTradesForClose(opens, imports).map((trade) => trade?.id)).toEqual([
+      "wide",
+      "tight",
+    ]);
+  });
 });

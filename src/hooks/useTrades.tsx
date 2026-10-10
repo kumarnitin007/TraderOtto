@@ -36,6 +36,7 @@ type TradesContextValue = {
   updateTrade: (id: string, trade: TradeUpdate) => Promise<Trade>;
   closeTrade: (id: string, payload: ClosePayload) => Promise<Trade>;
   deleteTrade: (id: string) => Promise<void>;
+  deleteAllTrades: () => Promise<void>;
 };
 
 const TradesContext = createContext<TradesContextValue | null>(null);
@@ -103,19 +104,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
   const importTrades = useCallback(async (items: TradeImport[]) => {
     if (!repository) throw new Error("Sign in to import trades.");
     const results = await repository.importMany(items);
-    const saved = results.flatMap((result) =>
-      (result.status === "imported" || result.status === "updated") && result.trade
-        ? [result.trade]
-        : []
-    );
-    if (saved.length) {
-      setTrades((previous) => {
-        const updates = new Map(saved.map((trade) => [trade.id, trade]));
-        const merged = previous.map((trade) => updates.get(trade.id) ?? trade);
-        const known = new Set(previous.map((trade) => trade.id));
-        return [...saved.filter((trade) => !known.has(trade.id)), ...merged];
-      });
-    }
+    setTrades(await repository.list());
     return results;
   }, [repository]);
 
@@ -139,6 +128,12 @@ export function TradesProvider({ children }: { children: ReactNode }) {
     setTrades((prev) => prev.filter((t) => t.id !== id));
   }, [repository]);
 
+  const deleteAllTrades = useCallback(async () => {
+    if (!repository) throw new Error("Sign in to delete trades.");
+    await repository.removeAll();
+    setTrades([]);
+  }, [repository]);
+
   const value = useMemo(
     () => ({
       trades,
@@ -151,6 +146,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       updateTrade,
       closeTrade,
       deleteTrade,
+      deleteAllTrades,
     }),
     [
       trades,
@@ -163,6 +159,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       updateTrade,
       closeTrade,
       deleteTrade,
+      deleteAllTrades,
     ]
   );
 

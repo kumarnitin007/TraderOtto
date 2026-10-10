@@ -51,14 +51,16 @@ export function DataTransferButton({
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  variant?: "primary" | "secondary" | "dashed";
+  variant?: "primary" | "secondary" | "dashed" | "danger";
 }) {
   const style =
     variant === "primary"
       ? "bg-otto-text text-otto-bg"
-      : variant === "dashed"
-        ? "border border-dashed border-otto-divider bg-otto-bg text-otto-text-dim"
-        : "border border-otto-divider bg-otto-bg text-otto-text-dim";
+      : variant === "danger"
+        ? "bg-otto-red text-white"
+        : variant === "dashed"
+          ? "border border-dashed border-otto-divider bg-otto-bg text-otto-text-dim"
+          : "border border-otto-divider bg-otto-bg text-otto-text-dim";
   return (
     <button
       type="button"

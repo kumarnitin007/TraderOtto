@@ -1,4 +1,8 @@
 import { tradePnl } from "@/lib/pnl";
+import {
+  isIncompleteRobinhoodClose,
+  sameTradeStructure,
+} from "@/lib/tradeDuplicate";
 import type { Trade } from "@/types/trade";
 
 export type PotentialDuplicateGroup = {
@@ -55,7 +59,7 @@ export function potentialDuplicateTrades(
     grouped.set(key, [...(grouped.get(key) ?? []), trade]);
   }
 
-  return Array.from(grouped, ([key, matches]) => {
+  const standard = Array.from(grouped, ([key, matches]) => {
     if (matches.length < 2 || !pnlCloseEnough(matches)) return null;
     const robinhood = matches.filter(isRobinhoodCsvTrade);
     const fingerprints = new Set(
@@ -80,6 +84,40 @@ export function potentialDuplicateTrades(
         matches[0].status === "closed"
           ? "Same ticker, strategy, close date, expiry, contracts, and strikes; P/L differs only slightly."
           : "Same ticker, strategy, open date, expiry, contracts, and strikes.",
+    } satisfies PotentialDuplicateGroup;
+  }).filter((group): group is PotentialDuplicateGroup => group != null);
+
+  const seen = new Set(standard.map((group) => group.key));
+  return [...standard, ...closeOnlyShadows(trades).filter((group) => !seen.has(group.key))];
+}
+
+/**
+ * A close imported from a file that lacked the opening credit, saved beside
+ * the real closed trade. P/L can differ by the whole opening credit, so the
+ * small-difference check above does not see it.
+ */
+function closeOnlyShadows(trades: Trade[]): PotentialDuplicateGroup[] {
+  const grouped = new Map<string, Trade[]>();
+  for (const trade of trades) {
+    if (trade.status !== "closed" || !trade.closeDate) continue;
+    const key = lifecycleKey(trade);
+    grouped.set(key, [...(grouped.get(key) ?? []), trade]);
+  }
+  return Array.from(grouped, ([key, matches]): PotentialDuplicateGroup | null => {
+    if (matches.length < 2) return null;
+    const incomplete = matches.filter((trade) => isIncompleteRobinhoodClose(trade));
+    const complete = matches.filter((trade) => !isIncompleteRobinhoodClose(trade));
+    if (!incomplete.length || !complete.length) return null;
+    if (!matches.every((trade) => sameTradeStructure(matches[0], trade))) return null;
+    const recommended =
+      complete.slice().sort((a, b) => Math.abs(b.premiumOpen) - Math.abs(a.premiumOpen))[0] ??
+      null;
+    return {
+      key: `close-only|${key}`,
+      trades: matches.slice().sort((a, b) => Math.abs(b.premiumOpen) - Math.abs(a.premiumOpen)),
+      recommendedId: recommended?.id ?? null,
+      reason:
+        "One row is a Robinhood close imported without its opening credit. Keep the row that has the opening premium.",
     } satisfies PotentialDuplicateGroup;
   }).filter((group): group is PotentialDuplicateGroup => group != null);
 }
