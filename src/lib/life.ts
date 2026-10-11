@@ -53,6 +53,79 @@ export function lifeDaysUntil(item: Pick<LifeItem, "repeats" | "month" | "day" |
   return daysBetween(today, nextLifeDate(item, today));
 }
 
+export const MILESTONE_WINDOWS = [7, 30, 90, 365] as const;
+export type MilestoneWindow = (typeof MILESTONE_WINDOWS)[number];
+export const MILESTONE_NOTIFICATION_THRESHOLDS = [90, 30, 7, 1, 0] as const;
+const MILESTONE_SNOOZE_KEY = "trader-otto:milestone-snooze";
+export const MILESTONE_SNOOZE_EVENT = "trader-otto:milestone-snooze";
+
+export function milestoneWindow(value: unknown): MilestoneWindow {
+  return value === 7 || value === 30 || value === 90 || value === 365 ? value : 90;
+}
+
+export function lifeMilestones(
+  items: LifeItem[],
+  withinDays: number,
+  today = new Date(),
+) {
+  return items
+    .filter((item) => item.milestone)
+    .map((item) => ({
+      item,
+      days: lifeDaysUntil(item, today),
+      occursOn: localIso(nextLifeDate(item, today)),
+    }))
+    .filter(({ days }) => days >= 0 && days <= withinDays)
+    .sort(
+      (left, right) =>
+        left.days - right.days || left.item.name.localeCompare(right.item.name),
+    );
+}
+
+export function milestoneNotificationThreshold(days: number) {
+  return MILESTONE_NOTIFICATION_THRESHOLDS.find((threshold) => threshold === days) ?? null;
+}
+
+/** Hide a milestone from Today until this many days have passed. The date itself stays. */
+export function snoozeMilestone(id: string, days: number, today = new Date()) {
+  const until = new Date(today.getFullYear(), today.getMonth(), today.getDate() + days);
+  const snoozed = readMilestoneSnooze();
+  snoozed[id] = localIso(until);
+  window.localStorage.setItem(MILESTONE_SNOOZE_KEY, JSON.stringify(snoozed));
+  window.dispatchEvent(new Event(MILESTONE_SNOOZE_EVENT));
+}
+
+export function milestoneSnoozed(id: string, today = new Date()) {
+  const until = readMilestoneSnooze()[id];
+  return Boolean(until && localIso(startOfDay(today)) < until);
+}
+
+function readMilestoneSnooze() {
+  if (typeof window === "undefined") return {} as Record<string, string>;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(MILESTONE_SNOOZE_KEY) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entry[1]),
+      ),
+    );
+  } catch {
+    return {} as Record<string, string>;
+  }
+}
+
+function localIso(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 export function lifeOccasionLabel(
   item: Pick<LifeItem, "category" | "year" | "repeats" | "month" | "day" | "occursOn">,
   today = new Date(),

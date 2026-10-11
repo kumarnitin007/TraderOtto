@@ -32,6 +32,7 @@ import {
 } from "@/lib/booksTransfer";
 import {
   DEFAULT_BOOKS_PREFERENCES,
+  BOOKS_PREFERENCES_EVENT,
   readBooksPreferences,
   writeBooksPreferences,
   type BooksPreferences,
@@ -68,8 +69,11 @@ export function BooksWorkspace() {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   useEffect(() => {
-    setPreferences(readBooksPreferences());
+    const sync = () => setPreferences(readBooksPreferences());
+    sync();
     setPreferencesLoaded(true);
+    window.addEventListener(BOOKS_PREFERENCES_EVENT, sync);
+    return () => window.removeEventListener(BOOKS_PREFERENCES_EVENT, sync);
   }, []);
 
   function changePreferences(next: BooksPreferences) {

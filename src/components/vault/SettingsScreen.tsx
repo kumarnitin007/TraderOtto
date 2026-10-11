@@ -2,7 +2,6 @@
 
 import {
   Clock3,
-  Import,
   KeyRound,
   RefreshCw,
   ShieldCheck,
@@ -10,6 +9,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import { DataTransferRow } from "@/components/settings/DataTransferPrimitives";
+import type { VaultSecuritySection } from "@/components/vault/VaultSecuritySettings";
 import {
   SettingsInfoRow,
   SettingsPageHeader,
@@ -34,7 +35,7 @@ export function SettingsScreen({
   onRecentlyDeleted: () => void;
   recentCount: number;
   onClearRecents: () => void;
-  onSecurity: () => void;
+  onSecurity: (section: VaultSecuritySection) => void;
   autoLockMinutes: number;
 }) {
   return (
@@ -51,32 +52,21 @@ export function SettingsScreen({
       <div className="overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow icon={Tag} label="Tags" detail={`${tagCount} tags`} onClick={onManageTags} />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
-          icon={Import}
-          label="Import & export"
-          detail="CSV"
-          onClick={onDataTransfer}
-        />
+        <DataTransferRow detail="CSV backup" onClick={onDataTransfer} />
       </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow
           icon={KeyRound}
           label="Change master password"
-          onClick={onSecurity}
-        />
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
-          icon={ShieldCheck}
-          label="Privacy & security"
-          onClick={onSecurity}
+          onClick={() => onSecurity("password")}
         />
         <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow
           icon={RefreshCw}
           label="Auto-lock"
           detail={`${autoLockMinutes} min`}
-          onClick={onSecurity}
+          onClick={() => onSecurity("lock")}
         />
         <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsRow

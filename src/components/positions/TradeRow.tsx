@@ -26,6 +26,7 @@ import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { PaceBadge } from "@/components/positions/PaceBadge";
 import { crossesEarnings } from "@/lib/earningsCache";
 import { assignmentCapital } from "@/lib/roi";
+import { tradeSourceLabel } from "@/lib/tradeImportHistory";
 import { AI_TRADE_DRAFT_KEY } from "@/lib/aiTradeDraft";
 import type { PositionRiskThresholds } from "@/types/notification";
 
@@ -150,7 +151,9 @@ export function TradeRow({
                 }`}
               />
             )}
-            <span className="truncate text-xs text-otto-text-faint">{t.strategy}</span>
+            <span className="truncate text-xs text-otto-text-faint">
+              {t.strategy} · {tradeSourceLabel(t)}
+            </span>
             {earningsCross && earningsDate && (
               <span
                 className="shrink-0 rounded-full bg-otto-amber-soft px-1.5 py-0.5 text-[10px] font-semibold text-otto-amber"

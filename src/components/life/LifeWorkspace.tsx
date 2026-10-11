@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { CalendarHeart, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { CalendarHeart, EyeOff, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { LifeBillsScreen } from "@/components/life/LifeBillsScreen";
 import { LifeBottomNav } from "@/components/life/LifeBottomNav";
@@ -9,6 +9,7 @@ import { LifeListsScreen } from "@/components/life/LifeListsScreen";
 import { LifeSettingsScreen } from "@/components/life/LifeSettingsScreen";
 import { LifeTasksScreen } from "@/components/life/LifeTasksScreen";
 import { LifeTodayScreen } from "@/components/life/LifeTodayScreen";
+import { useBills } from "@/hooks/useBills";
 import { useLife } from "@/hooks/useLife";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import {
@@ -17,6 +18,7 @@ import {
   lifeCountdownLabel,
   lifeDateInput,
   lifeDaysUntil,
+  snoozeMilestone,
   lifeIdentityKey,
   lifeOccasionLabel,
 } from "@/lib/life";
@@ -69,6 +71,7 @@ export function LifeWorkspace() {
     saveListItem,
     removeListItem,
   } = useLife();
+  const { bills } = useBills();
   const [tab, setTab] = useScreenOption("lifeTab");
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<LifeInput | null>(null);
@@ -184,7 +187,7 @@ export function LifeWorkspace() {
   }
 
   function exportLife(format: "json" | "csv", options: LifeExportOptions) {
-    const payload = { dates: items, habits: tasks, checks, lists, listItems };
+    const payload = { dates: items, habits: tasks, checks, lists, listItems, bills };
     const text =
       format === "csv" ? lifeExportCsv(payload, options) : lifeExportJson(payload, options);
     const blob = new Blob([text], {
@@ -470,6 +473,26 @@ export function LifeWorkspace() {
                 .catch((err) => setNotice(err instanceof Error ? err.message : "Could not save."));
             }}
           />
+          {selected.milestone && (
+            <>
+              <SheetAction
+                icon={EyeOff}
+                label="Hide for 7 days"
+                onClick={() => {
+                  snoozeMilestone(selected.id, 7);
+                  setSelected(null);
+                }}
+              />
+              <SheetAction
+                icon={EyeOff}
+                label="Hide for 30 days"
+                onClick={() => {
+                  snoozeMilestone(selected.id, 30);
+                  setSelected(null);
+                }}
+              />
+            </>
+          )}
           <SheetAction
             icon={Pencil}
             label="Edit"

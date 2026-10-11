@@ -54,12 +54,14 @@ describe("life export", () => {
             updatedAt: "2026-01-01T00:00:00Z",
           } satisfies LifeListItem,
         ],
+        bills: [],
       },
-      { dates: true, habits: false, habitHistory: false, todos: true }
+      { dates: true, habits: false, habitHistory: false, todos: true, bills: false }
     );
-    const parsed = JSON.parse(text) as { dates: unknown[]; habits?: unknown; todos: { name: string }[] };
+    const parsed = JSON.parse(text) as { dates: unknown[]; habits?: unknown; todos: { name: string }[]; bills?: unknown };
     expect(parsed.dates).toHaveLength(1);
     expect(parsed.habits).toBeUndefined();
+    expect(parsed.bills).toBeUndefined();
     expect(parsed.todos[0].name).toBe("Errands");
   });
 
@@ -81,11 +83,26 @@ describe("life export", () => {
             updatedAt: "2026-01-01T00:00:00Z",
           },
         ],
+        bills: [
+          {
+            id: "b1",
+            name: "Water",
+            amount: 40,
+            dueDay: 12,
+            dueDay2: null,
+            dueMonth: null,
+            dueSet: true,
+            frequency: "monthly",
+            category: "water",
+            paidMonth: null,
+          },
+        ],
       },
-      { dates: true, habits: false, habitHistory: false, todos: true }
+      { dates: true, habits: false, habitHistory: false, todos: true, bills: true }
     );
     expect(text.split("\n")[0]).toContain("section,name");
     expect(text).toContain("date,Ada,");
     expect(text).toContain('"Call, school"');
+    expect(text).toContain("bill,Water,,water");
   });
 });

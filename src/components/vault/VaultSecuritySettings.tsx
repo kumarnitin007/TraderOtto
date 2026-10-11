@@ -11,7 +11,10 @@ const AUTO_LOCK_OPTIONS = [1, 5, 15, 30] as const;
 const inputClassName =
   "w-full rounded-[10px] border border-otto-divider bg-otto-surface px-3 py-2.5 text-[15px]";
 
+export type VaultSecuritySection = "password" | "lock";
+
 export type VaultSecuritySettingsProps = {
+  section: VaultSecuritySection;
   autoLockMinutes: number;
   onAutoLockChange: (minutes: number) => void;
   onLock: () => void;
@@ -88,6 +91,7 @@ function SecretInput({
 }
 
 export function VaultSecuritySettings({
+  section,
   autoLockMinutes,
   onAutoLockChange,
   onLock,
@@ -146,17 +150,13 @@ export function VaultSecuritySettings({
     onChangePassword(currentPassword, nextPassword);
   }
 
-  return (
-    <section className="mx-auto w-full max-w-[720px] px-[18px] py-4 pb-8">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-        Vault security
+  if (section === "lock") {
+    return (
+      <section>
+      <p className="text-[13px] leading-relaxed text-otto-text-dim">
+        Choose how long the vault stays open on this device without activity.
       </p>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Master password & lock</h1>
-      <p className="mt-0.5 text-[13.5px] text-otto-text-dim">
-        Control auto-lock and update the password that wraps your vault key.
-      </p>
-
-      <div className="mt-5 overflow-hidden rounded-2xl bg-otto-surface">
+      <div className="mt-4 overflow-hidden rounded-2xl bg-otto-surface">
         <div className="flex items-center gap-3 px-3.5 py-3">
           <Timer size={18} className="shrink-0 text-otto-text-dim" aria-hidden />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -190,8 +190,12 @@ export function VaultSecuritySettings({
           <span className="flex-1 text-[14px] font-medium">Lock now</span>
         </button>
       </div>
+      </section>
+    );
+  }
 
-      <h2 className="mb-2 mt-6 text-[15px] font-bold">Change master password</h2>
+  return (
+    <section>
       <p className="mb-4 text-[13px] leading-relaxed text-otto-text-dim">
         Otto re-wraps your vault key with the new password. Items stay encrypted with the same vault
         key; only the wrapping changes. There is no recovery if you forget the new password.

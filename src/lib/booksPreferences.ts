@@ -59,42 +59,50 @@ export const KNOWN_BOOK_CATALOGS: BookCatalog[] = [
   },
 ];
 
+export function normalizeBooksPreferences(value: unknown): BooksPreferences {
+  const parsed =
+    value && typeof value === "object" ? (value as Partial<BooksPreferences>) : {};
+  return {
+    audience: isAudience(parsed.audience) ? parsed.audience : "",
+    likedGenres: text(parsed.likedGenres, 300),
+    avoid: text(parsed.avoid, 300),
+    readerNotes: text(parsed.readerNotes, 500),
+    logFinishedBooks: parsed.logFinishedBooks !== false,
+    catalogs: Array.isArray(parsed.catalogs)
+      ? parsed.catalogs
+          .filter(isCatalog)
+          .slice(0, 3)
+          .map((catalog) => {
+            const known = KNOWN_BOOK_CATALOGS.find((item) => item.id === catalog.id);
+            return {
+              id: catalog.id.slice(0, 80),
+              name: catalog.name.slice(0, 80),
+              shortName: (catalog.shortName || known?.shortName || catalog.name)
+                .trim()
+                .slice(0, 16),
+              searchUrl: catalog.searchUrl.slice(0, 500),
+            };
+          })
+      : [],
+  };
+}
+
 export function readBooksPreferences(): BooksPreferences {
   if (typeof window === "undefined") return DEFAULT_BOOKS_PREFERENCES;
   try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(BOOKS_PREFERENCES_KEY) ?? "{}"
-    ) as Partial<BooksPreferences>;
-    return {
-      audience: isAudience(parsed.audience) ? parsed.audience : "",
-      likedGenres: text(parsed.likedGenres, 300),
-      avoid: text(parsed.avoid, 300),
-      readerNotes: text(parsed.readerNotes, 500),
-      logFinishedBooks: parsed.logFinishedBooks !== false,
-      catalogs: Array.isArray(parsed.catalogs)
-        ? parsed.catalogs
-            .filter(isCatalog)
-            .slice(0, 3)
-            .map((catalog) => {
-              const known = KNOWN_BOOK_CATALOGS.find((item) => item.id === catalog.id);
-              return {
-                id: catalog.id.slice(0, 80),
-                name: catalog.name.slice(0, 80),
-                shortName: (catalog.shortName || known?.shortName || catalog.name)
-                  .trim()
-                  .slice(0, 16),
-                searchUrl: catalog.searchUrl.slice(0, 500),
-              };
-            })
-        : [],
-    };
+    return normalizeBooksPreferences(
+      JSON.parse(window.localStorage.getItem(BOOKS_PREFERENCES_KEY) ?? "{}")
+    );
   } catch {
     return DEFAULT_BOOKS_PREFERENCES;
   }
 }
 
+export const BOOKS_PREFERENCES_EVENT = "trader-otto:books-preferences-changed";
+
 export function writeBooksPreferences(preferences: BooksPreferences): void {
   window.localStorage.setItem(BOOKS_PREFERENCES_KEY, JSON.stringify(preferences));
+  window.dispatchEvent(new Event(BOOKS_PREFERENCES_EVENT));
 }
 
 export function catalogSearchUrl(catalog: BookCatalog, title: string, author: string): string {

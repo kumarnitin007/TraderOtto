@@ -52,7 +52,9 @@ export function notificationGroupKey(
         : /:above(?::|$)/.test(item.dedupeKey)
           ? "above"
           : "range"
-      : "";
+      : item.kind === "life_milestone"
+        ? item.dedupeKey.match(/:(90|30|7|1|0)(?::|$)/)?.[1] ?? "milestone"
+        : "";
   return [
     item.kind,
     item.ticker ?? item.groupId ?? "book",
@@ -62,6 +64,9 @@ export function notificationGroupKey(
 }
 
 function combinedTitle(first: SignalDraft, count: number) {
+  if (count > 1 && first.kind === "life_milestone") {
+    return `${count} Life milestones are approaching`;
+  }
   const ticker = first.ticker;
   if (count === 1 || !ticker) return first.title;
   if (first.kind === "position_risk") {

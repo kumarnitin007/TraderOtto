@@ -8,7 +8,6 @@ import {
   Check,
   Copy,
   Download,
-  Import,
   Info,
   Landmark,
   Maximize2,
@@ -33,6 +32,7 @@ import {
   DataTransferButton,
   DataTransferCard,
   DataTransferNotice,
+  DataTransferRow,
 } from "@/components/settings/DataTransferPrimitives";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
 import { useBanks } from "@/hooks/useBanks";
@@ -64,7 +64,12 @@ import {
   type HoldingSort,
   type WorthBuckets,
 } from "@/lib/banks";
-import { readBanksPreferences, writeBanksPreferences, type BanksPreferences } from "@/lib/banksPreferences";
+import {
+  BANKS_PREFERENCES_EVENT,
+  readBanksPreferences,
+  writeBanksPreferences,
+  type BanksPreferences,
+} from "@/lib/banksPreferences";
 import { accountMatchKey, depositMatchKey, ottoSheets, parseBankSheets, planBankImport, type ParsedTransfer } from "@/lib/banksTransfer";
 import { fmtDate } from "@/lib/pnl";
 import {
@@ -152,7 +157,10 @@ export function BanksWorkspace() {
   const entryCurrency = displayCurrency(banks.accounts, banks.deposits, prefs.home);
 
   useEffect(() => {
-    setPrefs(readBanksPreferences());
+    const sync = () => setPrefs(readBanksPreferences());
+    sync();
+    window.addEventListener(BANKS_PREFERENCES_EVENT, sync);
+    return () => window.removeEventListener(BANKS_PREFERENCES_EVENT, sync);
   }, []);
 
   function savePrefs(next: BanksPreferences) {
@@ -1090,12 +1098,7 @@ function BanksSettings({
           )}
         </div>
         <div className="overflow-hidden rounded-2xl bg-otto-surface">
-          <SettingsRow
-            icon={Import}
-            label="Import & export"
-            detail="Workbook or CSV"
-            onClick={() => setTransferOpen(true)}
-          />
+          <DataTransferRow detail="Workbook or CSV" onClick={() => setTransferOpen(true)} />
         </div>
         <DataTransferCard
           icon={Trash2}

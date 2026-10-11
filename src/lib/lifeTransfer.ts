@@ -1,3 +1,4 @@
+import type { Bill } from "@/types/bill";
 import type { LifeItem, LifeList, LifeListItem, LifeTask, LifeTaskCheck } from "@/types/life";
 
 export type LifeExportOptions = {
@@ -5,6 +6,7 @@ export type LifeExportOptions = {
   habits: boolean;
   habitHistory: boolean;
   todos: boolean;
+  bills: boolean;
 };
 
 export const DEFAULT_LIFE_EXPORT_OPTIONS: LifeExportOptions = {
@@ -12,18 +14,19 @@ export const DEFAULT_LIFE_EXPORT_OPTIONS: LifeExportOptions = {
   habits: true,
   habitHistory: true,
   todos: true,
+  bills: true,
 };
 
-export function lifeExportJson(
-  data: {
-    dates: LifeItem[];
-    habits: LifeTask[];
-    checks: LifeTaskCheck[];
-    lists: LifeList[];
-    listItems: LifeListItem[];
-  },
-  options: LifeExportOptions
-): string {
+export type LifeExportData = {
+  dates: LifeItem[];
+  habits: LifeTask[];
+  checks: LifeTaskCheck[];
+  lists: LifeList[];
+  listItems: LifeListItem[];
+  bills: Bill[];
+};
+
+export function lifeExportJson(data: LifeExportData, options: LifeExportOptions): string {
   const payload: Record<string, unknown> = { exportedAt: new Date().toISOString() };
   if (options.dates) {
     payload.dates = data.dates.map((item) => ({
@@ -66,6 +69,19 @@ export function lifeExportJson(
         })),
     }));
   }
+  if (options.bills) {
+    payload.bills = data.bills.map((bill) => ({
+      name: bill.name,
+      amount: bill.amount,
+      dueDay: bill.dueDay,
+      dueDay2: bill.dueDay2,
+      dueMonth: bill.dueMonth,
+      dueSet: bill.dueSet,
+      frequency: bill.frequency,
+      category: bill.category,
+      paidMonth: bill.paidMonth,
+    }));
+  }
   return JSON.stringify(payload, null, 2);
 }
 
@@ -88,23 +104,23 @@ const CSV_HEADERS = [
   "text",
   "done",
   "due_on",
+  "amount",
+  "due_day",
+  "due_day_2",
+  "due_month",
+  "frequency",
+  "paid_month",
+  "due_set",
 ] as const;
 
 /** One spreadsheet: each row is a date, habit, check, or to-do. */
-export function lifeExportCsv(
-  data: {
-    dates: LifeItem[];
-    habits: LifeTask[];
-    checks: LifeTaskCheck[];
-    lists: LifeList[];
-    listItems: LifeListItem[];
-  },
-  options: LifeExportOptions
-): string {
+export function lifeExportCsv(data: LifeExportData, options: LifeExportOptions): string {
   const rows: string[][] = [];
+  const cells = (values: string[]) =>
+    CSV_HEADERS.map((_, index) => values[index] ?? "");
   if (options.dates) {
     for (const item of data.dates) {
-      rows.push([
+      rows.push(cells([
         "date",
         item.name,
         "",
@@ -123,12 +139,12 @@ export function lifeExportCsv(
         "",
         "",
         "",
-      ]);
+      ]));
     }
   }
   if (options.habits) {
     for (const task of data.habits) {
-      rows.push([
+      rows.push(cells([
         "habit",
         task.name,
         "",
@@ -147,13 +163,13 @@ export function lifeExportCsv(
         "",
         "",
         "",
-      ]);
+      ]));
     }
   }
   if (options.habitHistory) {
     const names = new Map(data.habits.map((task) => [task.id, task.name]));
     for (const check of data.checks) {
-      rows.push([
+      rows.push(cells([
         "habit_check",
         names.get(check.taskId) ?? "",
         "",
@@ -172,13 +188,13 @@ export function lifeExportCsv(
         "",
         "",
         "",
-      ]);
+      ]));
     }
   }
   if (options.todos) {
     const lists = new Map(data.lists.map((list) => [list.id, list.name]));
     for (const item of data.listItems) {
-      rows.push([
+      rows.push(cells([
         "todo",
         "",
         lists.get(item.listId) ?? "",
@@ -197,7 +213,38 @@ export function lifeExportCsv(
         item.text,
         item.done ? "true" : "false",
         item.dueOn ?? "",
-      ]);
+      ]));
+    }
+  }
+  if (options.bills) {
+    for (const bill of data.bills) {
+      rows.push(cells([
+        "bill",
+        bill.name,
+        "",
+        bill.category,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        bill.amount == null ? "" : String(bill.amount),
+        String(bill.dueDay),
+        bill.dueDay2 == null ? "" : String(bill.dueDay2),
+        bill.dueMonth == null ? "" : String(bill.dueMonth),
+        bill.frequency,
+        bill.paidMonth ?? "",
+        bill.dueSet ? "true" : "false",
+      ]));
     }
   }
   return [CSV_HEADERS.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\n");

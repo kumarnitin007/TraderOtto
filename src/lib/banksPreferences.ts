@@ -1,6 +1,7 @@
 import type { BankCurrency } from "@/types/bank";
 
 const KEY = "trader-otto:banks-preferences";
+export const BANKS_PREFERENCES_EVENT = "trader-otto:banks-preferences-changed";
 
 export type BanksPreferences = {
   home: BankCurrency;
@@ -28,4 +29,5 @@ export function readBanksPreferences(): BanksPreferences {
 
 export function writeBanksPreferences(next: BanksPreferences) {
   window.localStorage.setItem(KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event(BANKS_PREFERENCES_EVENT));
 }

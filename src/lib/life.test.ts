@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { lifeDaysUntil, lifeOccasionLabel, lifeOnThisDay, parseLeoEvents } from "@/lib/life";
+import {
+  lifeDaysUntil,
+  lifeMilestones,
+  lifeOccasionLabel,
+  lifeOnThisDay,
+  milestoneNotificationThreshold,
+  milestoneSnoozed,
+  parseLeoEvents,
+  snoozeMilestone,
+} from "@/lib/life";
 
 const CSV = `### Tasks ###
 id,name
@@ -73,5 +82,66 @@ describe("life dates", () => {
     };
     expect(lifeOnThisDay([birthday], "2026-09-29").map((item) => item.name)).toEqual(["Kaashvi"]);
     expect(lifeOnThisDay([birthday], "2026-09-28")).toEqual([]);
+  });
+
+  it("lists every milestone in the chosen window in date order", () => {
+    const base = {
+      category: "special" as const,
+      notes: "",
+      year: null,
+      occursOn: null,
+      repeats: "yearly" as const,
+      remindDays: 3,
+      milestone: true,
+      createdAt: "",
+      updatedAt: "",
+    };
+    const items = [
+      { ...base, id: "later", name: "Later", month: 4, day: 15 },
+      { ...base, id: "soon", name: "Soon", month: 2, day: 1 },
+      { ...base, id: "outside", name: "Outside", month: 10, day: 1 },
+    ];
+    expect(
+      lifeMilestones(items, 90, new Date(2026, 0, 1)).map(({ item }) => item.id),
+    ).toEqual(["soon"]);
+    expect(
+      lifeMilestones(items, 365, new Date(2026, 0, 1)).map(({ item }) => item.id),
+    ).toEqual(["soon", "later", "outside"]);
+  });
+
+  it("hides a milestone from Today until the chosen day", () => {
+    const store = new Map<string, string>();
+    const previous = globalThis.window;
+    globalThis.window = {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+      },
+      dispatchEvent: () => true,
+    } as unknown as Window & typeof globalThis;
+    try {
+      const today = new Date(2026, 9, 11);
+      snoozeMilestone("soon", 7, today);
+      expect(milestoneSnoozed("soon", today)).toBe(true);
+      expect(milestoneSnoozed("soon", new Date(2026, 9, 17))).toBe(true);
+      expect(milestoneSnoozed("soon", new Date(2026, 9, 18))).toBe(false);
+      expect(milestoneSnoozed("other", today)).toBe(false);
+    } finally {
+      globalThis.window = previous;
+    }
+  });
+
+  it("uses fixed milestone notification thresholds", () => {
+    expect([91, 90, 30, 7, 1, 0, -1].map(milestoneNotificationThreshold)).toEqual([
+      null,
+      90,
+      30,
+      7,
+      1,
+      0,
+      null,
+    ]);
   });
 });

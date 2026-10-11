@@ -17,6 +17,7 @@ import {
 import { LibraryCheck } from "@/components/books/LibraryCheck";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
 import {
+  SettingsDetailScreen,
   SettingsInfoRow,
   SettingsPageHeader,
   SettingsToggleRow,
@@ -26,6 +27,7 @@ import {
   DataTransferCard,
   DataTransferChip,
   DataTransferNotice,
+  DataTransferRow,
 } from "@/components/settings/DataTransferPrimitives";
 import {
   KNOWN_BOOK_CATALOGS,
@@ -73,6 +75,7 @@ export function BooksSettingsScreen({
   const [renameText, setRenameText] = useState("");
   const [removingShelf, setRemovingShelf] = useState<BookShelf | null>(null);
   const [moveTo, setMoveTo] = useState("want_to_read");
+  const [transferOpen, setTransferOpen] = useState(false);
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
   const jsonRef = useRef<HTMLInputElement>(null);
@@ -507,15 +510,19 @@ export function BooksSettingsScreen({
         onApply={onApplyCleanup}
       />
 
-      <details className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
-          <Download size={18} className="text-otto-text-dim" />
-          <span>
-            <b className="block text-[14px]">Import / export</b>
-            <span className="text-[12px] text-otto-text-dim">{books.length} books</span>
-          </span>
-        </summary>
-        <div className="space-y-3 border-t border-otto-divider bg-otto-bg p-3">
+      <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <DataTransferRow
+          detail={`${books.length} book${books.length === 1 ? "" : "s"}`}
+          onClick={() => setTransferOpen(true)}
+        />
+      </div>
+      {transferOpen && (
+        <SettingsDetailScreen
+          title="Import & export"
+          eyebrow="Books data"
+          onClose={() => setTransferOpen(false)}
+        >
+        <div className="space-y-3">
         <DataTransferCard
           icon={Upload}
           title="Import bookshelf"
@@ -654,7 +661,8 @@ export function BooksSettingsScreen({
         />
         {importError && <p className="px-1 text-[12px] text-otto-red">{importError}</p>}
         </div>
-      </details>
+        </SettingsDetailScreen>
+      )}
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsToggleRow

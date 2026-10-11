@@ -4,7 +4,8 @@ export type NotificationEventKind =
   | "near_max"
   | "expiry_soon"
   | "earnings_soon"
-  | "assignment_cash_high";
+  | "assignment_cash_high"
+  | "life_milestone";
 
 export type NotificationChannel = "browser" | "email" | "discord" | "telegram";
 

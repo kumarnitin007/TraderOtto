@@ -122,6 +122,42 @@ function mapRow(row: TradeRow): Trade {
   };
 }
 
+function rowFromTrade(trade: Trade, userId: string) {
+  const closed = trade.status === "closed";
+  return {
+    id: trade.id,
+    user_id: userId,
+    ticker: trade.ticker.toUpperCase(),
+    strategy: trade.strategy,
+    status: trade.status,
+    contracts: trade.contracts,
+    expiry: trade.expiry,
+    open_date: trade.openDate,
+    close_date: closed ? trade.closeDate : null,
+    premium_open: trade.premiumOpen,
+    premium_close: closed ? trade.premiumClose ?? 0 : null,
+    pnl: closed
+      ? realizedPnl(
+          trade.premiumOpen,
+          trade.premiumClose ?? 0,
+          trade.contracts,
+          trade.strategy,
+          {
+            commissionOpen: trade.commissionOpen,
+            commissionClose: trade.commissionClose,
+          }
+        )
+      : null,
+    details: {
+      ...detailsFromTrade(trade),
+      stockPriceClose: closed ? trade.stockPriceClose : null,
+      commissionClose: closed ? trade.commissionClose ?? 0 : 0,
+      closeReason: closed ? trade.closeReason ?? "closed" : null,
+      rolledToTradeId: trade.rolledToTradeId ?? null,
+    },
+  };
+}
+
 function requireRow(data: unknown, error: { message: string } | null) {
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Supabase returned no trade.");
@@ -554,6 +590,37 @@ export function createSupabaseTradeRepository(
         .select()
         .single();
       return requireRow(data, error);
+    },
+
+    async rollbackImport(change: {
+      createdIds: string[];
+      before: Trade[];
+      removed: Trade[];
+    }): Promise<void> {
+      for (const id of change.createdIds) {
+        const { error } = await supabase
+          .from("tr_trades")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+        if (error) throw new Error(error.message);
+      }
+      for (const trade of change.before) {
+        const row = rowFromTrade(trade, userId);
+        const { id, ...patch } = row;
+        const { error } = await supabase
+          .from("tr_trades")
+          .update(patch)
+          .eq("id", id)
+          .eq("user_id", userId);
+        if (error) throw new Error(error.message);
+      }
+      if (change.removed.length) {
+        const { error } = await supabase
+          .from("tr_trades")
+          .insert(change.removed.map((trade) => rowFromTrade(trade, userId)));
+        if (error) throw new Error(error.message);
+      }
     },
 
     async remove(id: string): Promise<void> {

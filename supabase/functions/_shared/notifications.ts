@@ -7,6 +7,7 @@ const kinds = [
   "expiry_soon",
   "earnings_soon",
   "assignment_cash_high",
+  "life_milestone",
 ];
 
 export function notificationPreferences(value: unknown, email = "") {

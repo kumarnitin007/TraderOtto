@@ -11,6 +11,7 @@ import { NotificationEngine } from "@/hooks/useNotificationEngine";
 import { MarketSessionProvider } from "@/hooks/useMarketSession";
 import { LiveMarketProvider } from "@/hooks/useLiveMarket";
 import { AppShell } from "@/components/nav/AppShell";
+import { AccountPreferencesSync } from "@/components/settings/AccountPreferencesSync";
 
 export function AppFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -27,6 +28,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
               <LiveMarketProvider>
                 <NotificationsProvider>
                   <NotificationEngine />
+                  <AccountPreferencesSync />
                   <AppShell>{children}</AppShell>
                 </NotificationsProvider>
               </LiveMarketProvider>

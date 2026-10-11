@@ -6,8 +6,8 @@ import {
   Download,
   FileUp,
   Upload,
-  X,
 } from "lucide-react";
+import { SettingsDetailScreen } from "@/components/settings/SettingsPrimitives";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import {
   DataTransferButton,
@@ -135,28 +135,9 @@ export function VaultDataTransfer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-otto-bg">
-      <header className="flex shrink-0 items-center justify-between border-b border-otto-divider px-3 py-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-otto-surface"
-          aria-label="Close"
-        >
-          <X size={18} />
-        </button>
-        <b className="text-[15px] font-bold">Import & export</b>
-        <span className="w-9" />
-      </header>
-
-      <div className="mx-auto w-full max-w-[720px] flex-1 overflow-y-auto px-[18px] py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-          Vault data
-        </p>
-        <h1 className="mb-4 text-[24px] font-extrabold">CSV transfer</h1>
-        <p className="mb-5 text-[14px] leading-relaxed text-otto-text-dim">
-          Export a subset of your vault or import items from a vault-format CSV. Journal trade
-          exports are not supported here.
+    <SettingsDetailScreen title="Import & export" eyebrow="Vault data" onClose={onClose}>
+        <p className="mb-4 text-[13px] leading-relaxed text-otto-text-dim">
+          Export a subset of your vault or import items from a vault-format CSV.
         </p>
         <DataTransferNotice tone="warning">
           CSV exports are plaintext and include readable secrets. They are not protected by your
@@ -370,8 +351,7 @@ export function VaultDataTransfer({
             </div>
           )}
         </DataTransferCard>
-      </div>
-    </div>
+    </SettingsDetailScreen>
   );
 }
 

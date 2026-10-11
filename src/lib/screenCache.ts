@@ -5,6 +5,7 @@ import {
   normalizeDefaultSection,
   normalizeEnabledSections,
 } from "@/lib/sectionPreferences";
+import { milestoneWindow, type MilestoneWindow } from "@/lib/life";
 import type { PnlRange } from "@/lib/pnl";
 import type { PositionFocusFilter } from "@/lib/positionFocus";
 import type { TradeScope } from "@/lib/tradeScope";
@@ -34,6 +35,7 @@ export type ScreenOptions = {
   booksFilter: string;
   booksOpenLibraryEnabled: boolean;
   lifeTab: "today" | "dates" | "tasks" | "lists" | "bills" | "settings";
+  lifeMilestoneWindow: MilestoneWindow;
   journalTab: "entries" | "notes" | "add" | "day" | "settings";
   banksTab: "overview" | "holdings" | "activity" | "performance" | "settings";
 };
@@ -59,6 +61,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   booksFilter: "reading",
   booksOpenLibraryEnabled: true,
   lifeTab: "today",
+  lifeMilestoneWindow: 90,
   journalTab: "entries",
   banksTab: "overview",
 };
@@ -181,6 +184,7 @@ export function readScreenOptions(): ScreenOptions {
         parsed.lifeTab === "settings"
           ? parsed.lifeTab
           : "today",
+      lifeMilestoneWindow: milestoneWindow(parsed.lifeMilestoneWindow),
       journalTab:
         parsed.journalTab === "notes" ||
         parsed.journalTab === "add" ||

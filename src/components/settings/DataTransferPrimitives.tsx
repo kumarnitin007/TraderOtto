@@ -1,7 +1,20 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { Import, type LucideIcon } from "lucide-react";
+import { SettingsRow } from "@/components/settings/SettingsPrimitives";
+
+export function DataTransferRow({
+  detail,
+  onClick,
+}: {
+  detail: string;
+  onClick: () => void;
+}) {
+  return (
+    <SettingsRow icon={Import} label="Import & export" detail={detail} onClick={onClick} />
+  );
+}
 
 export function DataTransferCard({
   icon: Icon,

@@ -123,13 +123,13 @@ function OttoPreferencesBody() {
         <SettingsInfoRow
           icon={Cloud}
           label="Saved with your account"
-          detail="Trades, alerts, vault, books, journal, life, and banks"
+          detail="Trades, alerts, vault, books, journal, life, banks, theme, sections, and filters"
         />
         <div className="mx-3.5 border-t border-otto-divider" />
         <SettingsInfoRow
           icon={MonitorSmartphone}
           label="Kept on this device"
-          detail="Theme, visible sections, home, and display filters"
+          detail="The last screen open in each workspace"
         />
       </SettingsGroup>
 

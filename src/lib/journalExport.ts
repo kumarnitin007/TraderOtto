@@ -36,6 +36,7 @@ const HEADERS = [
   "sigma",
   "theta",
   "notes",
+  "import_source",
   "created_at",
   "updated_at",
 ] as const;
@@ -81,6 +82,7 @@ function row(trade: Trade) {
     trade.sigma,
     trade.theta,
     trade.notes,
+    trade.importSource,
     trade.createdAt,
     trade.updatedAt,
   ]

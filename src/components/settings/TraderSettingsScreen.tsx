@@ -1,7 +1,8 @@
 "use client";
 
-import { Bell, Clock3, EyeOff, FileSpreadsheet, ShieldAlert } from "lucide-react";
+import { Bell, Clock3, EyeOff, ShieldAlert } from "lucide-react";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import { DataTransferRow } from "@/components/settings/DataTransferPrimitives";
 import {
   SettingsPageHeader,
   SettingsRow,
@@ -60,12 +61,7 @@ export function TraderSettingsScreen({
           onClick={() => onOpen("timing")}
         />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
-          icon={FileSpreadsheet}
-          label="Import & export trades"
-          detail="CSV"
-          onClick={() => onOpen("data")}
-        />
+        <DataTransferRow detail="Robinhood CSV or journal" onClick={() => onOpen("data")} />
       </div>
 
       <p className="mt-6 text-center text-[12px] leading-relaxed text-otto-text-faint">

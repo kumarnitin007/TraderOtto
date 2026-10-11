@@ -1,18 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Download, Import, Upload } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
 import {
   SettingsDetailScreen,
   SettingsPageHeader,
-  SettingsRow,
 } from "@/components/settings/SettingsPrimitives";
 import {
   DataTransferButton,
   DataTransferCard,
   DataTransferChip,
   DataTransferNotice,
+  DataTransferRow,
 } from "@/components/settings/DataTransferPrimitives";
 import { parseLeoEvents } from "@/lib/life";
 import { parseLeoTasks } from "@/lib/lifeTasks";
@@ -43,6 +43,7 @@ export function LifeSettingsScreen({
     { key: "habits", label: "Habits" },
     { key: "habitHistory", label: "Habit history" },
     { key: "todos", label: "To-dos" },
+    { key: "bills", label: "Bills" },
   ];
   const selected = choices.filter((choice) => exportOptions[choice.key]).length;
 
@@ -56,12 +57,7 @@ export function LifeSettingsScreen({
       <OttoPreferencesEntry />
       </div>
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
-        <SettingsRow
-          icon={Import}
-          label="Import & export"
-          detail="Leo CSV or backup"
-          onClick={() => setTransferOpen(true)}
-        />
+        <DataTransferRow detail="Leo CSV or backup" onClick={() => setTransferOpen(true)} />
       </div>
       {notice && <p className="mt-3 text-[13px] text-otto-text-dim">{notice}</p>}
       <p className="mt-4 text-[13px] text-otto-text-dim">

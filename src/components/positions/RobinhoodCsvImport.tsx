@@ -9,7 +9,13 @@ import {
   LoaderCircle,
   X,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { useTrades } from "@/hooks/useTrades";
+import {
+  importChangeSet,
+  rememberTradeImport,
+  repairPreview,
+} from "@/lib/tradeImportHistory";
 import {
   parseRobinhoodCsv,
   robinhoodCandidateToTradeImport,
@@ -33,6 +39,7 @@ type ReviewItem = {
 };
 
 export function RobinhoodCsvImport() {
+  const { user } = useAuth();
   const { trades, importTrades, readonly } = useTrades();
   const [result, setResult] = useState<RobinhoodParseResult | null>(null);
   const [fileName, setFileName] = useState("");
@@ -124,19 +131,54 @@ export function RobinhoodCsvImport() {
       setError("Sign in to import trades.");
       return;
     }
-    const chosen = items
-      .filter(
-        (item) =>
-          !item.duplicate &&
-          selected.has(item.candidate.sourceFingerprint) &&
-          !saved.has(item.candidate.sourceFingerprint)
-      )
-      .map((item) => item.trade);
+    const chosenItems = items.filter(
+      (item) =>
+        !item.duplicate &&
+        selected.has(item.candidate.sourceFingerprint) &&
+        !saved.has(item.candidate.sourceFingerprint)
+    );
+    const chosen = chosenItems.map((item) => item.trade);
     if (!chosen.length) return;
     setSaving(true);
     setError("");
+    const change = importChangeSet(trades, chosen);
     try {
       const outcomes = await importTrades(chosen);
+      if (user && user.id !== "local-bypass") {
+        const unmatched = [
+          ...(result?.unsupportedRows ?? []).map((row) => ({
+            row: row.rowIndex + 1,
+            code: row.transCode,
+            description: row.description,
+          })),
+          ...items
+            .filter(
+              (item) =>
+                item.candidate.confidence === "needs_review" &&
+                !selected.has(item.candidate.sourceFingerprint)
+            )
+            .flatMap((item) =>
+              item.candidate.rawEventRefs.map((row) => ({
+                row: row.rowIndex + 1,
+                code: row.transCode,
+                description: row.description,
+              }))
+            ),
+        ];
+        rememberTradeImport(user.id, {
+          fileName: fileName || "Robinhood CSV",
+          imported: outcomes.filter((outcome) => outcome.status === "imported").length,
+          updated: outcomes.filter((outcome) => outcome.status === "updated").length,
+          skipped: outcomes.filter((outcome) => outcome.status === "duplicate").length,
+          failed: outcomes.filter((outcome) => outcome.status === "failed").length,
+          unmatched,
+          createdIds: outcomes
+            .filter((outcome) => outcome.status === "imported" && outcome.trade)
+            .map((outcome) => outcome.trade!.id),
+          before: change.before,
+          removed: change.removed,
+        });
+      }
       setSaved((current) => {
         const next = new Map(current);
         outcomes.forEach((outcome) => next.set(outcome.fingerprint, outcome));
@@ -472,8 +514,12 @@ function CandidateDetails({
   outcome?: TradeImportResult;
 }) {
   const candidate = item.candidate;
+  const repair = repairLine(item);
   return (
     <div className="border-t border-otto-divider bg-otto-surface px-3 py-3">
+      {repair && (
+        <p className="mb-3 text-[11.5px] leading-relaxed text-otto-text-dim">{repair}</p>
+      )}
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 desk:grid-cols-4">
         <Detail
           label="Opened"
@@ -565,6 +611,17 @@ function CandidateDetails({
       )}
     </div>
   );
+}
+
+function repairLine(item: ReviewItem) {
+  return repairPreview({
+    openingMissing: item.candidate.openingMissing,
+    candidateStatus: item.candidate.status,
+    match: item.openMatch
+      ? { status: item.openMatch.status, premiumOpen: item.openMatch.premiumOpen }
+      : null,
+    removesExtraClose: Boolean(item.closedCopy),
+  });
 }
 
 function ReviewStat({

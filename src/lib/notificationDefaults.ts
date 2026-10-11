@@ -34,6 +34,10 @@ export const EVENT_LABELS: Record<
     label: "Assignment cash limit",
     description: "Your short-put assignment backup exceeds your limit.",
   },
+  life_milestone: {
+    label: "Life milestones",
+    description: "A milestone reaches 90, 30, 7, 1, or 0 days away.",
+  },
 };
 
 const event = (enabled = true): EventPreference => ({
@@ -72,6 +76,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     expiry_soon: event(),
     earnings_soon: event(),
     assignment_cash_high: event(false),
+    life_milestone: event(),
   },
   discordWebhook: "",
   telegramChatId: "",

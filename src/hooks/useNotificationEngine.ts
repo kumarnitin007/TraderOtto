@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOptionMarks } from "@/hooks/useOptionMarks";
+import { useLife } from "@/hooks/useLife";
 import { useTickerQuotes } from "@/hooks/useLiveQuotes";
 import { useTrades } from "@/hooks/useTrades";
 import { useWatchGroups } from "@/hooks/useWatchGroups";
@@ -10,6 +11,12 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/pnl";
 import { positionAlert } from "@/lib/premiumPace";
 import { committedCapital } from "@/lib/roi";
+import {
+  lifeCountdownLabel,
+  lifeMilestones,
+  lifeOccasionLabel,
+  milestoneNotificationThreshold,
+} from "@/lib/life";
 import {
   combineSimilarAlerts,
   firedWithinCooldown,
@@ -44,6 +51,7 @@ function quietNow(start: string, end: string) {
 
 export function NotificationEngine() {
   const { trades } = useTrades();
+  const { items: lifeDates, loading: lifeLoading } = useLife();
   const { groups } = useWatchGroups();
   const {
     preferences,
@@ -85,7 +93,14 @@ export function NotificationEngine() {
   }, [loading, signals]);
 
   useEffect(() => {
-    if (loading || !initializedRef.current || !preferences.masterEnabled) return;
+    if (
+      loading ||
+      lifeLoading ||
+      !initializedRef.current ||
+      !preferences.masterEnabled
+    ) {
+      return;
+    }
     const drafts: SignalDraft[] = [];
 
     for (const trade of trades.filter((item) => item.status === "open")) {
@@ -210,6 +225,36 @@ export function NotificationEngine() {
       }
     }
 
+    for (const milestone of lifeMilestones(lifeDates, 90)) {
+      const threshold = milestoneNotificationThreshold(milestone.days);
+      if (threshold == null) continue;
+      const occasion = lifeOccasionLabel(milestone.item);
+      drafts.push({
+        kind: "life_milestone",
+        ticker: null,
+        tradeId: null,
+        groupId: null,
+        title:
+          milestone.days === 0
+            ? `${milestone.item.name} is today`
+            : `${milestone.item.name} milestone is approaching`,
+        message: [
+          occasion,
+          lifeCountdownLabel(milestone.days),
+          `Milestone date ${fmtDate(milestone.occursOn)}`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        severity:
+          milestone.days === 0
+            ? "critical"
+            : milestone.days <= 7
+              ? "warning"
+              : "info",
+        dedupeKey: `life_milestone:${milestone.item.id}:${milestone.occursOn}:${threshold}`,
+      });
+    }
+
     const smartDrafts = combineSimilarAlerts(drafts);
     const active = new Set(smartDrafts.map((draft) => draft.dedupeKey));
     for (const oldKey of activeRef.current) {
@@ -277,6 +322,8 @@ export function NotificationEngine() {
     clearCondition,
     fire,
     groups,
+    lifeDates,
+    lifeLoading,
     loading,
     marks,
     preferences,

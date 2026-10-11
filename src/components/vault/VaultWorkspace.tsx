@@ -13,7 +13,10 @@ import { SettingsScreen } from "@/components/vault/SettingsScreen";
 import { TagManager } from "@/components/vault/TagManager";
 import { VaultDataTransfer } from "@/components/vault/VaultDataTransfer";
 import { VaultMigrationPrompt } from "@/components/vault/VaultMigrationPrompt";
-import { VaultSecuritySettings } from "@/components/vault/VaultSecuritySettings";
+import {
+  VaultSecuritySettings,
+  type VaultSecuritySection,
+} from "@/components/vault/VaultSecuritySettings";
 import { VaultUnlockScreen } from "@/components/vault/VaultUnlockScreen";
 import { VaultBottomNav, type VaultTab } from "@/components/vault/VaultBottomNav";
 import { VaultScreen, type VaultFilter } from "@/components/vault/VaultScreen";
@@ -56,7 +59,7 @@ export function VaultWorkspace() {
   const [dataTransfer, setDataTransfer] = useState(false);
   const [recentlyDeleted, setRecentlyDeleted] = useState(false);
   const [healthHiddenUntil, setHealthHiddenUntil] = useState<number | "forever" | null>(null);
-  const [securitySettings, setSecuritySettings] = useState(false);
+  const [securitySettings, setSecuritySettings] = useState<VaultSecuritySection | null>(null);
   const [toast, setToast] = useState("");
   const [dataError, setDataError] = useState("");
   const [recentIds, setRecentIds] = useState<string[]>([]);
@@ -429,7 +432,7 @@ export function VaultWorkspace() {
               clearRecents();
             }
           }}
-          onSecurity={() => setSecuritySettings(true)}
+          onSecurity={setSecuritySettings}
           autoLockMinutes={vault.autoLockMinutes}
         />
       )}
@@ -505,11 +508,12 @@ export function VaultWorkspace() {
       )}
       {securitySettings && (
         <SettingsDetailScreen
-          title="Privacy & security"
-          eyebrow="Vault settings"
-          onClose={() => setSecuritySettings(false)}
+          title={securitySettings === "lock" ? "Auto-lock" : "Change master password"}
+          eyebrow="Vault security"
+          onClose={() => setSecuritySettings(null)}
         >
           <VaultSecuritySettings
+            section={securitySettings}
             autoLockMinutes={vault.autoLockMinutes}
             onAutoLockChange={(minutes) => void vault.updateAutoLock(minutes)}
             onLock={vault.lock}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -19,9 +19,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
+import { JournalDataTransfer } from "@/components/journal/JournalDataTransfer";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
 import {
   SettingsGroup,
+  SettingsInfoRow,
   SettingsPageHeader,
   SettingsToggleRow,
 } from "@/components/settings/SettingsPrimitives";
@@ -38,12 +40,18 @@ import {
 } from "@/lib/journal";
 import { LIFE_CATEGORY_LABEL, lifeOccasionLabel, lifeOnThisDay } from "@/lib/life";
 import {
+  BOOKS_PREFERENCES_EVENT,
   readBooksPreferences,
-  writeBooksPreferences,
   type BooksPreferences,
 } from "@/lib/booksPreferences";
+import {
+  JOURNAL_PREFERENCES_EVENT,
+  readJournalPreferences,
+  writeJournalPreferences,
+  type JournalPrefs,
+} from "@/lib/journalPreferences";
 import { fmtDate, todayISO } from "@/lib/pnl";
-import type { JournalEntry, JournalKind } from "@/types/journal";
+import type { JournalEntry, JournalInput, JournalKind } from "@/types/journal";
 
 type JournalTab = "entries" | "notes" | "add" | "day" | "settings";
 
@@ -55,34 +63,6 @@ const TABS: { id: JournalTab; label: string; icon: LucideIcon }[] = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const PREFS_KEY = "trader-otto:journal-preferences";
-
-type JournalPrefs = {
-  showStreak: boolean;
-  promptOfDay: boolean;
-  suggestTags: boolean;
-};
-
-const DEFAULT_PREFS: JournalPrefs = {
-  showStreak: true,
-  promptOfDay: true,
-  suggestTags: false,
-};
-
-function readPrefs(): JournalPrefs {
-  if (typeof window === "undefined") return DEFAULT_PREFS;
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(PREFS_KEY) ?? "{}") as Partial<JournalPrefs>;
-    return {
-      showStreak: parsed.showStreak !== false,
-      promptOfDay: parsed.promptOfDay !== false,
-      suggestTags: parsed.suggestTags === true,
-    };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
 export function JournalWorkspace() {
   const journal = useJournal();
   const life = useLife();
@@ -90,12 +70,22 @@ export function JournalWorkspace() {
   const [picked, setPicked] = useState<JournalEntry | null>(null);
   const [viewing, setViewing] = useState<JournalEntry | null>(null);
   const [tab, setTab] = useScreenOption("journalTab");
-  const [prefs, setPrefs] = useState<JournalPrefs>(readPrefs);
+  const [prefs, setPrefs] = useState<JournalPrefs>(readJournalPreferences);
   const [booksPrefs, setBooksPrefs] = useState<BooksPreferences>(() =>
     typeof window === "undefined"
       ? { audience: "", likedGenres: "", avoid: "", readerNotes: "", catalogs: [], logFinishedBooks: true }
       : readBooksPreferences()
   );
+  useEffect(() => {
+    const syncJournal = () => setPrefs(readJournalPreferences());
+    const syncBooks = () => setBooksPrefs(readBooksPreferences());
+    window.addEventListener(JOURNAL_PREFERENCES_EVENT, syncJournal);
+    window.addEventListener(BOOKS_PREFERENCES_EVENT, syncBooks);
+    return () => {
+      window.removeEventListener(JOURNAL_PREFERENCES_EVENT, syncJournal);
+      window.removeEventListener(BOOKS_PREFERENCES_EVENT, syncBooks);
+    };
+  }, []);
   const today = todayISO();
   const entries = journal.entries.filter((item) => item.kind === "entry");
   const notes = orderedNotes(journal.entries.filter((item) => item.kind === "note"));
@@ -107,12 +97,7 @@ export function JournalWorkspace() {
 
   function savePrefs(next: JournalPrefs) {
     setPrefs(next);
-    window.localStorage.setItem(PREFS_KEY, JSON.stringify(next));
-  }
-
-  function saveBooks(next: BooksPreferences) {
-    setBooksPrefs(next);
-    writeBooksPreferences(next);
+    writeJournalPreferences(next);
   }
 
   function move(note: JournalEntry, direction: -1 | 1) {
@@ -188,8 +173,12 @@ export function JournalWorkspace() {
         <JournalSettings
           prefs={prefs}
           books={booksPrefs}
+          entries={journal.entries}
+          readonly={journal.readonly}
           onPrefs={savePrefs}
-          onBooks={saveBooks}
+          onImport={async (incoming) => {
+            for (const entry of incoming) await journal.add(entry);
+          }}
         />
       )}
       <nav
@@ -623,23 +612,28 @@ function OnThisDay({
 function JournalSettings({
   prefs,
   books,
+  entries,
+  readonly,
   onPrefs,
-  onBooks,
+  onImport,
 }: {
   prefs: JournalPrefs;
   books: BooksPreferences;
+  entries: JournalEntry[];
+  readonly: boolean;
   onPrefs: (next: JournalPrefs) => void;
-  onBooks: (next: BooksPreferences) => void;
+  onImport: (entries: JournalInput[]) => Promise<void>;
 }) {
   return (
     <section>
       <SettingsPageHeader
         eyebrow="Journal preferences"
-        description="Choose writing aids and connections to other Otto workspaces."
+        description="Choose writing aids, backups, and connections to other Otto workspaces."
       />
       <div className="mt-5">
         <OttoPreferencesEntry />
       </div>
+      <JournalDataTransfer entries={entries} readonly={readonly} onImport={onImport} />
       <SettingsGroup title="Writing" className="mt-5">
         <SettingsToggleRow
           label="Show streak on Entries"
@@ -663,11 +657,10 @@ function JournalSettings({
         />
       </SettingsGroup>
       <SettingsGroup title="From books" className="mt-5">
-        <SettingsToggleRow
+        <SettingsInfoRow
+          icon={BookOpen}
           label="Log finished books"
-          detail="One entry on the finish date, including the review when there is one"
-          checked={books.logFinishedBooks}
-          onChange={(logFinishedBooks) => onBooks({ ...books, logFinishedBooks })}
+          detail={`${books.logFinishedBooks ? "On" : "Off"} · change it in Books settings`}
         />
       </SettingsGroup>
     </section>

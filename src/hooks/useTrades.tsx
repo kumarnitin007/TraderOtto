@@ -37,6 +37,11 @@ type TradesContextValue = {
   closeTrade: (id: string, payload: ClosePayload) => Promise<Trade>;
   deleteTrade: (id: string) => Promise<void>;
   deleteAllTrades: () => Promise<void>;
+  rollbackImport: (change: {
+    createdIds: string[];
+    before: Trade[];
+    removed: Trade[];
+  }) => Promise<void>;
 };
 
 const TradesContext = createContext<TradesContextValue | null>(null);
@@ -134,6 +139,16 @@ export function TradesProvider({ children }: { children: ReactNode }) {
     setTrades([]);
   }, [repository]);
 
+  const rollbackImport = useCallback(async (change: {
+    createdIds: string[];
+    before: Trade[];
+    removed: Trade[];
+  }) => {
+    if (!repository) throw new Error("Sign in to undo an import.");
+    await repository.rollbackImport(change);
+    setTrades(await repository.list());
+  }, [repository]);
+
   const value = useMemo(
     () => ({
       trades,
@@ -147,6 +162,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       closeTrade,
       deleteTrade,
       deleteAllTrades,
+      rollbackImport,
     }),
     [
       trades,
@@ -160,6 +176,7 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       closeTrade,
       deleteTrade,
       deleteAllTrades,
+      rollbackImport,
     ]
   );
 

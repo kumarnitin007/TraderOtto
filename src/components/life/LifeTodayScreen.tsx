@@ -1,14 +1,20 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, CircleCheckBig, Star } from "lucide-react";
 import {
   LIFE_CATEGORY_LABEL,
   lifeCountdownLabel,
   lifeDaysUntil,
+  lifeMilestones,
   lifeOccasionLabel,
+  MILESTONE_SNOOZE_EVENT,
+  MILESTONE_WINDOWS,
+  milestoneSnoozed,
   startOfDay,
+  type MilestoneWindow,
 } from "@/lib/life";
+import { useScreenOption } from "@/hooks/useScreenOption";
 import { dueListItems } from "@/lib/lifeLists";
 import { isoDay, recentDayDots, taskProgress } from "@/lib/lifeTasks";
 import type {
@@ -53,17 +59,26 @@ export function LifeTodayScreen({
   onOpenLists: () => void;
 }) {
   const [day, setDay] = useState(() => startOfDay(new Date()));
+  const [milestoneWindow, setMilestoneWindow] = useScreenOption("lifeMilestoneWindow");
+  const [snoozeTick, setSnoozeTick] = useState(0);
+  useEffect(() => {
+    const refresh = () => setSnoozeTick((current) => current + 1);
+    window.addEventListener(MILESTONE_SNOOZE_EVENT, refresh);
+    return () => window.removeEventListener(MILESTONE_SNOOZE_EVENT, refresh);
+  }, []);
   const now = day;
   const viewingToday = isoDay(day) === isoDay(new Date());
   const dateRows = dates
     .map((item) => ({ item, days: lifeDaysUntil(item, now) }))
     .filter(({ item, days }) => days >= 0 && days <= item.remindDays)
     .sort((left, right) => left.days - right.days || left.item.name.localeCompare(right.item.name));
-  const milestone = dates
-    .filter((item) => item.milestone)
-    .map((item) => ({ item, days: lifeDaysUntil(item, now) }))
-    .filter(({ days }) => days >= 0)
-    .sort((left, right) => left.days - right.days)[0];
+  const milestones = useMemo(
+    () =>
+      lifeMilestones(dates, milestoneWindow, now).filter(
+        ({ item }) => !milestoneSnoozed(item.id, now),
+      ),
+    [dates, milestoneWindow, now, snoozeTick],
+  );
   const dueItems = dueListItems(listItems, now);
   const todayIso = isoDay(now);
   const completedTodosToday = listItems.filter(
@@ -170,28 +185,59 @@ export function LifeTodayScreen({
             </div>
           </section>
 
-          {milestone && (
-            <button
-              type="button"
-              onClick={() => onDate(milestone.item)}
-              className="mb-4 flex w-full items-center gap-3 rounded-2xl bg-otto-surface px-4 py-4 text-left"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-otto-amber-soft text-otto-amber">
-                <Star size={19} className="fill-current" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-                  Next milestone
-                </span>
-                <span className="block truncate text-[16px] font-extrabold">
-                  {milestone.item.name}
-                </span>
-              </span>
-              <span className="shrink-0 text-right text-[16px] font-extrabold">
-                {lifeCountdownLabel(milestone.days)}
-              </span>
-            </button>
-          )}
+          <section className="mb-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[13px] font-extrabold">Milestones</span>
+              <div className="flex rounded-full bg-otto-surface p-1">
+                {MILESTONE_WINDOWS.map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    aria-pressed={milestoneWindow === days}
+                    onClick={() => setMilestoneWindow(days as MilestoneWindow)}
+                    className={`rounded-full px-2.5 py-1 text-[10.5px] font-bold ${
+                      milestoneWindow === days
+                        ? "bg-otto-text text-otto-bg"
+                        : "text-otto-text-dim"
+                    }`}
+                  >
+                    {days === 365 ? "1y" : `${days}d`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-2xl bg-otto-surface">
+              {milestones.length ? (
+                milestones.map(({ item, days }) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onDate(item)}
+                    className="flex w-full items-center gap-3 border-b border-otto-divider px-4 py-3 text-left last:border-b-0"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-otto-amber-soft text-otto-amber">
+                      <Star size={16} className="fill-current" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-extrabold">
+                        {item.name}
+                      </span>
+                      <span className="block truncate text-[12px] text-otto-text-dim">
+                        {[lifeOccasionLabel(item, now), LIFE_CATEGORY_LABEL[item.category]]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-[13px] font-extrabold">
+                      {lifeCountdownLabel(days)}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <EmptyRow text={`No milestones in the next ${milestoneWindow === 365 ? "year" : `${milestoneWindow} days`}`} />
+              )}
+            </div>
+          </section>
 
           <TodaySection title="Dates" count={dateRows.length} onOpen={onOpenDates}>
             {dateRows.length ? (

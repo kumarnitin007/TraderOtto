@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { THEME_CHANGED_EVENT } from "@/lib/accountPreferences";
 
 export type Theme = "dark" | "warm-paper";
 
@@ -45,6 +46,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.cookie = `${COOKIE_KEY}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.documentElement.dataset.theme = next;
     setTheme(next);
+    window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
   }, []);
 
   const value = useMemo(
