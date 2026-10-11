@@ -2,17 +2,19 @@
 
 import {
   Clock3,
-  Heart,
   Import,
   KeyRound,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   Tag,
   Trash2,
 } from "lucide-react";
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
-import { SettingsRow } from "@/components/settings/SettingsPrimitives";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import {
+  SettingsInfoRow,
+  SettingsPageHeader,
+  SettingsRow,
+} from "@/components/settings/SettingsPrimitives";
 
 export function SettingsScreen({
   tagCount,
@@ -37,13 +39,13 @@ export function SettingsScreen({
 }) {
   return (
     <section>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-        Make it yours
-      </p>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
+      <SettingsPageHeader
+        eyebrow="Vault preferences"
+        description="Manage organization, privacy, security, and backups."
+      />
 
       <div className="mt-5">
-        <SectionPreferences />
+        <OttoPreferencesEntry />
       </div>
 
       <div className="overflow-hidden rounded-2xl bg-otto-surface">
@@ -100,9 +102,11 @@ export function SettingsScreen({
       </p>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
-        <SettingsRow icon={Sparkles} label="Suggest an idea" />
-        <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow icon={Heart} label="About Otto Vault" detail="Encrypted sync" />
+        <SettingsInfoRow
+          icon={ShieldCheck}
+          label="Vault encryption"
+          detail="Encrypted before sync"
+        />
       </div>
 
       <p className="mt-6 text-center text-[12px] leading-relaxed text-otto-text-faint">

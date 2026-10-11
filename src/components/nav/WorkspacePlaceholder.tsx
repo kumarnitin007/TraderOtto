@@ -1,6 +1,6 @@
 "use client";
 
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
 import { APP_WORKSPACE_META, type AppWorkspace } from "@/lib/appWorkspace";
 
 export function WorkspacePlaceholder({ workspace }: { workspace: AppWorkspace }) {
@@ -19,7 +19,7 @@ export function WorkspacePlaceholder({ workspace }: { workspace: AppWorkspace })
         </p>
       </div>
       <div className="mt-6 text-left">
-        <SectionPreferences />
+        <OttoPreferencesEntry />
       </div>
     </div>
   );

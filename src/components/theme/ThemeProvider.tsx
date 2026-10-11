@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -15,6 +16,7 @@ const COOKIE_KEY = "trader-otto-theme";
 
 type ThemeContextValue = {
   theme: Theme;
+  setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 };
 
@@ -39,19 +41,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = next;
   }, []);
 
+  const applyTheme = useCallback((next: Theme) => {
+    document.cookie = `${COOKIE_KEY}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.documentElement.dataset.theme = next;
+    setTheme(next);
+  }, []);
+
   const value = useMemo(
     () => ({
       theme,
-      toggleTheme: () => {
-        setTheme((current) => {
-          const next = current === "dark" ? "warm-paper" : "dark";
-          document.cookie = `${COOKIE_KEY}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
-          document.documentElement.dataset.theme = next;
-          return next;
-        });
-      },
+      setTheme: applyTheme,
+      toggleTheme: () => applyTheme(theme === "dark" ? "warm-paper" : "dark"),
     }),
-    [theme]
+    [applyTheme, theme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

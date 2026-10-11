@@ -2,8 +2,12 @@
 
 import { useRef, useState } from "react";
 import { Download, Import, Upload } from "lucide-react";
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
-import { SettingsDetailScreen, SettingsRow } from "@/components/settings/SettingsPrimitives";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import {
+  SettingsDetailScreen,
+  SettingsPageHeader,
+  SettingsRow,
+} from "@/components/settings/SettingsPrimitives";
 import {
   DataTransferButton,
   DataTransferCard,
@@ -44,8 +48,13 @@ export function LifeSettingsScreen({
 
   return (
     <div>
-      <h1 className="mb-3 text-[22px] font-extrabold tracking-[-0.3px]">Settings</h1>
-      <SectionPreferences />
+      <SettingsPageHeader
+        eyebrow="Life preferences"
+        description="Manage dates, habits, to-dos, and Life backups."
+      />
+      <div className="mt-5">
+      <OttoPreferencesEntry />
+      </div>
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <SettingsRow
           icon={Import}

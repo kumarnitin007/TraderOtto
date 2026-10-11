@@ -15,8 +15,12 @@ import {
   UserRound,
 } from "lucide-react";
 import { LibraryCheck } from "@/components/books/LibraryCheck";
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
-import { SettingsRow } from "@/components/settings/SettingsPrimitives";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import {
+  SettingsInfoRow,
+  SettingsPageHeader,
+  SettingsToggleRow,
+} from "@/components/settings/SettingsPrimitives";
 import {
   DataTransferButton,
   DataTransferCard,
@@ -152,12 +156,12 @@ export function BooksSettingsScreen({
 
   return (
     <section>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-        Books preferences
-      </p>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
+      <SettingsPageHeader
+        eyebrow="Books preferences"
+        description="Shape recommendations, organize shelves, and manage library data."
+      />
       <div className="mt-5">
-        <SectionPreferences />
+        <OttoPreferencesEntry />
       </div>
 
       <details className="overflow-hidden rounded-2xl bg-otto-surface">
@@ -653,60 +657,34 @@ export function BooksSettingsScreen({
       </details>
 
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
-        <SettingsRow
+        <SettingsToggleRow
           icon={BookImage}
           label="Open Library covers"
-          detail={openLibraryEnabled ? "On" : "Off"}
-          onClick={() => onOpenLibraryChange(!openLibraryEnabled)}
-          trailing={
-            <span
-              aria-hidden
-              className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${
-                openLibraryEnabled ? "bg-otto-green" : "bg-otto-divider"
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
-                  openLibraryEnabled ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </span>
-          }
+          detail="Download cover images from Open Library"
+          checked={openLibraryEnabled}
+          onChange={onOpenLibraryChange}
         />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
+        <SettingsToggleRow
           icon={NotebookPen}
           label="Log finished books"
-          detail={preferences.logFinishedBooks ? "On" : "Off"}
-          onClick={() =>
+          detail="Create a Journal entry when a book is finished"
+          checked={preferences.logFinishedBooks}
+          onChange={(logFinishedBooks) =>
             onPreferencesChange({
               ...preferences,
-              logFinishedBooks: !preferences.logFinishedBooks,
+              logFinishedBooks,
             })
-          }
-          trailing={
-            <span
-              aria-hidden
-              className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${
-                preferences.logFinishedBooks ? "bg-otto-green" : "bg-otto-divider"
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
-                  preferences.logFinishedBooks ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </span>
           }
         />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
+        <SettingsInfoRow
           icon={Sparkles}
           label="AI recommendations"
           detail="On request only"
         />
         <div className="mx-3.5 border-t border-otto-divider" />
-        <SettingsRow
+        <SettingsInfoRow
           icon={ShieldCheck}
           label="Library privacy"
           detail="Private to your account"

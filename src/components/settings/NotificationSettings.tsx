@@ -7,6 +7,7 @@ import { useWatchGroups } from "@/hooks/useWatchGroups";
 import { getSupabaseClient } from "@/lib/supabase";
 import { EVENT_LABELS } from "@/lib/notificationDefaults";
 import { TelegramSetup } from "@/components/settings/TelegramSetup";
+import { SettingsSwitch } from "@/components/settings/SettingsPrimitives";
 import type {
   NotificationChannel,
   NotificationEventKind,
@@ -178,7 +179,7 @@ export function NotificationSettings({
               Master switch for every channel
             </span>
           </span>
-          <Switch
+          <SettingsSwitch
             checked={preferences.masterEnabled}
             label="Enable all notifications"
             onChange={(checked) =>
@@ -232,7 +233,7 @@ export function NotificationSettings({
                 : "Off. Alert types stay hidden until you turn it on."}
             </span>
           </span>
-          <Switch
+          <SettingsSwitch
             checked={preferences.channels[selectedChannel]}
             label={`${preferences.channels[selectedChannel] ? "Turn off" : "Turn on"} ${selectedChannel}`}
             onChange={(checked) =>
@@ -274,7 +275,7 @@ export function NotificationSettings({
                             {EVENT_LABELS[kind].description}
                           </div>
                         </div>
-                        <Switch
+                        <SettingsSwitch
                           checked={checked}
                           label={`${checked ? "Disable" : "Enable"} ${EVENT_LABELS[kind].label} for ${selectedChannel}`}
                           onChange={(next) => setEventChannel(kind, selectedChannel, next)}
@@ -706,35 +707,6 @@ function ChannelConfiguration({
     >
       <TelegramSetup preferences={preferences} save={save} notice={setNotice} />
     </Channel>
-  );
-}
-
-function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-        checked ? "bg-otto-green" : "bg-otto-divider"
-      }`}
-    >
-      <span
-        className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-          checked ? "translate-x-5" : "translate-x-0"
-        }`}
-      />
-    </button>
   );
 }
 

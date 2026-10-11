@@ -1,8 +1,11 @@
 "use client";
 
 import { Bell, Clock3, EyeOff, FileSpreadsheet, ShieldAlert } from "lucide-react";
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
-import { SettingsRow } from "@/components/settings/SettingsPrimitives";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import {
+  SettingsPageHeader,
+  SettingsRow,
+} from "@/components/settings/SettingsPrimitives";
 import type { TraderSettingsSection } from "@/components/settings/NotificationSettings";
 import { useNotifications } from "@/hooks/useNotifications";
 
@@ -17,16 +20,13 @@ export function TraderSettingsScreen({
 
   return (
     <section className="mx-auto w-full max-w-[760px]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-otto-text-faint">
-        Trader preferences
-      </p>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
-      <p className="mt-0.5 text-[13px] text-otto-text-dim">
-        Tune alerts, timing, and position risk in focused sections.
-      </p>
+      <SettingsPageHeader
+        eyebrow="Trader preferences"
+        description="Tune alerts, timing, position risk, and trade data."
+      />
 
       <div className="mt-5">
-        <SectionPreferences />
+        <OttoPreferencesEntry />
       </div>
 
       <div className="overflow-hidden rounded-2xl bg-otto-surface">

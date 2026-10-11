@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
+import { SettingsDetailScreen } from "@/components/settings/SettingsPrimitives";
 import { ItemEditor } from "@/components/vault/ItemEditor";
 import { ItemSheet } from "@/components/vault/ItemSheet";
 import { PasswordGenerator } from "@/components/vault/PasswordGenerator";
@@ -503,14 +504,11 @@ export function VaultWorkspace() {
         />
       )}
       {securitySettings && (
-        <div className="fixed inset-0 z-40 overflow-y-auto bg-otto-bg">
-          <button
-            type="button"
-            onClick={() => setSecuritySettings(false)}
-            className="sticky left-3 top-3 z-10 rounded-full bg-otto-surface px-3 py-2 text-[13px] font-semibold"
-          >
-            Close
-          </button>
+        <SettingsDetailScreen
+          title="Privacy & security"
+          eyebrow="Vault settings"
+          onClose={() => setSecuritySettings(false)}
+        >
           <VaultSecuritySettings
             autoLockMinutes={vault.autoLockMinutes}
             onAutoLockChange={(minutes) => void vault.updateAutoLock(minutes)}
@@ -523,7 +521,7 @@ export function VaultWorkspace() {
             busy={vault.busy}
             error={vault.error}
           />
-        </div>
+        </SettingsDetailScreen>
       )}
       {toast && (
         <div className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-otto-surface px-4 py-2 text-[13px] font-semibold shadow-lg desk:bottom-8">

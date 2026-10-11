@@ -23,8 +23,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { BanksActivity, BanksPerformance } from "@/components/banks/BanksInsights";
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
-import { SettingsDetailScreen, SettingsRow } from "@/components/settings/SettingsPrimitives";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import {
+  SettingsDetailScreen,
+  SettingsPageHeader,
+  SettingsRow,
+} from "@/components/settings/SettingsPrimitives";
 import {
   DataTransferButton,
   DataTransferCard,
@@ -994,13 +998,17 @@ function BanksSettings({
   const [preview, setPreview] = useState<ParsedTransfer | null>(null);
   const [transferNote, setTransferNote] = useState("");
   const [clearNote, setClearNote] = useState("");
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   return (
     <section>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Settings</h1>
-      <div className="mt-4">
-        <SectionPreferences />
+      <SettingsPageHeader
+        eyebrow="Banks preferences"
+        description="Choose display currency, transfer data, and manage saved accounts."
+      />
+      <div className="mt-5">
+        <OttoPreferencesEntry />
       </div>
       <div className="mt-3 space-y-3">
         <div className="rounded-2xl bg-otto-surface p-4">
@@ -1094,23 +1102,42 @@ function BanksSettings({
           title="Delete all bank data"
           description="Removes every account, deposit, and saved balance change. Use this to clear a test import and start again."
         >
-          <button
-            type="button"
+          <DataTransferButton
+            variant={confirmingClear ? "danger" : "secondary"}
             disabled={busy || readonly || (accounts.length === 0 && deposits.length === 0)}
             onClick={() => {
-              if (!window.confirm("Delete all bank accounts, deposits, and balance history?")) return;
+              if (!confirmingClear) {
+                setConfirmingClear(true);
+                setClearNote("");
+                return;
+              }
               setBusy(true);
               setClearNote("");
               void onClear()
-                .then(() => setClearNote("All bank data was deleted."))
+                .then(() => {
+                  setClearNote("All bank data was deleted.");
+                  setConfirmingClear(false);
+                })
                 .catch((cause) => setClearNote(cause instanceof Error ? cause.message : "Could not delete bank data."))
                 .finally(() => setBusy(false));
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-otto-red-soft px-4 py-2.5 text-xs font-bold text-otto-red disabled:opacity-40"
           >
             <Trash2 size={14} />
-            {busy ? "Deleting…" : "Delete everything"}
-          </button>
+            {busy
+              ? "Deleting bank data…"
+              : confirmingClear
+                ? `Delete ${accounts.length} accounts and ${deposits.length} deposits now`
+                : "Delete all bank data"}
+          </DataTransferButton>
+          {confirmingClear && (
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(false)}
+              className="mt-2 w-full py-2 text-xs font-semibold text-otto-text-faint"
+            >
+              Cancel
+            </button>
+          )}
         </DataTransferCard>
         {clearNote && <p className="text-[13px] text-otto-text-dim">{clearNote}</p>}
       </div>

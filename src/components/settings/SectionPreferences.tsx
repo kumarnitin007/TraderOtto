@@ -1,12 +1,11 @@
 "use client";
 
-import { ChevronDown, LayoutGrid } from "lucide-react";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { APP_WORKSPACE_META, APP_WORKSPACES, type AppWorkspace } from "@/lib/appWorkspace";
 import { updateScreenOptions } from "@/lib/screenCache";
 import { withSectionToggled } from "@/lib/sectionPreferences";
 
-export function SectionPreferences() {
+export function SectionPreferenceEditor() {
   const [enabledSections] = useScreenOption("enabledSections");
   const [defaultSection] = useScreenOption("defaultSection");
   const [workspace] = useScreenOption("appWorkspace");
@@ -22,27 +21,11 @@ export function SectionPreferences() {
     updateScreenOptions({ defaultSection: id });
   }
 
-  const home = APP_WORKSPACE_META[defaultSection];
-
   return (
-    <details className="group mb-5 overflow-hidden rounded-2xl bg-otto-surface">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3">
-        <LayoutGrid size={18} className="shrink-0 text-otto-text-dim" />
-        <span className="min-w-0 flex-1">
-          <b className="block text-[14px]">Sections</b>
-          <span className="block text-[12px] text-otto-text-dim">
-            {enabledSections.length} visible · {home.label} opens after sign-in
-          </span>
-        </span>
-        <ChevronDown
-          size={17}
-          className="shrink-0 text-otto-text-faint transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <div className="border-t border-otto-divider">
-        <p className="px-3.5 pb-1 pt-3 text-[12px] leading-relaxed text-otto-text-dim">
-          Turn a section off to hide it. Home is the one that opens after you sign in.
-        </p>
+    <div className="overflow-hidden rounded-2xl bg-otto-surface">
+      <p className="px-3.5 pb-1 pt-3 text-[12px] leading-relaxed text-otto-text-dim">
+        Turn a section off to hide it. Home is the one that opens after you sign in.
+      </p>
         {APP_WORKSPACES.map((id, index) => {
           const item = APP_WORKSPACE_META[id];
           const Icon = item.icon;
@@ -84,7 +67,6 @@ export function SectionPreferences() {
             </div>
           );
         })}
-      </div>
-    </details>
+    </div>
   );
 }

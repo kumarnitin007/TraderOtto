@@ -19,7 +19,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ActionSheet, SheetAction } from "@/components/ui/ActionSheet";
-import { SectionPreferences } from "@/components/settings/SectionPreferences";
+import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
+import {
+  SettingsGroup,
+  SettingsPageHeader,
+  SettingsToggleRow,
+} from "@/components/settings/SettingsPrimitives";
 import { useJournal } from "@/hooks/useJournal";
 import { useLife } from "@/hooks/useLife";
 import { useScreenOption } from "@/hooks/useScreenOption";
@@ -628,32 +633,37 @@ function JournalSettings({
 }) {
   return (
     <section>
-      <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">Journal settings</h1>
-      <div className="mt-4">
-        <SectionPreferences />
+      <SettingsPageHeader
+        eyebrow="Journal preferences"
+        description="Choose writing aids and connections to other Otto workspaces."
+      />
+      <div className="mt-5">
+        <OttoPreferencesEntry />
       </div>
-      <SettingsGroup title="Writing">
-        <ToggleRow
+      <SettingsGroup title="Writing" className="mt-5">
+        <SettingsToggleRow
           label="Show streak on Entries"
           detail="Counts days with a journal entry"
           checked={prefs.showStreak}
           onChange={(showStreak) => onPrefs({ ...prefs, showStreak })}
         />
-        <ToggleRow
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsToggleRow
           label="Prompt of the day"
           detail="A short question above a new entry"
           checked={prefs.promptOfDay}
           onChange={(promptOfDay) => onPrefs({ ...prefs, promptOfDay })}
         />
-        <ToggleRow
+        <div className="mx-3.5 border-t border-otto-divider" />
+        <SettingsToggleRow
           label="Suggest tags"
           detail="Offer tags you have used before"
           checked={prefs.suggestTags}
           onChange={(suggestTags) => onPrefs({ ...prefs, suggestTags })}
         />
       </SettingsGroup>
-      <SettingsGroup title="From books">
-        <ToggleRow
+      <SettingsGroup title="From books" className="mt-5">
+        <SettingsToggleRow
           label="Log finished books"
           detail="One entry on the finish date, including the review when there is one"
           checked={books.logFinishedBooks}
@@ -661,43 +671,6 @@ function JournalSettings({
         />
       </SettingsGroup>
     </section>
-  );
-}
-
-function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mt-5">
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-otto-text-faint">{title}</p>
-      <div className="space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  detail,
-  checked,
-  onChange,
-}: {
-  label: string;
-  detail: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center gap-3 rounded-2xl bg-otto-surface px-4 py-3 text-left"
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block text-[14px] font-bold">{label}</span>
-        <span className="mt-0.5 block text-[11.5px] text-otto-text-faint">{detail}</span>
-      </span>
-      <span className={`relative h-7 w-12 shrink-0 rounded-full ${checked ? "bg-otto-green" : "bg-otto-divider"}`}>
-        <span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
-      </span>
-    </button>
   );
 }
 
