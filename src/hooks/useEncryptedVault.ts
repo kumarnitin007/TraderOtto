@@ -59,6 +59,7 @@ export function useEncryptedVault() {
   const settingsRef = useRef<Record<string, unknown>>({});
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const lastActivityRef = useRef(Date.now());
 
   const clearTimer = useCallback(() => {
     if (lockTimerRef.current) {
@@ -86,9 +87,15 @@ export function useEncryptedVault() {
   const scheduleLock = useCallback(() => {
     clearTimer();
     if (!sessionRef.current) return;
+    const timeoutMs = autoLockMinutes * 60_000;
+    const remainingMs = timeoutMs - (Date.now() - lastActivityRef.current);
+    if (remainingMs <= 0) {
+      lock();
+      return;
+    }
     lockTimerRef.current = setTimeout(
       () => lock(),
-      autoLockMinutes * 60_000
+      remainingMs
     );
   }, [autoLockMinutes, clearTimer, lock]);
 
@@ -167,7 +174,10 @@ export function useEncryptedVault() {
 
   useEffect(() => {
     if (status !== "unlocked") return;
-    const activity = () => scheduleLock();
+    const activity = () => {
+      lastActivityRef.current = Date.now();
+      scheduleLock();
+    };
     const events: (keyof WindowEventMap)[] = [
       "pointerdown",
       "keydown",
@@ -177,7 +187,7 @@ export function useEncryptedVault() {
       window.addEventListener(event, activity, { passive: true })
     );
     const visibility = () => {
-      if (document.visibilityState === "hidden") lock();
+      if (document.visibilityState === "visible") scheduleLock();
     };
     document.addEventListener("visibilitychange", visibility);
     scheduleLock();
@@ -197,6 +207,7 @@ export function useEncryptedVault() {
       }
       sessionRef.current?.destroy();
       sessionRef.current = session;
+      lastActivityRef.current = Date.now();
       setRepository(
         createSupabaseVaultRepository(
           supabase,
@@ -307,6 +318,7 @@ export function useEncryptedVault() {
     async (minutes: number) => {
       const safe = safeAutoLock(minutes);
       setAutoLockMinutesState(safe);
+      lastActivityRef.current = Date.now();
       setError("");
       try {
         await updateSettings({ autoLockMinutes: safe });

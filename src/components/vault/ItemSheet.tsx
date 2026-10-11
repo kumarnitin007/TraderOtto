@@ -77,6 +77,7 @@ export function ItemSheet({
     "actions"
   );
   const [show, setShow] = useState(false);
+  const [showUsername, setShowUsername] = useState(false);
   const [history, setHistory] = useState<VaultHistoryEntry[]>([]);
   const meta = kindMeta(item.kind);
   const Icon = meta.icon;
@@ -150,6 +151,7 @@ export function ItemSheet({
                 label="Username & password"
                 onClick={() => {
                   setShow(false);
+                  setShowUsername(false);
                   setView("credentials");
                 }}
               />
@@ -196,11 +198,15 @@ export function ItemSheet({
               <Field label="Name" value={item.name} />
               <Field
                 label={meta.detailLabel}
-                value={show ? item.username || "—" : "••••••••••••••"}
+                value={showUsername ? item.username || "—" : "••••••••••••••"}
                 action={
                   <>
-                    <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide credentials" : "Show credentials"}>
-                      {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                    <button
+                      type="button"
+                      onClick={() => setShowUsername(!showUsername)}
+                      aria-label={showUsername ? `Hide ${meta.detailLabel}` : `Show ${meta.detailLabel}`}
+                    >
+                      {showUsername ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                     {item.username && (
                       <button type="button" onClick={() => onCopy(item.username!, "Username copied")} aria-label="Copy username">
@@ -215,7 +221,11 @@ export function ItemSheet({
                 value={show ? item.password || "—" : "••••••••••••••"}
                 action={
                   <>
-                    <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide credentials" : "Show credentials"}>
+                    <button
+                      type="button"
+                      onClick={() => setShow(!show)}
+                      aria-label={show ? `Hide ${meta.secretLabel ?? "password"}` : `Show ${meta.secretLabel ?? "password"}`}
+                    >
                       {show ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                     {item.password && (

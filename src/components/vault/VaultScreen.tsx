@@ -12,7 +12,7 @@ import {
   Tag,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { VaultRow } from "@/components/vault/VaultRow";
 import type { VaultItem, VaultKind, VaultTag } from "@/lib/vaultRepository";
 import type { VaultSecuritySnapshot } from "@/lib/vaultSecurity";
@@ -26,6 +26,21 @@ import { orderByRecent } from "@/lib/vaultRecents";
 
 export type VaultFilter = "all" | VaultKind | "favorites" | "recent";
 type ItemSort = "updated" | "name-asc" | "name-desc" | "category" | "favorites";
+const PAGE_SIZES = [10, 20, 50, 100, null] as const;
+type VaultPageSize = (typeof PAGE_SIZES)[number];
+const PAGE_SIZE_KEY = "trader-otto:vault-page-size";
+
+function readPageSize(): VaultPageSize {
+  if (typeof window === "undefined") return 50;
+  try {
+    const raw = window.localStorage.getItem(PAGE_SIZE_KEY);
+    if (raw === "none") return null;
+    const parsed = Number(raw);
+    return parsed === 10 || parsed === 20 || parsed === 50 || parsed === 100 ? parsed : 50;
+  } catch {
+    return 50;
+  }
+}
 
 export function VaultScreen({
   items,
@@ -71,6 +86,8 @@ export function VaultScreen({
   const [sortOpen, setSortOpen] = useState(false);
   const [itemSort, setItemSort] = useState<ItemSort>("updated");
   const [tagSort, setTagSort] = useState<VaultTagSort>("name-asc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<VaultPageSize>(readPageSize);
   const activeTag = tags.find((tag) => tag.id === tagFilter);
   const showTagGrid = browsingTags && !activeTag;
   const sortedItems = useMemo(() => {
@@ -95,6 +112,34 @@ export function VaultScreen({
     () => sortVaultTags(tags, allItems, tagSort),
     [tags, tagSort, allItems]
   );
+  const pageCount =
+    pageSize == null ? 1 : Math.max(1, Math.ceil(sortedItems.length / pageSize));
+  const pageItems =
+    pageSize == null
+      ? sortedItems
+      : sortedItems.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, itemSort, query, tagFilter]);
+
+  useEffect(() => {
+    if (filter === "recent") setPage(1);
+  }, [filter, recentIds]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
+
+  function choosePageSize(size: VaultPageSize) {
+    setPageSize(size);
+    setPage(1);
+    try {
+      window.localStorage.setItem(PAGE_SIZE_KEY, size == null ? "none" : String(size));
+    } catch {
+      // The list still uses the chosen size for this visit.
+    }
+  }
 
   function toggleTags() {
     if (browsingTags || activeTag) {
@@ -342,7 +387,7 @@ export function VaultScreen({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {sortedItems.map((item) => (
+          {pageItems.map((item) => (
             <VaultRow
               key={item.id}
               item={item}
@@ -368,6 +413,50 @@ export function VaultScreen({
                 </p>
               </div>
             ))}
+          {sortedItems.length > 0 && (
+            <div className="mt-3 rounded-xl border border-otto-divider bg-otto-surface px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  disabled={page === 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-otto-text-dim disabled:opacity-35"
+                >
+                  Previous
+                </button>
+                <span className="text-center text-[11.5px] font-medium text-otto-text-dim">
+                  {pageSize == null
+                    ? `All ${sortedItems.length}`
+                    : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, sortedItems.length)} of ${sortedItems.length}`}
+                </span>
+                <button
+                  type="button"
+                  disabled={page === pageCount}
+                  onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                  className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-otto-text-dim disabled:opacity-35"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="mt-2 flex justify-center gap-1">
+                {PAGE_SIZES.map((size) => (
+                  <button
+                    key={size ?? "none"}
+                    type="button"
+                    aria-pressed={pageSize === size}
+                    onClick={() => choosePageSize(size)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                      pageSize === size
+                        ? "bg-otto-text text-otto-bg"
+                        : "text-otto-text-dim"
+                    }`}
+                  >
+                    {size ?? "None"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>

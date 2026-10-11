@@ -139,9 +139,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {trading && <PnlOverview compact />}
           </header>
           <div className="px-[18px] pt-3.5">
-            {workspace === "vault" ? (
+            <div className={workspace === "vault" ? undefined : "hidden"}>
               <VaultWorkspace />
-            ) : workspace === "books" ? (
+            </div>
+            {workspace !== "vault" && (workspace === "books" ? (
               <BooksWorkspace />
             ) : workspace === "life" ? (
               <LifeWorkspace />
@@ -169,7 +170,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
             {children}
             </>
-            )}
+            ))}
           </div>
         </main>
       </div>
