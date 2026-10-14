@@ -38,6 +38,7 @@ export type ScreenOptions = {
   lifeMilestoneWindow: MilestoneWindow;
   journalTab: "entries" | "notes" | "add" | "day" | "settings";
   banksTab: "overview" | "holdings" | "activity" | "performance" | "settings";
+  screensTab: string;
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -64,6 +65,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   lifeMilestoneWindow: 90,
   journalTab: "entries",
   banksTab: "overview",
+  screensTab: "overview",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -193,6 +195,10 @@ export function readScreenOptions(): ScreenOptions {
           ? parsed.journalTab
           : "entries",
       banksTab: readBanksTab(decoded.banksTab),
+      screensTab:
+        typeof parsed.screensTab === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(parsed.screensTab)
+          ? parsed.screensTab
+          : "overview",
     };
     if (!options.enabledSections.includes(options.appWorkspace)) {
       options.appWorkspace = options.defaultSection;

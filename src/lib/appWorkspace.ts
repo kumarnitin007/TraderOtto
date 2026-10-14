@@ -1,5 +1,13 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, CalendarHeart, KeyRound, Landmark, LineChart, NotebookPen } from "lucide-react";
+import {
+  BookOpen,
+  CalendarHeart,
+  Grid2X2,
+  KeyRound,
+  Landmark,
+  LineChart,
+  NotebookPen,
+} from "lucide-react";
 
 export const APP_WORKSPACES = [
   "trader",
@@ -8,6 +16,7 @@ export const APP_WORKSPACES = [
   "journal",
   "life",
   "banks",
+  "screens",
 ] as const;
 
 export type AppWorkspace = (typeof APP_WORKSPACES)[number];
@@ -63,6 +72,13 @@ export const APP_WORKSPACE_META: Record<AppWorkspace, AppWorkspaceMeta> = {
     tagline: "Accounts and deposits",
     icon: Landmark,
   },
+  screens: {
+    id: "screens",
+    label: "User Screens",
+    product: "User Screens",
+    tagline: "Build your own trackers",
+    icon: Grid2X2,
+  },
 };
 
 export function isAppWorkspace(value: unknown): value is AppWorkspace {
@@ -72,6 +88,7 @@ export function isAppWorkspace(value: unknown): value is AppWorkspace {
     value === "books" ||
     value === "journal" ||
     value === "life" ||
-    value === "banks"
+    value === "banks" ||
+    value === "screens"
   );
 }

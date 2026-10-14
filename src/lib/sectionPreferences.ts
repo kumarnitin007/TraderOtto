@@ -3,6 +3,10 @@ import { APP_WORKSPACES, isAppWorkspace, type AppWorkspace } from "@/lib/appWork
 export function normalizeEnabledSections(value: unknown): AppWorkspace[] {
   if (!Array.isArray(value)) return [...APP_WORKSPACES];
   const enabled = APP_WORKSPACES.filter((id) => value.includes(id));
+  const legacyAll = ["trader", "vault", "books", "journal", "life", "banks"];
+  if (legacyAll.every((id) => value.includes(id)) && !enabled.includes("screens")) {
+    enabled.push("screens");
+  }
   return enabled.length > 0 ? enabled : [...APP_WORKSPACES];
 }
 

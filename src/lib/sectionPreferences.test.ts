@@ -14,6 +14,7 @@ describe("section preferences", () => {
       "journal",
       "life",
       "banks",
+      "screens",
     ]);
   });
 
@@ -26,6 +27,7 @@ describe("section preferences", () => {
       "journal",
       "life",
       "banks",
+      "screens",
     ]);
   });
 

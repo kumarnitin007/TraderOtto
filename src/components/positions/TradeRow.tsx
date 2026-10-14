@@ -119,10 +119,6 @@ export function TradeRow({
           sameTickerOpenTrades,
         }).score
       : null;
-  const entryLabel =
-    t.longStrike != null && t.shortStrike != null && t.strategy !== "Iron Condor"
-      ? `${t.ticker} ${t.shortStrike}/${t.longStrike}`
-      : t.ticker;
 
   const avatarBg = tickerAvatarColor(t.ticker);
 
@@ -161,7 +157,7 @@ export function TradeRow({
               className="shrink-0 text-[15px] font-bold underline decoration-transparent underline-offset-4 hover:decoration-current"
               title={`Open ${t.ticker} market details`}
             >
-              {entryLabel}
+              {t.ticker}
             </span>
             {pace && (
               <PaceBadge
@@ -183,7 +179,7 @@ export function TradeRow({
               }`}
             >
               {strategyLabel}
-              {riskScore != null ? ` · risk ${riskScore}` : ""}
+              {riskScore != null ? ` · R-${riskScore}` : ""}
             </span>
             {earningsCross && earningsDate && (
               <span
