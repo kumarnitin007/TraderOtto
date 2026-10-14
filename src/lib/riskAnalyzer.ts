@@ -31,6 +31,17 @@ function daysBetween(from: string, to: string) {
   );
 }
 
+/** ITM distance is negative. Being through the short strike outranks a close OTM cushion. */
+function strikeDistancePoints(distance: number) {
+  if (distance <= -10) return 48;
+  if (distance < -5) return 42;
+  if (distance < 0) return 34;
+  if (distance <= 2) return 18;
+  if (distance <= 5) return 12;
+  if (distance <= 10) return 6;
+  return 0;
+}
+
 function spreadWidth(trade: Trade) {
   const put =
     trade.shortStrike != null && trade.longStrike != null
@@ -105,13 +116,13 @@ export function analyzeTradeRisk(
 
   const distance = shortStrikeDistancePct(trade, options.spot);
   if (distance != null) {
-    const points = distance <= 2 ? 28 : distance <= 5 ? 20 : distance <= 10 ? 10 : 0;
+    const points = strikeDistancePoints(distance);
     add({
       id: "strike-distance",
       label: distance < 0 ? "Short strike is in the money" : "Distance to short strike",
       detail: `${Math.abs(distance).toFixed(1)}% ${distance < 0 ? "ITM" : "OTM"} at the latest stock price.`,
       points,
-      level: points >= 20 ? "high" : points >= 10 ? "medium" : "good",
+      level: points >= 34 ? "high" : points >= 12 ? "medium" : "good",
     });
   }
 

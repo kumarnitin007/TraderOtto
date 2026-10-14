@@ -47,6 +47,33 @@ describe("risk analyzer", () => {
     expect(report.capitalAtRisk).toBe(840);
   });
 
+  it("scores an in-the-money short strike above a close out-of-the-money strike", () => {
+    const intel = analyzeTradeRisk(
+      trade({
+        ticker: "INTC",
+        expiry: "2026-10-16",
+        shortStrike: 110,
+        longStrike: 100,
+        premiumOpen: 1,
+      }),
+      { today: "2026-10-13", spot: 102.85 }
+    );
+    const gld = analyzeTradeRisk(
+      trade({
+        ticker: "GLD",
+        expiry: "2026-10-30",
+        shortStrike: 375,
+        longStrike: 355,
+        premiumOpen: 1,
+      }),
+      { today: "2026-10-13", spot: 382.5, sameTickerOpenTrades: 2 }
+    );
+
+    expect(intel.factors.find((factor) => factor.id === "strike-distance")?.points).toBe(42);
+    expect(gld.factors.find((factor) => factor.id === "strike-distance")?.points).toBe(18);
+    expect(intel.score).toBeGreaterThan(gld.score);
+  });
+
   it("keeps a longer defined-risk trade low when no event overlaps", () => {
     const report = analyzeTradeRisk(
       trade({ expiry: "2027-01-15", shortStrike: 300, longStrike: 290 }),

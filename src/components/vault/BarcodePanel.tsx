@@ -3,52 +3,74 @@
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { useEffect, useRef, useState } from "react";
+import { vaultBarcodeFormat, type VaultBarcodeFormat } from "@/lib/vaultRepository";
 import { wifiQrPayload } from "@/lib/wifiQr";
 
 type BarcodeChoice = {
-  format: string;
+  format: VaultBarcodeFormat;
   label: string;
-  note?: string;
   accepts: (value: string) => boolean;
 };
 
 const CHOICES: BarcodeChoice[] = [
-  {
-    format: "CODE128",
-    label: "Code 128",
-    note: "Closest to the library card. Try this one first.",
-    accepts: () => true,
-  },
-  {
-    format: "CODABAR",
-    label: "Codabar",
-    note: "The other format many library scanners accept.",
-    accepts: (value) => /^[0-9\-$:/.+]+$/.test(value),
-  },
+  { format: "CODE128", label: "Code 128", accepts: () => true },
+  { format: "CODABAR", label: "Codabar", accepts: (value) => /^[0-9\-$:/.+]+$/.test(value) },
   {
     format: "CODE39",
     label: "Code 39",
     accepts: (value) => /^[0-9A-Z .\-$/+%]+$/.test(value),
   },
-  { format: "MSI", label: "MSI", accepts: (value) => /^\d+$/.test(value) },
-  { format: "EAN13", label: "EAN-13", accepts: (value) => /^\d{12,13}$/.test(value) },
-  { format: "UPC", label: "UPC-A", accepts: (value) => /^\d{11,12}$/.test(value) },
-  { format: "ITF14", label: "ITF-14", accepts: (value) => /^\d{13,14}$/.test(value) },
+  { format: "QR", label: "QR code", accepts: () => true },
 ];
 
-export function BarcodePanel({ value }: { value: string }) {
-  const choices = CHOICES.filter((choice) => choice.accepts(value));
+export function barcodeChoices(value: string) {
+  return CHOICES.filter((choice) => choice.accepts(value));
+}
+
+export function BarcodePanel({
+  value,
+  format,
+  onFormat,
+}: {
+  value: string;
+  format?: VaultBarcodeFormat;
+  onFormat?: (format: VaultBarcodeFormat) => void;
+}) {
+  const choices = barcodeChoices(value);
+  const [selected, setSelected] = useState<VaultBarcodeFormat>(() => vaultBarcodeFormat(format));
+  useEffect(() => {
+    setSelected(vaultBarcodeFormat(format));
+  }, [format]);
+  const active = choices.some((choice) => choice.format === selected) ? selected : "CODE128";
+  const choice = choices.find((item) => item.format === active) ?? choices[0];
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-2">
-      <p className="mb-3 text-[12px] leading-relaxed text-otto-text-dim">
-        Generated on this device from the username. The QR code holds that same value, not the password.
-      </p>
-      <div className="space-y-3">
-        <QrCard title="QR code" value={value} />
-        {choices.map((choice) => (
-          <BarcodeCard key={choice.format} value={value} choice={choice} />
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {choices.map((item) => (
+          <button
+            key={item.format}
+            type="button"
+            aria-pressed={item.format === choice.format}
+            onClick={() => {
+              setSelected(item.format);
+              onFormat?.(item.format);
+            }}
+            className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${
+              item.format === choice.format
+                ? "bg-otto-text text-otto-bg"
+                : "bg-otto-surface text-otto-text-dim"
+            }`}
+          >
+            {item.label}
+          </button>
         ))}
       </div>
+      {choice.format === "QR" ? (
+        <QrCard title="QR code" value={value} />
+      ) : (
+        <BarcodeCard value={value} choice={choice} />
+      )}
     </div>
   );
 }
@@ -95,7 +117,13 @@ function QrCard({ title, value }: { title: string; value: string }) {
   );
 }
 
-function BarcodeCard({ value, choice }: { value: string; choice: BarcodeChoice }) {
+function BarcodeCard({
+  value,
+  choice,
+}: {
+  value: string;
+  choice: Exclude<BarcodeChoice, { format: "QR" }>;
+}) {
   const svg = useRef<SVGSVGElement>(null);
   const [valid, setValid] = useState(true);
 
@@ -122,7 +150,6 @@ function BarcodeCard({ value, choice }: { value: string; choice: BarcodeChoice }
   return (
     <section className="rounded-2xl bg-white p-3 text-black">
       <h3 className="text-center text-[13px] font-bold">{choice.label}</h3>
-      {choice.note && <p className="mt-1 text-center text-[11px] text-neutral-600">{choice.note}</p>}
       <div className="mt-2 overflow-x-auto">
         <svg ref={svg} className="mx-auto h-auto w-full" aria-label={`${choice.label} barcode`} />
       </div>

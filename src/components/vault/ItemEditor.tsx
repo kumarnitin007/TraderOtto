@@ -10,8 +10,15 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { barcodeChoices } from "@/components/vault/BarcodePanel";
 import { kindGroups, kindMeta } from "@/lib/vaultItemTypes";
-import type { VaultItem, VaultKind, VaultTag } from "@/lib/vaultRepository";
+import {
+  vaultBarcodeFormat,
+  type VaultBarcodeFormat,
+  type VaultItem,
+  type VaultKind,
+  type VaultTag,
+} from "@/lib/vaultRepository";
 
 export function ItemEditor({
   item,
@@ -36,6 +43,9 @@ export function ItemEditor({
   const [tagQuery, setTagQuery] = useState("");
   const [show, setShow] = useState(false);
   const [barcodeEnabled, setBarcodeEnabled] = useState(item?.barcodeEnabled ?? false);
+  const [barcodeFormat, setBarcodeFormat] = useState<VaultBarcodeFormat>(
+    vaultBarcodeFormat(item?.barcodeFormat)
+  );
 
   const meta = kindMeta(kind);
   const KindIcon = meta.icon;
@@ -57,6 +67,7 @@ export function ItemEditor({
       website: website.trim() || undefined,
       note: note.trim() || undefined,
       barcodeEnabled: barcodeEnabled && Boolean(username.trim()),
+      barcodeFormat: barcodeEnabled ? barcodeFormat : undefined,
       tags: selectedTags,
       favorite: item?.favorite ?? false,
       color: item && item.kind === kind ? item.color : meta.color,
@@ -204,23 +215,44 @@ export function ItemEditor({
               </label>
             )}
 
-            <label className="flex items-start gap-3 rounded-xl bg-otto-surface p-3">
-              <input
-                type="checkbox"
-                checked={barcodeEnabled}
-                disabled={!username.trim()}
-                onChange={(event) => setBarcodeEnabled(event.target.checked)}
-                className="mt-0.5 h-4 w-4"
-              />
-              <span>
-                <span className="block text-[13px] font-semibold">Enable barcode</span>
-                <span className="mt-0.5 block text-[11.5px] leading-relaxed text-otto-text-dim">
-                  {kind === "wifi"
-                    ? "Adds barcodes for the network name, plus a Wi-Fi QR code that includes the password."
-                    : "Adds barcodes and a QR code generated on this device from the username."}
+            <div className="rounded-xl bg-otto-surface p-3">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={barcodeEnabled}
+                  disabled={!username.trim()}
+                  onChange={(event) => setBarcodeEnabled(event.target.checked)}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-[13px] font-semibold">Enable barcode</span>
+                  <span className="mt-0.5 block text-[11.5px] leading-relaxed text-otto-text-dim">
+                    {kind === "wifi"
+                      ? "Adds a code for the network name. The Wi-Fi QR still includes the password."
+                      : "Adds one code generated on this device from the username."}
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              {barcodeEnabled && username.trim() && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {barcodeChoices(username.trim()).map((choice) => (
+                    <button
+                      key={choice.format}
+                      type="button"
+                      aria-pressed={barcodeFormat === choice.format}
+                      onClick={() => setBarcodeFormat(choice.format)}
+                      className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${
+                        barcodeFormat === choice.format
+                          ? "bg-otto-text text-otto-bg"
+                          : "text-otto-text-dim"
+                      }`}
+                    >
+                      {choice.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-otto-text-dim">

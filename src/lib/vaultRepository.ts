@@ -1,3 +1,10 @@
+export const VAULT_BARCODE_FORMATS = ["CODE128", "CODABAR", "CODE39", "QR"] as const;
+export type VaultBarcodeFormat = (typeof VAULT_BARCODE_FORMATS)[number];
+
+export function vaultBarcodeFormat(value: unknown): VaultBarcodeFormat {
+  return value === "CODABAR" || value === "CODE39" || value === "QR" ? value : "CODE128";
+}
+
 export type VaultKind =
   | "login"
   | "note"
@@ -33,6 +40,7 @@ export interface VaultItem {
   updatedAt: string;
   customFields?: Record<string, string>;
   barcodeEnabled?: boolean;
+  barcodeFormat?: VaultBarcodeFormat;
   deletedAt?: string;
 }
 

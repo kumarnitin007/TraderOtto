@@ -18,6 +18,8 @@ import {
   lifeCountdownLabel,
   lifeDateInput,
   lifeDaysUntil,
+  milestoneHideDaysLeft,
+  milestoneHideLabel,
   snoozeMilestone,
   lifeIdentityKey,
   lifeOccasionLabel,
@@ -382,6 +384,7 @@ export function LifeWorkspace() {
             <div className="overflow-hidden rounded-2xl bg-otto-surface">
               {group.rows.map(({ item, days }) => {
                 const occasion = lifeOccasionLabel(item);
+                const hiddenDays = milestoneHideDaysLeft(item.id);
                 return (
                   <button
                     key={item.id}
@@ -403,6 +406,11 @@ export function LifeWorkspace() {
                       <span className="block truncate text-[12px] text-otto-text-dim">
                         {[occasion, LIFE_CATEGORY_LABEL[item.category]].filter(Boolean).join(" · ")}
                       </span>
+                      {hiddenDays != null && (
+                        <span className="mt-0.5 block truncate text-[12px] font-semibold text-otto-amber">
+                          {milestoneHideLabel(hiddenDays)}
+                        </span>
+                      )}
                     </span>
                     <span className={`shrink-0 text-right font-extrabold ${item.milestone ? "text-[15px]" : "text-[13px]"}`}>
                       {lifeCountdownLabel(days)}

@@ -26,7 +26,7 @@ import { RealizedPnlPreview } from "@/components/ui/RealizedPnlPreview";
 import { PaceBadge } from "@/components/positions/PaceBadge";
 import { crossesEarnings } from "@/lib/earningsCache";
 import { assignmentCapital } from "@/lib/roi";
-import { tradeSourceLabel } from "@/lib/tradeImportHistory";
+import { analyzeTradeRisk } from "@/lib/riskAnalyzer";
 import { AI_TRADE_DRAFT_KEY } from "@/lib/aiTradeDraft";
 import type { PositionRiskThresholds } from "@/types/notification";
 
@@ -45,6 +45,7 @@ export function TradeRow({
   riskThresholds,
   earningsDate = null,
   earningsTiming = null,
+  sameTickerOpenTrades = 1,
 }: {
   t: Trade;
   open: boolean;
@@ -60,6 +61,7 @@ export function TradeRow({
   riskThresholds: PositionRiskThresholds;
   earningsDate?: string | null;
   earningsTiming?: string | null;
+  sameTickerOpenTrades?: number;
 }) {
   const router = useRouter();
   const pnl = tradePnl(t);
@@ -103,6 +105,24 @@ export function TradeRow({
       : t.longStrike
         ? `${t.shortStrike} / ${t.longStrike}`
         : `${t.shortStrike}`;
+  const strategyLabel =
+    t.strategy === "Put Credit Spread"
+      ? "PCS"
+      : t.strategy === "Call Credit Spread"
+        ? "CCS"
+        : t.strategy;
+  const riskScore =
+    t.status === "open"
+      ? analyzeTradeRisk(t, {
+          spot: live?.price,
+          earningsDate,
+          sameTickerOpenTrades,
+        }).score
+      : null;
+  const entryLabel =
+    t.longStrike != null && t.shortStrike != null && t.strategy !== "Iron Condor"
+      ? `${t.ticker} ${t.shortStrike}/${t.longStrike}`
+      : t.ticker;
 
   const avatarBg = tickerAvatarColor(t.ticker);
 
@@ -141,7 +161,7 @@ export function TradeRow({
               className="shrink-0 text-[15px] font-bold underline decoration-transparent underline-offset-4 hover:decoration-current"
               title={`Open ${t.ticker} market details`}
             >
-              {t.ticker}
+              {entryLabel}
             </span>
             {pace && (
               <PaceBadge
@@ -151,8 +171,19 @@ export function TradeRow({
                 }`}
               />
             )}
-            <span className="truncate text-xs text-otto-text-faint">
-              {t.strategy} · {tradeSourceLabel(t)}
+            <span
+              className={`truncate text-xs font-semibold ${
+                riskScore == null
+                  ? "text-otto-text-faint"
+                  : riskScore >= 70
+                    ? "text-otto-red"
+                    : riskScore >= 45
+                      ? "text-otto-amber"
+                      : "text-otto-text-faint"
+              }`}
+            >
+              {strategyLabel}
+              {riskScore != null ? ` · risk ${riskScore}` : ""}
             </span>
             {earningsCross && earningsDate && (
               <span
@@ -189,13 +220,14 @@ export function TradeRow({
                   </div>
                   <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-otto-text-faint">
                     <span className="desk:hidden">
-                      ${currentMark!.toFixed(2)} now
+                      {live?.price != null && <>${live.price.toFixed(2)} · </>}
                       {riskDistance != null && (
-                        <> · <RiskDistance distance={riskDistance} thresholds={riskThresholds} /></>
+                        <RiskDistance distance={riskDistance} thresholds={riskThresholds} />
                       )}
                     </span>
                     <span className="hidden desk:inline">
-                      ${currentMark!.toFixed(2)} current · ${Math.abs(t.premiumOpen).toFixed(2)} open
+                      {live?.price != null && <>${live.price.toFixed(2)} stock · </>}
+                      ${Math.abs(t.premiumOpen).toFixed(2)} open
                       {riskDistance != null && (
                         <> · <RiskDistance distance={riskDistance} thresholds={riskThresholds} /></>
                       )}

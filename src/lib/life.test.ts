@@ -5,6 +5,8 @@ import {
   lifeOccasionLabel,
   lifeOnThisDay,
   milestoneNotificationThreshold,
+  milestoneHideDaysLeft,
+  milestoneHideLabel,
   milestoneSnoozed,
   parseLeoEvents,
   snoozeMilestone,
@@ -125,8 +127,12 @@ describe("life dates", () => {
       const today = new Date(2026, 9, 11);
       snoozeMilestone("soon", 7, today);
       expect(milestoneSnoozed("soon", today)).toBe(true);
-      expect(milestoneSnoozed("soon", new Date(2026, 9, 17))).toBe(true);
+      expect(milestoneHideDaysLeft("soon", today)).toBe(7);
+      expect(milestoneHideLabel(7)).toBe("Hidden from Today for 7 more days");
+      expect(milestoneHideDaysLeft("soon", new Date(2026, 9, 17))).toBe(1);
+      expect(milestoneHideLabel(1)).toBe("Hidden from Today for 1 more day");
       expect(milestoneSnoozed("soon", new Date(2026, 9, 18))).toBe(false);
+      expect(milestoneHideDaysLeft("soon", new Date(2026, 9, 18))).toBeNull();
       expect(milestoneSnoozed("other", today)).toBe(false);
     } finally {
       globalThis.window = previous;

@@ -36,6 +36,7 @@ type ItemPayload = {
   note?: string;
   customFields?: Record<string, string>;
   barcodeEnabled?: boolean;
+  barcodeFormat?: VaultItem["barcodeFormat"];
 };
 
 type ItemRow = {
@@ -135,6 +136,7 @@ function payloadFromItem(item: VaultItem): ItemPayload {
     note: item.note,
     customFields: item.customFields,
     barcodeEnabled: item.barcodeEnabled,
+    barcodeFormat: item.barcodeFormat,
   };
 }
 
@@ -226,6 +228,7 @@ function rowToItem(
     note: payload.note,
     customFields: payload.customFields,
     barcodeEnabled: payload.barcodeEnabled,
+    barcodeFormat: payload.barcodeFormat,
     tags: tagIds,
     favorite: row.favorite,
     color: row.color ?? "",

@@ -135,6 +135,7 @@ type ParsedOptionRow = {
   expiry: string;
   right: OptionRight;
   strike: number;
+  closingSide: "short" | "long" | null;
 };
 
 type LegOpenSlice = {
@@ -181,6 +182,7 @@ type CloseSlice = {
   description: string;
   strike: number;
   closeReason: CloseReason;
+  closingSide: "short" | "long" | null;
 };
 
 let nextPositionId = 1;
@@ -362,6 +364,7 @@ function parseOptionRows(records: string[][]): {
     const description = record[iDescription] ?? "";
     const instrument = (record[iInstrument] ?? "").trim();
     const contracts = parseQuantity(record[iQty] ?? "");
+    const quantity = (record[iQty] ?? "").trim();
     const price = parsePrice(record[iPrice] ?? "");
     const amount = parseMoney(record[iAmount] ?? "");
 
@@ -409,6 +412,16 @@ function parseOptionRows(records: string[][]): {
       expiry: parsed.expiry,
       right: parsed.right,
       strike: parsed.strike,
+      closingSide:
+        transCode === "BTC"
+          ? "short"
+          : transCode === "STC"
+            ? "long"
+            : transCode === "OEXP" || transCode === "OASGN" || transCode === "OEXCS"
+              ? /S$/i.test(quantity)
+                ? "long"
+                : "short"
+              : null,
     });
   }
 
@@ -793,6 +806,7 @@ function matchCloseToPositions(
   const key = legKey(ticker, expiry, right, close.strike);
   return positions.filter((p) => {
     if (p.remaining <= 0) return false;
+    if (p.bundle.openDate > close.activityDate) return false;
     return positionLegKeys(p.bundle).includes(key);
   });
 }
@@ -1058,7 +1072,7 @@ function emitOrphanClose(candidates: RobinhoodTradeCandidate[], leg: PendingClos
   );
 }
 
-/** Pair leftover BTC/STC legs into a vertical when the opening fills are not in this file. */
+/** Pair leftover close or expiration legs when the opening fills are not in this file. */
 function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeCandidate[]) {
   const groups = new Map<string, PendingCloseLeg[]>();
   for (const leg of legs) {
@@ -1069,9 +1083,9 @@ function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeC
   }
 
   for (const group of groups.values()) {
-    const btcs = group.filter((leg) => leg.transCode === "BTC");
-    const stcs = group.filter((leg) => leg.transCode === "STC");
-    const other = group.filter((leg) => leg.transCode !== "BTC" && leg.transCode !== "STC");
+    const btcs = group.filter((leg) => leg.closingSide === "short");
+    const stcs = group.filter((leg) => leg.closingSide === "long");
+    const other = group.filter((leg) => leg.closingSide == null);
     for (const leg of other) emitOrphanClose(candidates, leg);
     if (!btcs.length || !stcs.length) {
       for (const leg of [...btcs, ...stcs]) emitOrphanClose(candidates, leg);
@@ -1111,9 +1125,7 @@ function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeC
       : unique;
 
     if (!matching || matching === "ambiguous") {
-      for (const leg of group) {
-        if (leg.transCode === "BTC" || leg.transCode === "STC") emitOrphanClose(candidates, leg);
-      }
+      for (const leg of group) emitOrphanClose(candidates, leg);
       continue;
     }
 
@@ -1132,7 +1144,7 @@ function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeC
           {
             code: "close_without_open",
             message:
-              "Closing fills have no opening fills in this file. A matching open trade will be closed.",
+              "Closing activity has no opening activity in this file. A matching open trade will be closed.",
             severity: "warning",
           },
           ...(pairedByFileOrder
@@ -1172,7 +1184,7 @@ function pairUnpairedCloses(legs: PendingCloseLeg[], candidates: RobinhoodTradeC
         netSpreadPremium(edge.strategy, shortPx, longPx),
         commissionFromFill(shortPx, take, shortLeg.amount) +
           commissionFromFill(longPx, take, longLeg.amount),
-        "closed",
+        closeReasonForCode(shortLeg.transCode),
         [shortLeg, longLeg].map((leg) => ({
           rowIndex: leg.rowIndex,
           activityDate: leg.activityDate,
@@ -1404,6 +1416,7 @@ function reconstructTrades(
       ticker: row.ticker,
       expiry: row.expiry,
       right: row.right,
+      closingSide: row.closingSide,
     };
     const list = pendingByDay.get(row.activityDate) ?? [];
     list.push(slice);

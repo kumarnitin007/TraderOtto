@@ -20,6 +20,7 @@ import { SheetAction } from "@/components/ui/ActionSheet";
 import { BarcodePanel, WifiQrPanel } from "@/components/vault/BarcodePanel";
 import { kindMeta } from "@/lib/vaultItemTypes";
 import {
+  type VaultBarcodeFormat,
   type VaultHistoryEntry,
   type VaultItem,
   type VaultRepository,
@@ -63,6 +64,7 @@ export function ItemSheet({
   onEdit,
   onDelete,
   onFavorite,
+  onBarcodeFormat,
 }: {
   item: VaultItem;
   tags: VaultTag[];
@@ -72,6 +74,7 @@ export function ItemSheet({
   onEdit: () => void;
   onDelete: () => void;
   onFavorite: () => void;
+  onBarcodeFormat: (format: VaultBarcodeFormat) => void;
 }) {
   const [view, setView] = useState<"actions" | "credentials" | "barcodes" | "wifi" | "details">(
     "actions"
@@ -241,7 +244,11 @@ export function ItemSheet({
           </>
         ) : view === "barcodes" && item.username ? (
           <>
-            <BarcodePanel value={item.username} />
+            <BarcodePanel
+              value={item.username}
+              format={item.barcodeFormat}
+              onFormat={onBarcodeFormat}
+            />
             <FocusedFooter onBack={() => setView("actions")} />
           </>
         ) : view === "wifi" && item.username ? (
@@ -410,6 +417,7 @@ function formatHistoryField(field: string): string {
   if (field === "customFields") return "additional fields";
   if (field === "deletedAt") return "deletion status";
   if (field === "barcodeEnabled") return "barcode setting";
+  if (field === "barcodeFormat") return "barcode type";
   return field.replace(/([A-Z])/g, " $1").toLowerCase();
 }
 

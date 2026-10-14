@@ -181,4 +181,80 @@ describe("robinhood csv spreads", () => {
       "tight",
     ]);
   });
+
+  it("reconstructs a spread expiration from a later file", () => {
+    const parsed = parseRobinhoodCsv(
+      [
+        "Activity Date,Process Date,Settle Date,Instrument,Description,Trans Code,Quantity,Price,Amount",
+        "9/25/2026,9/25/2026,9/28/2026,COST,COST 9/25/2026 Put $900.00,OEXP,1,,",
+        "9/25/2026,9/25/2026,9/28/2026,COST,COST 9/25/2026 Put $895.00,OEXP,1S,,",
+      ].join("\n")
+    );
+
+    expect(parsed.candidates).toHaveLength(1);
+    expect(parsed.candidates[0]).toMatchObject({
+      ticker: "COST",
+      strategy: "Put Credit Spread",
+      status: "closed",
+      shortStrike: 900,
+      longStrike: 895,
+      closeDate: "2026-09-25",
+      premiumClose: 0,
+      closeReason: "expired",
+      openingMissing: true,
+    });
+
+    const existing = openTrade({
+      id: "cost",
+      ticker: "COST",
+      expiry: "2026-09-25",
+      openDate: "2026-08-28",
+      shortStrike: 900,
+      longStrike: 895,
+    });
+    const imported = parsed.candidates.map(robinhoodCandidateToTradeImport);
+    expect(matchOpenTradesForClose([existing], imported)[0]?.id).toBe("cost");
+  });
+
+  it("does not attach a close to a spread opened later", () => {
+    const parsed = parseRobinhoodCsv(
+      [
+        "Activity Date,Process Date,Settle Date,Instrument,Description,Trans Code,Quantity,Price,Amount",
+        "10/9/2026,10/9/2026,10/13/2026,GOOG,GOOG 10/16/2026 Put $305.00,STC,1,$0.07,$6.95",
+        "10/9/2026,10/9/2026,10/13/2026,GOOG,GOOG 10/16/2026 Put $325.00,BTC,1,$0.29,($29.04)",
+        "10/8/2026,10/8/2026,10/9/2026,GOOG,GOOG 10/16/2026 Put $305.00,BTO,1,$0.15,($15.04)",
+        "10/8/2026,10/8/2026,10/9/2026,GOOG,GOOG 10/16/2026 Put $325.00,STO,1,$0.85,$84.94",
+        "9/30/2026,9/30/2026,10/1/2026,GOOG,GOOG 10/16/2026 Put $305.00,STC,1,$0.46,$45.94",
+        "9/30/2026,9/30/2026,10/1/2026,GOOG,GOOG 10/16/2026 Put $325.00,BTC,1,$2.02,($202.04)",
+      ].join("\n")
+    );
+
+    expect(
+      parsed.candidates.map((candidate) => ({
+        status: candidate.status,
+        openDate: candidate.openDate,
+        closeDate: candidate.closeDate,
+        shortStrike: candidate.shortStrike,
+        longStrike: candidate.longStrike,
+        openingMissing: Boolean(candidate.openingMissing),
+      }))
+    ).toEqual([
+      {
+        status: "closed",
+        openDate: "2026-09-30",
+        closeDate: "2026-09-30",
+        shortStrike: 325,
+        longStrike: 305,
+        openingMissing: true,
+      },
+      {
+        status: "closed",
+        openDate: "2026-10-08",
+        closeDate: "2026-10-09",
+        shortStrike: 325,
+        longStrike: 305,
+        openingMissing: false,
+      },
+    ]);
+  });
 });

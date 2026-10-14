@@ -273,6 +273,9 @@ export function PositionsView() {
                 riskThresholds={preferences.positionRiskThresholds}
                 earningsDate={earningsByTicker[t.ticker.toUpperCase()]?.earningsDate}
                 earningsTiming={earningsByTicker[t.ticker.toUpperCase()]?.earningsTiming}
+                sameTickerOpenTrades={
+                  openWithFocus.filter((item) => item.trade.ticker === t.ticker).length
+                }
               />
             ))}
           </div>

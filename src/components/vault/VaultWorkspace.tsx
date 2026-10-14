@@ -23,6 +23,8 @@ import { VaultScreen, type VaultFilter } from "@/components/vault/VaultScreen";
 import { tagPalette } from "@/lib/vaultItemTypes";
 import {
   saveVaultItems,
+  vaultBarcodeFormat,
+  type VaultBarcodeFormat,
   type VaultItem,
   type VaultTag,
 } from "@/lib/vaultRepository";
@@ -180,6 +182,23 @@ export function VaultWorkspace() {
     setEditor(null);
     setSelected(null);
     setToast("Saved locally");
+  }
+
+  async function saveBarcodeFormat(format: VaultBarcodeFormat) {
+    if (!repository || !selected) return;
+    const saved = {
+      ...selected,
+      barcodeFormat: vaultBarcodeFormat(format),
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      await repository.save(saved);
+    } catch {
+      setDataError("The barcode type could not be saved.");
+      return;
+    }
+    setItems((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+    setSelected(saved);
   }
 
   async function removeItem(id: string) {
@@ -468,6 +487,7 @@ export function VaultWorkspace() {
           }}
           onDelete={() => void removeItem(selected.id)}
           onFavorite={() => void saveItem({ ...selected, favorite: !selected.favorite })}
+          onBarcodeFormat={(format) => void saveBarcodeFormat(format)}
         />
       )}
       {editor && (

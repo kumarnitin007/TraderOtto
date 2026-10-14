@@ -96,8 +96,21 @@ export function snoozeMilestone(id: string, days: number, today = new Date()) {
 }
 
 export function milestoneSnoozed(id: string, today = new Date()) {
+  return milestoneHideDaysLeft(id, today) != null;
+}
+
+/** Days until a hidden milestone returns to Today. The hide ends on that morning. */
+export function milestoneHideDaysLeft(id: string, today = new Date()) {
   const until = readMilestoneSnooze()[id];
-  return Boolean(until && localIso(startOfDay(today)) < until);
+  if (!until || localIso(startOfDay(today)) >= until) return null;
+  const [year, month, day] = until.split("-").map(Number);
+  return daysBetween(startOfDay(today), new Date(year, month - 1, day));
+}
+
+export function milestoneHideLabel(daysLeft: number) {
+  return daysLeft === 1
+    ? "Hidden from Today for 1 more day"
+    : `Hidden from Today for ${daysLeft} more days`;
 }
 
 function readMilestoneSnooze() {
