@@ -3,6 +3,7 @@ import type {
   UserScreenColumn,
   UserScreenRow,
   UserScreenRowData,
+  UserScreenSummary,
 } from "@/types/userScreens";
 
 export type AutoResult = { v: number } | { err: string };
@@ -65,16 +66,12 @@ export function evalAuto(
 }
 
 export function evalRow(
-  list: Pick<UserScreen, "columns" | "summary">,
+  list: Pick<UserScreen, "columns">,
   row: UserScreenRowData,
   today = new Date(),
 ): RowEvaluation {
   const vals: Record<string, AutoResult> = {};
   let err: string | null = null;
-  if (list.summary) {
-    const by = column(list, list.summary.by);
-    if (by && !String(row[by.id] ?? "").trim()) err = `Add ${by.label}`;
-  }
   for (const col of list.columns) {
     if (col.type !== "auto") continue;
     const result = evalAuto(list, row, col, today);
@@ -91,24 +88,26 @@ export type UserScreenTotals = {
 };
 
 export function groupTotals(
-  list: Pick<UserScreen, "columns" | "summary">,
+  list: Pick<UserScreen, "columns" | "summaries">,
   rows: Pick<UserScreenRow, "data">[],
   today = new Date(),
+  summary: UserScreenSummary | undefined = list.summaries[0],
 ): UserScreenTotals {
   const totals = new Map<string, { label: string; value: number }>();
   let skipped = 0;
   let counted = 0;
-  if (!list.summary) return { totals, skipped, counted: rows.length };
-  const sum = column(list, list.summary.sum);
-  if (!sum) return { totals, skipped: rows.length, counted: 0 };
+  if (!summary) return { totals, skipped, counted: rows.length };
+  const by = column(list, summary.by);
+  const sum = column(list, summary.sum);
+  if (!by || !sum) return { totals, skipped: rows.length, counted: 0 };
 
   for (const row of rows) {
     const evaluation = evalRow(list, row.data, today);
-    if (evaluation.err) {
+    const label = String(row.data[by.id] ?? "").trim();
+    if (evaluation.err || !label) {
       skipped += 1;
       continue;
     }
-    const label = String(row.data[list.summary.by] ?? "").trim();
     const key = label.toLocaleLowerCase();
     const result = sum.type === "auto" ? evaluation.vals[sum.id] : null;
     const value =
@@ -125,23 +124,109 @@ export function groupTotals(
   return { totals, skipped, counted };
 }
 
+export type ScreenSummaryView = {
+  by: string;
+  sum: string;
+  byLabel: string;
+  sumLabel: string;
+  totals: { label: string; value: number }[];
+  skipped: number;
+  counted: number;
+  total: number;
+};
+
 export function userScreenAnalytics(
-  list: Pick<UserScreen, "columns" | "summary">,
+  list: Pick<UserScreen, "columns" | "summaries">,
   rows: UserScreenRow[],
   today = new Date(),
 ) {
-  const summary = groupTotals(list, rows, today);
-  const values = [...summary.totals.values()];
-  const total = values.reduce((sum, item) => sum + item.value, 0);
-  const largest = values.slice().sort((a, b) => b.value - a.value)[0] ?? null;
+  const summaries: ScreenSummaryView[] = list.summaries.map((summary) => {
+    const result = groupTotals(list, rows, today, summary);
+    const values = [...result.totals.values()];
+    return {
+      by: summary.by,
+      sum: summary.sum,
+      byLabel: column(list, summary.by)?.label ?? "Group",
+      sumLabel: column(list, summary.sum)?.label ?? "Total",
+      totals: values,
+      skipped: result.skipped,
+      counted: result.counted,
+      total: values.reduce((sum, item) => sum + item.value, 0),
+    };
+  });
+  const primary = summaries[0];
+  const formulaSkipped = rows.filter((row) => evalRow(list, row.data, today).err).length;
+  const skipped = primary?.skipped ?? formulaSkipped;
+  const counted = primary?.counted ?? rows.length - formulaSkipped;
+  const totals = primary?.totals ?? [];
+  const largest = totals.slice().sort((a, b) => b.value - a.value)[0] ?? null;
   return {
     rows: rows.length,
-    counted: summary.counted,
-    skipped: summary.skipped,
-    completionPct: rows.length ? Math.round((summary.counted / rows.length) * 100) : 100,
-    total,
-    groups: values.length,
+    counted,
+    skipped,
+    completionPct: rows.length ? Math.round((counted / rows.length) * 100) : 100,
+    total: primary?.total ?? 0,
+    groups: totals.length,
     largest,
-    totals: values,
+    totals,
+    summaries,
   };
+}
+
+export function screenRowPreview(
+  list: Pick<UserScreen, "columns">,
+  data: UserScreenRowData,
+  today = new Date(),
+) {
+  const evaluation = evalRow(list, data, today);
+  const titleColumn =
+    list.columns.find((column) => column.type === "text" && String(data[column.id] ?? "").trim()) ??
+    list.columns.find(
+      (column) => column.type !== "auto" && String(data[column.id] ?? "").trim(),
+    );
+  const title = titleColumn ? String(data[titleColumn.id]).trim() : "Untitled";
+  const dates = list.columns
+    .filter((column) => column.type === "date")
+    .map((column) => String(data[column.id] ?? "").trim())
+    .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .map(formatScreenDate);
+  const notes = list.columns
+    .filter((column) => column.type === "text" && column.id !== titleColumn?.id)
+    .map((column) => String(data[column.id] ?? "").trim())
+    .filter(Boolean);
+  const metricColumn =
+    list.columns.find((column) => column.type === "auto") ??
+    list.columns.find((column) => column.type === "number");
+  let metric: string | null = null;
+  if (metricColumn?.type === "auto") {
+    const result = evaluation.vals[metricColumn.id];
+    metric = result && "v" in result ? formatScreenNumber(result.v) : null;
+  } else if (metricColumn) {
+    const raw = String(data[metricColumn.id] ?? "").trim();
+    metric = raw || null;
+  }
+  return {
+    title,
+    detail: [dates.join(" – "), ...notes].filter(Boolean).join(" · "),
+    metric,
+    metricLabel: metricColumn?.label ?? "",
+    invalid: Boolean(evaluation.err),
+    error: evaluation.err,
+  };
+}
+
+function formatScreenDate(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function formatScreenNumber(value: number) {
+  return Number.isInteger(value)
+    ? value.toLocaleString("en-US")
+    : value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }

@@ -1,4 +1,4 @@
-import type { UserScreenInput } from "@/types/userScreens";
+import { USER_SCREEN_SUMMARY_LIMIT, type UserScreenInput } from "@/types/userScreens";
 
 function id() {
   return crypto.randomUUID();
@@ -26,7 +26,7 @@ export function travelScreenTemplate(): UserScreenInput {
         today: false,
       },
     ],
-    summary: { by: person, sum: total },
+    summaries: [{ by: person, sum: total }],
   };
 }
 
@@ -43,7 +43,7 @@ export function expenseScreenTemplate(): UserScreenInput {
       { id: extra, label: "Tax and tip", type: "number" },
       { id: total, label: "Total", type: "auto", a: amount, op: "+", b: extra },
     ],
-    summary: { by: category, sum: total },
+    summaries: [{ by: category, sum: total }],
   };
 }
 
@@ -51,7 +51,7 @@ export function blankScreenTemplate(): UserScreenInput {
   return {
     name: "",
     columns: [{ id: id(), label: "Name", type: "text" }],
-    summary: null,
+    summaries: [],
   };
 }
 
@@ -96,12 +96,19 @@ export function validateUserScreen(input: UserScreenInput) {
       return `Use two date columns or two number columns in ${col.label}.`;
     }
   }
-  if (input.summary) {
-    const by = input.columns.find((column) => column.id === input.summary?.by);
-    const sum = input.columns.find((column) => column.id === input.summary?.sum);
+  if (input.summaries.length > USER_SCREEN_SUMMARY_LIMIT) {
+    return `A screen can have up to ${USER_SCREEN_SUMMARY_LIMIT} summaries.`;
+  }
+  const seen = new Set<string>();
+  for (const summary of input.summaries) {
+    const by = input.columns.find((column) => column.id === summary.by);
+    const sum = input.columns.find((column) => column.id === summary.sum);
     if (!by || by.type !== "text" || !sum || (sum.type !== "number" && sum.type !== "auto")) {
       return "Choose a text column to group by and a number or formula column to total.";
     }
+    const key = `${summary.by}:${summary.sum}`;
+    if (seen.has(key)) return "Each summary needs its own group and total.";
+    seen.add(key);
   }
   return null;
 }

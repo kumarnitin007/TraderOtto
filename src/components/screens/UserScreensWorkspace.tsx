@@ -1,44 +1,38 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3,
   Check,
-  ChevronDown,
-  Download,
-  FileJson,
+  ChevronLeft,
+  ChevronRight,
   Grid2X2,
-  Pencil,
+  MoreHorizontal,
   Plus,
-  Settings,
+  Search,
   Trash2,
-  Upload,
   X,
 } from "lucide-react";
 import { UserScreensBottomNav } from "@/components/screens/UserScreensBottomNav";
+import { UserScreensDataTransfer } from "@/components/screens/UserScreensDataTransfer";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
-import { DataTransferButton } from "@/components/settings/DataTransferPrimitives";
+import { DataTransferButton, DataTransferCard, DataTransferRow } from "@/components/settings/DataTransferPrimitives";
 import { SettingsPageHeader } from "@/components/settings/SettingsPrimitives";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useUserScreens } from "@/hooks/useUserScreens";
-import { evalRow, userScreenAnalytics } from "@/lib/userScreensEngine";
+import { evalRow, screenRowPreview, userScreenAnalytics } from "@/lib/userScreensEngine";
 import {
   USER_SCREEN_TEMPLATES,
   blankScreenTemplate,
   validateUserScreen,
 } from "@/lib/userScreensTemplates";
+import { parseUserScreenJson } from "@/lib/userScreensTransfer";
 import {
-  parseUserScreenCsv,
-  parseUserScreenJson,
-  userScreenCsv,
-  userScreenJson,
-} from "@/lib/userScreensTransfer";
-import type {
-  UserScreen,
-  UserScreenColumn,
-  UserScreenInput,
-  UserScreenRow,
-  UserScreenRowData,
+  USER_SCREEN_SUMMARY_LIMIT,
+  type UserScreen,
+  type UserScreenColumn,
+  type UserScreenInput,
+  type UserScreenRow,
+  type UserScreenRowData,
 } from "@/types/userScreens";
 
 type BuilderState = { mode: "new"; draft: UserScreenInput } | { mode: "edit"; list: UserScreen; draft: UserScreenInput };
@@ -116,29 +110,40 @@ export function UserScreensWorkspace() {
               draft: {
                 name: item.name,
                 columns: item.columns.map((column) => ({ ...column })),
-                summary: item.summary ? { ...item.summary } : null,
+                summaries: item.summaries.map((summary) => ({ ...summary })),
               },
             })
           }
-          onImport={async (backup) => {
-            setBusy(true);
-            try {
-              const saved = await data.createList(
-                { name: backup.name, columns: backup.columns, summary: backup.summary },
-                backup.rows,
-              );
-              setTab(saved.id);
-              setNotice(`Imported ${backup.rows.length} rows.`);
-            } catch (cause) {
-              setNotice(cause instanceof Error ? cause.message : "Import failed.");
-            } finally {
-              setBusy(false);
+          onImportScreen={async (backup) => {
+            const saved = await data.createList(
+              { name: backup.name, columns: backup.columns, summaries: backup.summaries },
+              backup.rows,
+            );
+            setTab(saved.id);
+            setNotice(`Imported ${backup.name}.`);
+          }}
+          onImportRows={async (target, imported, added) => {
+            if (added.length) {
+              await data.updateList(target.id, {
+                name: target.name,
+                columns: [...target.columns, ...added],
+                summaries: target.summaries,
+              });
             }
+            await data.addRows(target.id, imported);
+            setTab(target.id);
+            const addedNote = added.length ? ` · added ${added.map((column) => column.label).join(", ")}` : "";
+            setNotice(`Imported ${imported.length} rows${addedNote}.`);
           }}
           onDelete={async (id) => {
             await data.deleteList(id);
             setTab("overview");
             setNotice("Screen deleted.");
+          }}
+          onDeleteRows={async (id) => {
+            const target = lists.find((item) => item.id === id);
+            await data.deleteRows(id);
+            setNotice(target ? `Rows removed from ${target.name}.` : "Rows removed.");
           }}
         />
       ) : list ? (
@@ -153,18 +158,13 @@ export function UserScreensWorkspace() {
               draft: {
                 name: list.name,
                 columns: list.columns.map((column) => ({ ...column })),
-                summary: list.summary ? { ...list.summary } : null,
+                summaries: list.summaries.map((summary) => ({ ...summary })),
               },
             })
           }
-          onAdd={() => data.addRows(list.id, [{}])}
-          onLocal={(rowId, row) => data.setRowLocal(list.id, rowId, row)}
+          onCreate={(row) => data.addRows(list.id, [row])}
           onSave={(rowId, row) => data.updateRow(list.id, rowId, row)}
           onDelete={(rowId) => data.deleteRow(list.id, rowId)}
-          onImport={async (rows, ignored) => {
-            await data.addRows(list.id, rows);
-            setNotice(`Added ${rows.length} rows${ignored ? ` · ignored ${ignored} unmatched columns` : ""}.`);
-          }}
         />
       ) : null}
       <UserScreensBottomNav lists={lists} active={active} onTab={setTab} />
@@ -204,7 +204,6 @@ function ScreensOverview({
       <div className="overflow-hidden rounded-2xl bg-otto-surface">
         {lists.map((list) => {
           const analytics = userScreenAnalytics(list, rows[list.id] ?? []);
-          const max = Math.max(1, ...analytics.totals.map((item) => item.value));
           return (
             <button
               key={list.id}
@@ -218,18 +217,30 @@ function ScreensOverview({
                   {analytics.rows} {analytics.rows === 1 ? "row" : "rows"}
                 </span>
               </div>
-              {analytics.totals.slice(0, 4).map((item) => (
-                <div key={item.label} className="mt-2 grid grid-cols-[80px_1fr_54px] items-center gap-2 text-[12px]">
-                  <span className="truncate text-otto-text-dim">{item.label}</span>
-                  <span className="h-1.5 overflow-hidden rounded-full bg-otto-divider">
-                    <span
-                      className="block h-full rounded-full bg-otto-green"
-                      style={{ width: `${(item.value / max) * 100}%` }}
-                    />
-                  </span>
-                  <strong className="text-right">{formatNumber(item.value)}</strong>
-                </div>
-              ))}
+              {analytics.summaries.map((summary) => {
+                const max = Math.max(1, ...summary.totals.map((item) => item.value));
+                return (
+                  <div key={`${summary.by}:${summary.sum}`} className="mt-2">
+                    {analytics.summaries.length > 1 && (
+                      <p className="text-[11px] font-semibold text-otto-text-faint">
+                        {summary.sumLabel} by {summary.byLabel}
+                      </p>
+                    )}
+                    {summary.totals.slice(0, 4).map((item) => (
+                      <div key={item.label} className="mt-2 grid grid-cols-[80px_1fr_54px] items-center gap-2 text-[12px]">
+                        <span className="truncate text-otto-text-dim">{item.label}</span>
+                        <span className="h-1.5 overflow-hidden rounded-full bg-otto-divider">
+                          <span
+                            className="block h-full rounded-full bg-otto-green"
+                            style={{ width: `${(item.value / max) * 100}%` }}
+                          />
+                        </span>
+                        <strong className="text-right">{formatNumber(item.value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
               {analytics.skipped > 0 && (
                 <span className="mt-3 inline-flex rounded-full bg-otto-red-soft px-2.5 py-1 text-[11px] font-semibold text-otto-red">
                   {analytics.skipped} not counted
@@ -298,193 +309,491 @@ function TemplatePicker({
   );
 }
 
+const PAGE_SIZES = [10, 20, 50, 100, null] as const;
+type ScreenPageSize = (typeof PAGE_SIZES)[number];
+const PAGE_SIZE_KEY = "trader-otto:screens-page-size";
+type ScreenSort = { columnId: string; dir: "asc" | "desc" };
+const SORT_KEY = "trader-otto:screens-sort";
+
+function readSort(listId: string): ScreenSort {
+  if (typeof window === "undefined") return { columnId: "added", dir: "asc" };
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(SORT_KEY) || "{}") as Record<string, ScreenSort>;
+    const saved = raw[listId];
+    if (saved && typeof saved.columnId === "string" && (saved.dir === "asc" || saved.dir === "desc")) {
+      return saved;
+    }
+  } catch {
+    // The list still opens in the order rows were added.
+  }
+  return { columnId: "added", dir: "asc" };
+}
+
+function writeSort(listId: string, sort: ScreenSort) {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(SORT_KEY) || "{}") as Record<string, ScreenSort>;
+    raw[listId] = sort;
+    window.localStorage.setItem(SORT_KEY, JSON.stringify(raw));
+  } catch {
+    // The chosen sort still applies for this visit.
+  }
+}
+
+function sortChoices(list: UserScreen): Array<ScreenSort & { label: string }> {
+  const choices: Array<ScreenSort & { label: string }> = [
+    { columnId: "added", dir: "asc", label: "Oldest added" },
+    { columnId: "added", dir: "desc", label: "Newest added" },
+  ];
+  for (const column of list.columns) {
+    const name = column.label || "Unnamed";
+    if (column.type === "number" || column.type === "auto") {
+      choices.push({ columnId: column.id, dir: "asc", label: `${name} low to high` });
+      choices.push({ columnId: column.id, dir: "desc", label: `${name} high to low` });
+    } else if (column.type === "date") {
+      choices.push({ columnId: column.id, dir: "asc", label: `${name} oldest` });
+      choices.push({ columnId: column.id, dir: "desc", label: `${name} newest` });
+    } else if (column.type === "check") {
+      choices.push({ columnId: column.id, dir: "desc", label: `${name} checked first` });
+      choices.push({ columnId: column.id, dir: "asc", label: `${name} unchecked first` });
+    } else {
+      choices.push({ columnId: column.id, dir: "asc", label: `${name} A–Z` });
+      choices.push({ columnId: column.id, dir: "desc", label: `${name} Z–A` });
+    }
+  }
+  return choices;
+}
+
+function rankRow(list: UserScreen, row: UserScreenRow, columnId: string) {
+  if (columnId === "added") return { empty: false, num: 0, text: row.createdAt || row.id };
+  const column = list.columns.find((item) => item.id === columnId);
+  if (!column) return { empty: false, num: 0, text: row.createdAt || row.id };
+  if (column.type === "check") return { empty: false, num: row.data[column.id] === true ? 1 : 0, text: "" };
+  if (column.type === "auto") {
+    const result = evalRow(list, row.data).vals[column.id];
+    return result && "v" in result ? { empty: false, num: result.v, text: "" } : { empty: true, num: 0, text: "" };
+  }
+  if (column.type === "number") {
+    const raw = String(row.data[column.id] ?? "").trim();
+    const value = Number.parseFloat(raw);
+    return raw && Number.isFinite(value) ? { empty: false, num: value, text: "" } : { empty: true, num: 0, text: "" };
+  }
+  const text = String(row.data[column.id] ?? "").trim();
+  return text ? { empty: false, num: 0, text: text.toLocaleLowerCase() } : { empty: true, num: 0, text: "" };
+}
+
+function readPageSize(): ScreenPageSize {
+  if (typeof window === "undefined") return 20;
+  try {
+    const raw = window.localStorage.getItem(PAGE_SIZE_KEY);
+    if (raw === "none") return null;
+    const parsed = Number(raw);
+    return parsed === 10 || parsed === 20 || parsed === 50 || parsed === 100 ? parsed : 20;
+  } catch {
+    return 20;
+  }
+}
+
 function ScreenRows({
   list,
   rows,
   readonly,
   onEditColumns,
-  onAdd,
-  onLocal,
+  onCreate,
   onSave,
   onDelete,
-  onImport,
 }: {
   list: UserScreen;
   rows: UserScreenRow[];
   readonly: boolean;
   onEditColumns: () => void;
-  onAdd: () => Promise<unknown>;
-  onLocal: (rowId: string, row: UserScreenRowData) => void;
+  onCreate: (row: UserScreenRowData) => Promise<unknown>;
   onSave: (rowId: string, row: UserScreenRowData) => Promise<unknown>;
   onDelete: (rowId: string) => Promise<void>;
-  onImport: (rows: UserScreenRowData[], ignored: number) => Promise<void>;
 }) {
   const [page, setPage] = useState(1);
-  const [transfer, setTransfer] = useState(false);
-  const pageSize = rows.length > 200 ? 100 : Math.max(1, rows.length);
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const visible = rows.slice((page - 1) * pageSize, page * pageSize);
+  const [pageSize, setPageSize] = useState<ScreenPageSize>(readPageSize);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ScreenSort>(() => readSort(list.id));
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState<UserScreenRow | null | "new">(null);
   const analytics = useMemo(() => userScreenAnalytics(list, rows), [list, rows]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const sortColumn = list.columns.find((column) => column.id === sort.columnId);
+  const sortId = sort.columnId === "added" || sortColumn ? sort.columnId : "added";
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    if (!needle) return rows;
+    return rows.filter((row) => {
+      const preview = screenRowPreview(list, row.data);
+      return (
+        preview.title.toLocaleLowerCase().includes(needle) ||
+        preview.detail.toLocaleLowerCase().includes(needle) ||
+        list.columns.some((column) => String(row.data[column.id] ?? "").toLocaleLowerCase().includes(needle))
+      );
+    });
+  }, [list, query, rows]);
+  const sorted = useMemo(() => {
+    const numeric = sortColumn?.type === "number" || sortColumn?.type === "auto" || sortColumn?.type === "check";
+    const ranks = new Map(filtered.map((row) => [row.id, rankRow(list, row, sortId)]));
+    return [...filtered].sort((a, b) => {
+      const left = ranks.get(a.id) ?? { empty: true, num: 0, text: "" };
+      const right = ranks.get(b.id) ?? { empty: true, num: 0, text: "" };
+      if (left.empty !== right.empty) return left.empty ? 1 : -1;
+      const base = numeric ? left.num - right.num : left.text.localeCompare(right.text);
+      const compared = base || a.id.localeCompare(b.id);
+      return sort.dir === "asc" ? compared : -compared;
+    });
+  }, [filtered, list, sort.dir, sortColumn, sortId]);
+  const pageCount = pageSize == null ? 1 : Math.max(1, Math.ceil(sorted.length / pageSize));
+  const visible = pageSize == null ? sorted : sorted.slice((page - 1) * pageSize, page * pageSize);
 
-  async function importCsv(file?: File) {
-    if (!file) return;
-    const parsed = parseUserScreenCsv(list, await file.text());
-    await onImport(parsed.rows, parsed.ignoredHeaders);
+  useEffect(() => {
+    setPage(1);
+    setEditing(null);
+    setQuery("");
+    setSortOpen(false);
+    setSort(readSort(list.id));
+  }, [list.id]);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    function close(event: PointerEvent) {
+      if (sortMenuRef.current?.contains(event.target as Node)) return;
+      setSortOpen(false);
+    }
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [sortOpen]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
+
+  function choosePageSize(size: ScreenPageSize) {
+    setPageSize(size);
+    setPage(1);
+    try {
+      window.localStorage.setItem(PAGE_SIZE_KEY, size == null ? "none" : String(size));
+    } catch {
+      // The list still uses the chosen size for this visit.
+    }
+  }
+
+  function chooseSort(next: ScreenSort) {
+    const columnId =
+      next.columnId === "added" || list.columns.some((column) => column.id === next.columnId)
+        ? next.columnId
+        : "added";
+    const saved = { columnId, dir: next.dir };
+    setSort(saved);
+    setPage(1);
+    setSortOpen(false);
+    writeSort(list.id, saved);
+  }
+
+  if (editing) {
+    return (
+      <ScreenRowPage
+        list={list}
+        row={editing === "new" ? null : editing}
+        readonly={readonly}
+        onClose={() => setEditing(null)}
+        onSave={async (data) => {
+          if (editing === "new") await onCreate(data);
+          else await onSave(editing.id, data);
+        }}
+        onDelete={
+          editing === "new"
+            ? undefined
+            : async () => {
+                await onDelete(editing.id);
+              }
+        }
+      />
+    );
   }
 
   return (
     <>
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-extrabold">{list.name}</h1>
           <p className="text-[12px] text-otto-text-dim">
-            {rows.length} rows · {analytics.completionPct}% counted
+            {rows.length} {rows.length === 1 ? "row" : "rows"} · {analytics.completionPct}% counted
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1">
           <button type="button" onClick={onEditColumns} className="rounded-full border border-otto-divider px-3 py-2 text-[12px] font-bold">
             Edit columns
           </button>
-          <button type="button" onClick={() => setTransfer((value) => !value)} className="rounded-full border border-otto-divider px-3 py-2 text-[12px] font-bold">
-            Import / export
-          </button>
+          <div className="relative" ref={sortMenuRef}>
+            <button
+              type="button"
+              onClick={() => setSortOpen((open) => !open)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-otto-text-faint hover:bg-otto-surface"
+              aria-label="Sort rows"
+              aria-expanded={sortOpen}
+            >
+              <MoreHorizontal size={20} />
+            </button>
+            {sortOpen && (
+              <div className="absolute right-0 top-9 z-20 max-h-80 w-56 overflow-y-auto rounded-xl border border-otto-divider bg-otto-bg p-1.5 shadow-xl">
+                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-otto-text-faint">
+                  Sort by
+                </p>
+                {sortChoices(list).map((choice) => (
+                  <button
+                    key={`${choice.columnId}:${choice.dir}`}
+                    type="button"
+                    onClick={() => chooseSort(choice)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[13px] font-medium hover:bg-otto-surface"
+                  >
+                    <span className="flex-1">{choice.label}</span>
+                    {sortId === choice.columnId && sort.dir === choice.dir && (
+                      <Check size={15} className="shrink-0 text-otto-green" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      {transfer && (
-        <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-otto-surface p-3">
-          <DataTransferButton onClick={() => download(userScreenJson(list, rows))}>Export JSON</DataTransferButton>
-          <DataTransferButton onClick={() => download(userScreenCsv(list, rows))}>Export CSV</DataTransferButton>
-          <DataTransferButton onClick={() => inputRef.current?.click()} disabled={readonly}>Import CSV</DataTransferButton>
-          <input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={(event) => void importCsv(event.target.files?.[0])} />
-        </div>
-      )}
-      <div className="space-y-2">
-        {visible.map((row) => (
-          <ScreenRowEditor
-            key={row.id}
-            list={list}
-            row={row}
-            readonly={readonly}
-            onLocal={(next) => onLocal(row.id, next)}
-            onSave={(next) => onSave(row.id, next)}
-            onDelete={() => onDelete(row.id)}
-          />
-        ))}
+      <label className="mb-3 flex items-center gap-2 rounded-xl bg-otto-surface px-3">
+        <Search size={16} className="shrink-0 text-otto-text-faint" />
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Search rows"
+          aria-label="Search rows"
+          className="h-11 w-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-[14px]"
+        />
+      </label>
+      <div className="flex flex-col gap-2">
+        {visible.map((row) => {
+          const preview = screenRowPreview(list, row.data);
+          return (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => setEditing(row)}
+              className="flex w-full items-center gap-3 rounded-2xl bg-otto-surface px-3 py-3 text-left"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-otto-green-soft text-[15px] font-black text-otto-green">
+                {(preview.title.trim()[0] || "?").toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-extrabold">{preview.title}</span>
+                <span className={`mt-0.5 block truncate text-[12px] ${preview.invalid ? "text-otto-red" : "text-otto-text-dim"}`}>
+                  {preview.invalid ? preview.error : preview.detail || "No details yet"}
+                </span>
+              </span>
+              {preview.metric && (
+                <span className="shrink-0 text-right">
+                  <span className="block text-[15px] font-extrabold">{preview.metric}</span>
+                  <span className="block text-[10px] text-otto-text-faint">{preview.metricLabel}</span>
+                </span>
+              )}
+              <ChevronRight size={16} className="shrink-0 text-otto-text-faint" />
+            </button>
+          );
+        })}
       </div>
-      {!rows.length && (
+      {!filtered.length && (
         <div className="rounded-2xl bg-otto-surface px-5 py-10 text-center text-sm text-otto-text-dim">
-          No rows yet. Add the first one below.
+          {rows.length ? "No rows match that search." : "No rows yet. Add the first one below."}
         </div>
       )}
-      {pages > 1 && (
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-otto-surface p-2 text-[12px]">
-          <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="px-3 py-2 disabled:opacity-30">Previous</button>
-          <span>Page {page} of {pages}</span>
-          <button disabled={page === pages} onClick={() => setPage((value) => value + 1)} className="px-3 py-2 disabled:opacity-30">Next</button>
+      {filtered.length > 0 && (
+        <div className="mt-3 rounded-xl border border-otto-divider bg-otto-surface px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              disabled={page === 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-otto-text-dim disabled:opacity-35"
+            >
+              Previous
+            </button>
+            <span className="text-center text-[11.5px] font-medium text-otto-text-dim">
+              {pageSize == null
+                ? `All ${filtered.length}`
+                : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, filtered.length)} of ${filtered.length}`}
+            </span>
+            <button
+              type="button"
+              disabled={page === pageCount}
+              onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+              className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-otto-text-dim disabled:opacity-35"
+            >
+              Next
+            </button>
+          </div>
+          <div className="mt-2 flex justify-center gap-1">
+            {PAGE_SIZES.map((size) => (
+              <button
+                key={size ?? "none"}
+                type="button"
+                aria-pressed={pageSize === size}
+                onClick={() => choosePageSize(size)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                  pageSize === size ? "bg-otto-text text-otto-bg" : "text-otto-text-dim"
+                }`}
+              >
+                {size ?? "None"}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <button
         type="button"
         disabled={readonly || rows.length >= 5000}
-        onClick={() => void onAdd()}
+        onClick={() => setEditing("new")}
         className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-dashed border-otto-green font-bold text-otto-green disabled:opacity-40"
       >
         <Plus size={17} /> Add row
       </button>
-      {list.summary && (
-        <div className="sticky bottom-[76px] z-10 mt-4 rounded-2xl border border-otto-divider bg-otto-bg/95 p-3 shadow-lg backdrop-blur desk:bottom-2">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-            {analytics.totals.map((item) => (
-              <span key={item.label}><b>{item.label}</b> {formatNumber(item.value)}</span>
-            ))}
-            {analytics.skipped > 0 && <span className="font-semibold text-otto-red">{analytics.skipped} not counted</span>}
-          </div>
+      {analytics.summaries.length > 0 && (
+        <div className="sticky bottom-[76px] z-10 mt-4 space-y-3 rounded-2xl border border-otto-divider bg-otto-bg/95 p-3 shadow-lg backdrop-blur desk:bottom-2">
+          {analytics.summaries.map((summary) => (
+            <div key={`${summary.by}:${summary.sum}`}>
+              <p className="text-[11px] font-semibold text-otto-text-faint">
+                {summary.sumLabel} by {summary.byLabel}
+              </p>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                {summary.totals.map((item) => (
+                  <span key={item.label}><b>{item.label}</b> {formatNumber(item.value)}</span>
+                ))}
+                {summary.skipped > 0 && (
+                  <span className="font-semibold text-otto-red">{summary.skipped} not counted</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </>
   );
 }
 
-function ScreenRowEditor({
+function ScreenRowPage({
   list,
   row,
   readonly,
-  onLocal,
+  onClose,
   onSave,
   onDelete,
 }: {
   list: UserScreen;
-  row: UserScreenRow;
+  row: UserScreenRow | null;
   readonly: boolean;
-  onLocal: (data: UserScreenRowData) => void;
+  onClose: () => void;
   onSave: (data: UserScreenRowData) => Promise<unknown>;
-  onDelete: () => Promise<void>;
+  onDelete?: () => Promise<void>;
 }) {
-  const evaluation = evalRow(list, row.data);
-  const change = (column: UserScreenColumn, value: string | boolean) => {
-    onLocal({ ...row.data, [column.id]: value });
-  };
+  const [draft, setDraft] = useState<UserScreenRowData>(row?.data ?? {});
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const evaluation = evalRow(list, draft);
+
+  async function save() {
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(draft);
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The row could not be saved.");
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className={`relative rounded-2xl bg-otto-surface px-3 py-3 ${evaluation.err ? "border-l-4 border-otto-red" : ""}`}>
-      <button
-        type="button"
-        disabled={readonly}
-        onClick={() => void onDelete()}
-        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center text-otto-text-faint disabled:opacity-30"
-        aria-label="Delete row"
-      >
-        <Trash2 size={15} />
+    <div>
+      <button type="button" onClick={onClose} className="mb-3 inline-flex items-center gap-1 text-[13px] font-semibold text-otto-text-dim">
+        <ChevronLeft size={16} /> {list.name}
       </button>
-      <div className="grid grid-cols-2 gap-2 pr-7">
+      <h1 className="text-[24px] font-extrabold">{row ? "Edit row" : "New row"}</h1>
+      {error && <p className="mt-3 rounded-xl bg-otto-red-soft px-3 py-2 text-[12px] text-otto-red">{error}</p>}
+      <div className="mt-4 space-y-3">
         {list.columns.map((column) => {
           const result = evaluation.vals[column.id];
           if (column.type === "auto") {
             return (
-              <label key={column.id} className="grid gap-1 text-[11px] font-semibold text-otto-text-dim">
-                {column.label}
-                <span className="min-h-10 rounded-xl bg-otto-bg px-3 py-2 text-[15px] text-otto-text">
+              <div key={column.id} className="rounded-2xl bg-otto-surface px-4 py-3">
+                <span className="block text-[11px] font-semibold text-otto-text-dim">{column.label}</span>
+                <span className="mt-1 block text-[18px] font-extrabold">
                   {result && "v" in result ? formatNumber(result.v) : "—"}
                 </span>
-              </label>
+              </div>
             );
           }
           if (column.type === "check") {
             return (
-              <label key={column.id} className="flex min-h-14 items-center gap-2 rounded-xl bg-otto-bg px-3 text-[12px] font-semibold">
+              <label key={column.id} className="flex min-h-14 items-center gap-3 rounded-2xl bg-otto-surface px-4 text-[14px] font-semibold">
                 <input
                   type="checkbox"
-                  checked={row.data[column.id] === true}
+                  checked={draft[column.id] === true}
                   disabled={readonly}
-                  onChange={(event) => {
-                    const next = { ...row.data, [column.id]: event.target.checked };
-                    onLocal(next);
-                    void onSave(next);
-                  }}
-                  className="h-5 w-5"
+                  onChange={(event) => setDraft({ ...draft, [column.id]: event.target.checked })}
+                  className="h-5 w-5 shrink-0 p-0"
                 />
                 {column.label}
               </label>
             );
           }
           return (
-            <label key={column.id} className="grid gap-1 text-[11px] font-semibold text-otto-text-dim">
+            <label key={column.id} className="grid gap-1 text-[12px] font-semibold text-otto-text-dim">
               {column.label}
               <input
-                type={column.type}
+                type={column.type === "number" ? "number" : column.type}
                 inputMode={column.type === "number" ? "decimal" : undefined}
-                value={String(row.data[column.id] ?? "")}
+                value={String(draft[column.id] ?? "")}
                 disabled={readonly}
-                onChange={(event) => change(column, event.target.value)}
-                onBlur={(event) => void onSave({ ...row.data, [column.id]: event.target.value })}
-                className="min-h-10 rounded-xl border border-otto-divider bg-otto-bg px-3 py-2 text-[14px] text-otto-text"
+                onChange={(event) => setDraft({ ...draft, [column.id]: event.target.value })}
+                className="h-11 rounded-xl border border-otto-divider bg-otto-surface px-3 text-[15px] text-otto-text"
               />
             </label>
           );
         })}
       </div>
       {evaluation.err && (
-        <p className="mt-2 text-[12px] font-semibold text-otto-red">Not counted: {evaluation.err}</p>
+        <p className="mt-3 text-[12px] font-semibold text-otto-red">Not counted: {evaluation.err}</p>
+      )}
+      <button
+        type="button"
+        disabled={readonly || busy}
+        onClick={() => void save()}
+        className="mt-5 min-h-12 w-full rounded-full bg-otto-text font-extrabold text-otto-bg disabled:opacity-40"
+      >
+        {busy ? "Saving…" : "Save row"}
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          disabled={readonly || busy}
+          onClick={() => {
+            if (!confirmDelete) {
+              setConfirmDelete(true);
+              return;
+            }
+            void onDelete()
+              .then(onClose)
+              .catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : "The row could not be deleted.");
+              });
+          }}
+          className={`mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-full text-[14px] font-bold ${
+            confirmDelete ? "bg-otto-red text-white" : "text-otto-text-dim"
+          }`}
+        >
+          <Trash2 size={15} /> {confirmDelete ? "Tap again to delete" : "Delete row"}
+        </button>
       )}
     </div>
   );
@@ -509,10 +818,17 @@ function ScreenBuilder({
   const totalColumns = draft.columns.filter((column) => column.type === "number" || column.type === "auto");
 
   function patchColumn(id: string, patch: Partial<UserScreenColumn>) {
-    setDraft((current) => ({
-      ...current,
-      columns: current.columns.map((column) => (column.id === id ? { ...column, ...patch } : column)),
-    }));
+    setDraft((current) => {
+      const columns = current.columns.map((column) => (column.id === id ? { ...column, ...patch } : column));
+      const summaries = patch.type
+        ? current.summaries.filter((summary) => {
+            if (summary.by === id && patch.type !== "text") return false;
+            if (summary.sum === id && patch.type !== "number" && patch.type !== "auto") return false;
+            return true;
+          })
+        : current.summaries;
+      return { ...current, columns, summaries };
+    });
   }
 
   function removeColumn(id: string) {
@@ -525,9 +841,19 @@ function ScreenBuilder({
             ? { ...column, a: undefined, b: undefined }
             : column,
         ),
-      summary:
-        current.summary?.by === id || current.summary?.sum === id ? null : current.summary,
+      summaries: current.summaries.filter((summary) => summary.by !== id && summary.sum !== id),
     }));
+  }
+
+  function addSummary() {
+    const used = new Set(draft.summaries.map((summary) => `${summary.by}:${summary.sum}`));
+    for (const by of textColumns) {
+      for (const sum of totalColumns) {
+        if (used.has(`${by.id}:${sum.id}`)) continue;
+        setDraft({ ...draft, summaries: [...draft.summaries, { by: by.id, sum: sum.id }] });
+        return;
+      }
+    }
   }
 
   return (
@@ -616,53 +942,80 @@ function ScreenBuilder({
         <Plus size={16} /> Add column
       </button>
       <div className="mt-5 rounded-2xl bg-otto-surface p-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-[14px] font-extrabold">Summary</h2>
-            <p className="text-[11px] text-otto-text-dim">Optional totals grouped by a text column</p>
+            <h2 className="text-[14px] font-extrabold">Summaries</h2>
+            <p className="text-[11px] text-otto-text-dim">Group a text column and total a number or formula</p>
           </div>
           <button
             type="button"
-            onClick={() =>
-              setDraft({
-                ...draft,
-                summary: draft.summary
-                  ? null
-                  : textColumns[0] && totalColumns[0]
-                    ? { by: textColumns[0].id, sum: totalColumns[0].id }
-                    : null,
-              })
+            onClick={addSummary}
+            disabled={
+              !textColumns.length ||
+              !totalColumns.length ||
+              draft.summaries.length >= USER_SCREEN_SUMMARY_LIMIT ||
+              draft.summaries.length >= textColumns.length * totalColumns.length
             }
-            disabled={!draft.summary && (!textColumns.length || !totalColumns.length)}
             className="rounded-full border border-otto-divider px-3 py-1.5 text-[12px] font-bold disabled:opacity-30"
           >
-            {draft.summary ? "Remove" : "Add"}
+            Add
           </button>
         </div>
-        {draft.summary && (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <label className="grid gap-1 text-[11px] text-otto-text-dim">
-              Group by
-              <select
-                value={draft.summary.by}
-                onChange={(event) => setDraft({ ...draft, summary: { ...draft.summary!, by: event.target.value } })}
-                className="min-h-10 rounded-xl border border-otto-divider bg-otto-bg px-2 text-otto-text"
+        <div className="mt-3 space-y-3">
+          {draft.summaries.map((summary, index) => (
+            <div key={`${index}:${summary.by}:${summary.sum}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] items-end gap-2">
+              <label className="grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
+                Group by
+                <select
+                  value={summary.by}
+                  aria-label={`Summary ${index + 1} group`}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      summaries: draft.summaries.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, by: event.target.value } : item,
+                      ),
+                    })
+                  }
+                  className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-bg px-2 text-otto-text"
+                >
+                  {textColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
+                </select>
+              </label>
+              <label className="grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
+                Add up
+                <select
+                  value={summary.sum}
+                  aria-label={`Summary ${index + 1} total`}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      summaries: draft.summaries.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, sum: event.target.value } : item,
+                      ),
+                    })
+                  }
+                  className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-bg px-2 text-otto-text"
+                >
+                  {totalColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft({ ...draft, summaries: draft.summaries.filter((_, itemIndex) => itemIndex !== index) })
+                }
+                className="flex h-10 w-10 items-center justify-center text-otto-text-faint"
+                aria-label={`Remove summary ${index + 1}`}
               >
-                {textColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1 text-[11px] text-otto-text-dim">
-              Add up
-              <select
-                value={draft.summary.sum}
-                onChange={(event) => setDraft({ ...draft, summary: { ...draft.summary!, sum: event.target.value } })}
-                className="min-h-10 rounded-xl border border-otto-divider bg-otto-bg px-2 text-otto-text"
-              >
-                {totalColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
-              </select>
-            </label>
-          </div>
-        )}
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          {!draft.summaries.length && (
+            <p className="text-[12px] text-otto-text-dim">No summaries yet.</p>
+          )}
+        </div>
       </div>
       <button
         type="button"
@@ -748,27 +1101,33 @@ function ScreensSettings({
   rows,
   readonly,
   onEdit,
-  onImport,
+  onImportScreen,
+  onImportRows,
   onDelete,
+  onDeleteRows,
 }: {
   lists: UserScreen[];
   rows: Record<string, UserScreenRow[]>;
   readonly: boolean;
   onEdit: (list: UserScreen) => void;
-  onImport: (backup: ReturnType<typeof parseUserScreenJson>) => Promise<void>;
+  onImportScreen: (backup: ReturnType<typeof parseUserScreenJson>) => Promise<void>;
+  onImportRows: (
+    list: UserScreen,
+    imported: UserScreenRowData[],
+    addedColumns: UserScreenColumn[],
+  ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onDeleteRows: (id: string) => Promise<void>;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [confirm, setConfirm] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-  async function importJson(file?: File) {
-    if (!file) return;
-    try {
-      await onImport(parseUserScreenJson(await file.text()));
-    } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Import failed.");
-    }
-  }
+  const [clearId, setClearId] = useState("");
+  const [clearProof, setClearProof] = useState("");
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState("");
+  const clearTarget = lists.find((list) => list.id === clearId) ?? null;
+  const clearCount = clearTarget ? (rows[clearTarget.id]?.length ?? 0) : 0;
+  const clearReady = Boolean(clearTarget && clearCount > 0 && clearProof.trim() === clearTarget.name);
   return (
     <>
       <SettingsPageHeader
@@ -776,25 +1135,25 @@ function ScreensSettings({
         title="Settings"
         description="Manage layouts, backups, and account preferences."
       />
-      {message && <Notice text={message} tone="error" />}
-      <OttoPreferencesEntry />
+      <div className="mt-5">
+        <OttoPreferencesEntry />
+      </div>
+      <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
+        <DataTransferRow detail="Workbook, CSV, or screen backup" onClick={() => setTransferOpen(true)} />
+      </div>
       <div className="mt-4 overflow-hidden rounded-2xl bg-otto-surface">
         {lists.map((list) => (
-          <div key={list.id} className="border-b border-otto-divider p-4 last:border-b-0">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <strong className="block">{list.name}</strong>
-                <span className="text-[12px] text-otto-text-dim">{rows[list.id]?.length ?? 0} rows</span>
-              </div>
+          <div key={list.id} className="flex items-center justify-between gap-3 border-b border-otto-divider px-4 py-3 last:border-b-0">
+            <div className="min-w-0">
+              <strong className="block truncate">{list.name}</strong>
+              <span className="text-[12px] text-otto-text-dim">{rows[list.id]?.length ?? 0} rows</span>
+            </div>
+            <div className="flex shrink-0 gap-2">
               <button type="button" onClick={() => onEdit(list)} className="rounded-full border border-otto-divider px-3 py-2 text-[12px] font-bold">
                 Edit
               </button>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <DataTransferButton onClick={() => download(userScreenJson(list, rows[list.id] ?? []))}>JSON</DataTransferButton>
-              <DataTransferButton onClick={() => download(userScreenCsv(list, rows[list.id] ?? []))}>CSV</DataTransferButton>
-              <DataTransferButton
-                variant="danger"
+              <button
+                type="button"
                 disabled={readonly}
                 onClick={() => {
                   if (confirm !== list.id) {
@@ -803,26 +1162,101 @@ function ScreensSettings({
                   }
                   void onDelete(list.id);
                 }}
+                className={`rounded-full px-3 py-2 text-[12px] font-bold disabled:opacity-40 ${
+                  confirm === list.id ? "bg-otto-red text-white" : "text-otto-text-dim"
+                }`}
               >
                 {confirm === list.id ? "Confirm" : "Delete"}
-              </DataTransferButton>
+              </button>
             </div>
           </div>
         ))}
         {!lists.length && <p className="px-4 py-8 text-center text-sm text-otto-text-dim">No screens to manage.</p>}
       </div>
-      <button
-        type="button"
-        disabled={readonly || lists.length >= 4}
-        onClick={() => inputRef.current?.click()}
-        className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-otto-divider font-bold disabled:opacity-40"
-      >
-        <Upload size={17} /> Import a screen from JSON
-      </button>
-      <input ref={inputRef} type="file" accept=".json,application/json" hidden onChange={(event) => void importJson(event.target.files?.[0])} />
+      <div className="mt-4">
+        <DataTransferCard
+          icon={Trash2}
+          title="Delete all rows"
+          description="Removes every row on one screen. Columns and summaries stay. Type the screen name to confirm."
+        >
+          <label className="grid gap-1 text-[12px] font-semibold text-otto-text-dim">
+            Screen
+            <select
+              value={clearId}
+              disabled={!lists.length || clearing}
+              onChange={(event) => {
+                setClearId(event.target.value);
+                setClearProof("");
+                setClearError("");
+              }}
+              className="h-11 rounded-xl border border-otto-divider bg-otto-bg px-3 text-[14px] text-otto-text"
+            >
+              <option value="">Choose a screen</option>
+              {lists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name} · {rows[list.id]?.length ?? 0} rows
+                </option>
+              ))}
+            </select>
+          </label>
+          {clearTarget && (
+            <label className="mt-3 grid gap-1 text-[12px] font-semibold text-otto-text-dim">
+              Type {clearTarget.name} to delete {clearCount} {clearCount === 1 ? "row" : "rows"}
+              <input
+                value={clearProof}
+                disabled={clearing || clearCount === 0}
+                onChange={(event) => {
+                  setClearProof(event.target.value);
+                  setClearError("");
+                }}
+                autoComplete="off"
+                aria-label="Confirm screen name"
+                className="h-11 rounded-xl border border-otto-divider bg-otto-bg px-3 text-[14px] text-otto-text"
+              />
+            </label>
+          )}
+          <div className="mt-3">
+            <DataTransferButton
+              variant="danger"
+              disabled={readonly || clearing || !clearReady}
+              onClick={() => {
+                if (!clearTarget || clearProof.trim() !== clearTarget.name || clearCount === 0) {
+                  setClearError("Type the screen name exactly before deleting its rows.");
+                  return;
+                }
+                setClearing(true);
+                setClearError("");
+                void onDeleteRows(clearTarget.id)
+                  .then(() => {
+                    setClearProof("");
+                    setClearId("");
+                  })
+                  .catch((cause: unknown) => {
+                    setClearError(cause instanceof Error ? cause.message : "The rows could not be deleted.");
+                  })
+                  .finally(() => setClearing(false));
+              }}
+            >
+              <Trash2 size={14} />
+              {clearing ? "Deleting rows…" : clearCount ? `Delete ${clearCount} rows` : "Delete all rows"}
+            </DataTransferButton>
+          </div>
+          {clearError && <p className="mt-2 text-[12px] font-semibold text-otto-red">{clearError}</p>}
+        </DataTransferCard>
+      </div>
       <p className="mt-3 text-[11px] leading-relaxed text-otto-text-faint">
         One definition table and one row table hold every User Screen. New screens do not create database tables.
       </p>
+      {transferOpen && (
+        <UserScreensDataTransfer
+          lists={lists}
+          rows={rows}
+          readonly={readonly}
+          onClose={() => setTransferOpen(false)}
+          onImportRows={onImportRows}
+          onImportScreen={onImportScreen}
+        />
+      )}
     </>
   );
 }
@@ -848,11 +1282,3 @@ function formatNumber(value: number) {
   return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function download(file: { fileName: string; text: string }) {
-  const url = URL.createObjectURL(new Blob([file.text], { type: "text/plain;charset=utf-8" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = file.fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}

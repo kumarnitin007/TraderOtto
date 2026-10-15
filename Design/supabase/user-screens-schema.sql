@@ -10,6 +10,8 @@ create table if not exists public.us_custom_lists (
   position smallint not null default 0,
   columns jsonb not null default '[]'::jsonb
     check (jsonb_typeof(columns) = 'array' and jsonb_array_length(columns) between 1 and 20),
+  -- {"items":[{"by":"<text column id>","sum":"<number or formula id>"}]}.
+  -- Older rows may still be {"by":"...","sum":"..."}. Both are objects, so no migration is required.
   summary jsonb check (summary is null or jsonb_typeof(summary) = 'object'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

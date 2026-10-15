@@ -23,7 +23,7 @@ export interface UserScreen {
   name: string;
   position: number;
   columns: UserScreenColumn[];
-  summary: UserScreenSummary | null;
+  summaries: UserScreenSummary[];
   createdAt: string;
   updatedAt: string;
 }
@@ -38,8 +38,9 @@ export interface UserScreenRow {
   updatedAt: string;
 }
 
-export type UserScreenInput = Pick<UserScreen, "name" | "columns" | "summary">;
+export type UserScreenInput = Pick<UserScreen, "name" | "columns" | "summaries">;
 
 export const USER_SCREEN_LIMIT = 4;
 export const USER_SCREEN_ROW_LIMIT = 5000;
 export const USER_SCREEN_COLUMN_LIMIT = 20;
+export const USER_SCREEN_SUMMARY_LIMIT = 8;

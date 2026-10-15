@@ -142,6 +142,12 @@ export function useUserScreens() {
     }));
   }
 
+  async function deleteRows(listId: string) {
+    if (!repository) throw new Error("Sign in to delete rows.");
+    await repository.deleteRows(listId);
+    setRows((current) => ({ ...current, [listId]: [] }));
+  }
+
   return {
     lists,
     rows,
@@ -156,5 +162,6 @@ export function useUserScreens() {
     setRowLocal,
     updateRow,
     deleteRow,
+    deleteRows,
   };
 }

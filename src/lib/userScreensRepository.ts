@@ -23,6 +23,7 @@ export interface UserScreensRepository {
   addRows(listId: string, rows: UserScreenRowData[]): Promise<UserScreenRow[]>;
   updateRow(rowId: string, data: UserScreenRowData): Promise<UserScreenRow>;
   deleteRow(rowId: string): Promise<void>;
+  deleteRows(listId: string): Promise<void>;
 }
 
 export function friendlyUserScreensError(cause: unknown) {

@@ -5,17 +5,17 @@ import type {
   UserScreenInput,
   UserScreenRow,
   UserScreenRowData,
-  UserScreenSummary,
 } from "@/types/userScreens";
 import type { UserScreensRepository } from "@/lib/userScreensRepository";
 import { friendlyUserScreensError } from "@/lib/userScreensRepository";
+import { readStoredSummaries, writeStoredSummaries } from "@/lib/userScreensSummaries";
 
 type ListRow = {
   id: string;
   name: string;
   position: number;
   columns: UserScreenColumn[];
-  summary: UserScreenSummary | null;
+  summary: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -34,7 +34,7 @@ function listFromRow(row: ListRow): UserScreen {
     name: row.name,
     position: row.position,
     columns: row.columns,
-    summary: row.summary,
+    summaries: readStoredSummaries(row.summary),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -79,7 +79,7 @@ export function createSupabaseUserScreensRepository(
           name: input.name.trim(),
           position: current.length,
           columns: input.columns,
-          summary: input.summary,
+          summary: writeStoredSummaries(input.summaries),
         })
         .select("id,name,position,columns,summary,created_at,updated_at")
         .single();
@@ -93,7 +93,7 @@ export function createSupabaseUserScreensRepository(
         .update({
           name: input.name.trim(),
           columns: input.columns,
-          summary: input.summary,
+          summary: writeStoredSummaries(input.summaries),
         })
         .eq("id", id)
         .eq("user_id", userId)
@@ -160,6 +160,15 @@ export function createSupabaseUserScreensRepository(
         .from("us_custom_list_rows")
         .delete()
         .eq("id", rowId)
+        .eq("user_id", userId);
+      fail(error);
+    },
+
+    async deleteRows(listId) {
+      const { error } = await client
+        .from("us_custom_list_rows")
+        .delete()
+        .eq("list_id", listId)
         .eq("user_id", userId);
       fail(error);
     },

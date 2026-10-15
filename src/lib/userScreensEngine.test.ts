@@ -15,8 +15,8 @@ const days: UserScreenColumn = {
 };
 const travel = {
   columns: [person, start, end, days],
-  summary: { by: "person", sum: "days" },
-} as Pick<UserScreen, "columns" | "summary">;
+  summaries: [{ by: "person", sum: "days" }],
+} as Pick<UserScreen, "columns" | "summaries">;
 
 describe("user screens engine", () => {
   it("calculates exclusive, inclusive, same-day and leap-month date differences", () => {
@@ -65,10 +65,31 @@ describe("user screens engine", () => {
       { id: "2", listId: "x", data: { person: "asha", start: "2026-01-03", end: "2026-01-05" }, createdAt: "", updatedAt: "" },
       { id: "3", listId: "x", data: { person: "", start: "2026-01-01", end: "2026-01-02" }, createdAt: "", updatedAt: "" },
     ] satisfies UserScreenRow[];
-    expect(evalRow(travel, rows[2].data).err).toBe("Add Person");
+    expect(evalRow(travel, rows[2].data).err).toBeNull();
     const result = groupTotals(travel, rows);
     expect(result.skipped).toBe(1);
     expect(result.counted).toBe(2);
     expect([...result.totals.values()]).toEqual([{ label: "Asha", value: 3 }]);
+  });
+
+  it("totals each summary on its own", () => {
+    const place = { id: "place", label: "Place", type: "text" } as const;
+    const list = {
+      columns: [...travel.columns, place],
+      summaries: [
+        { by: "person", sum: "days" },
+        { by: "place", sum: "days" },
+      ],
+    };
+    const rows = [
+      { data: { person: "Asha", place: "Canada", start: "2026-01-01", end: "2026-01-03" } },
+      { data: { person: "Asha", place: "", start: "2026-02-01", end: "2026-02-02" } },
+    ];
+    expect([...groupTotals(list, rows, new Date(), list.summaries[0]).totals.values()]).toEqual([
+      { label: "Asha", value: 3 },
+    ]);
+    const byPlace = groupTotals(list, rows, new Date(), list.summaries[1]);
+    expect(byPlace.skipped).toBe(1);
+    expect([...byPlace.totals.values()]).toEqual([{ label: "Canada", value: 2 }]);
   });
 });
