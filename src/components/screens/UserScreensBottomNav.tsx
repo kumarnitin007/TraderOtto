@@ -1,6 +1,7 @@
 "use client";
 
-import { Grid2X2, ListPlus, Settings } from "lucide-react";
+import { Home, Settings } from "lucide-react";
+import { screenIcon } from "@/lib/userScreenIcons";
 import type { UserScreen } from "@/types/userScreens";
 
 export function UserScreensBottomNav({
@@ -13,9 +14,8 @@ export function UserScreensBottomNav({
   onTab: (tab: string) => void;
 }) {
   const tabs = [
-    { id: "overview", label: "Overview", icon: Grid2X2 },
-    ...lists.map((list) => ({ id: list.id, label: list.name, icon: Grid2X2 })),
-    ...(lists.length < 4 ? [{ id: "new", label: "New", icon: ListPlus }] : []),
+    { id: "overview", label: "Home", icon: Home },
+    ...lists.map((list) => ({ id: list.id, label: list.name, icon: screenIcon(list.icon, list.name) })),
     { id: "settings", label: "Settings", icon: Settings },
   ];
   return (

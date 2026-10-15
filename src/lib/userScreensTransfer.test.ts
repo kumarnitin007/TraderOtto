@@ -22,7 +22,8 @@ const list: UserScreen = {
     { id: "end", label: "End date", type: "date" },
     { id: "days", label: "Total days", type: "auto", a: "end", b: "start", op: "-", incl: true },
   ],
-  summaries: [{ by: "person", sum: "days" }],
+  summaries: [{ by: "person", sum: "days", view: "donut" }],
+  icon: "plane",
   createdAt: "",
   updatedAt: "",
 };
@@ -43,6 +44,7 @@ describe("user screens transfer", () => {
       name: "Travel log",
       columns: list.columns,
       summaries: list.summaries,
+      icon: "plane",
       rows: [rows[0].data],
     });
   });

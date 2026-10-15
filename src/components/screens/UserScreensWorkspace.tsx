@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -16,19 +18,27 @@ import { UserScreensBottomNav } from "@/components/screens/UserScreensBottomNav"
 import { UserScreensDataTransfer } from "@/components/screens/UserScreensDataTransfer";
 import { OttoPreferencesEntry } from "@/components/settings/OttoPreferences";
 import { DataTransferButton, DataTransferCard, DataTransferRow } from "@/components/settings/DataTransferPrimitives";
-import { SettingsPageHeader } from "@/components/settings/SettingsPrimitives";
+import { SettingsDetailScreen, SettingsPageHeader } from "@/components/settings/SettingsPrimitives";
 import { useScreenOption } from "@/hooks/useScreenOption";
 import { useUserScreens } from "@/hooks/useUserScreens";
-import { evalRow, screenRowPreview, userScreenAnalytics } from "@/lib/userScreensEngine";
+import {
+  evalRow,
+  screenRowPreview,
+  userScreenAnalytics,
+  type ScreenSummaryView,
+} from "@/lib/userScreensEngine";
 import {
   USER_SCREEN_TEMPLATES,
   blankScreenTemplate,
   validateUserScreen,
 } from "@/lib/userScreensTemplates";
+import { screenIcon, USER_SCREEN_ICON_OPTIONS } from "@/lib/userScreenIcons";
+import { suggestedScreenIcon } from "@/lib/userScreensSummaries";
 import { parseUserScreenJson } from "@/lib/userScreensTransfer";
 import {
   USER_SCREEN_SUMMARY_LIMIT,
   type UserScreen,
+  type UserScreenIcon,
   type UserScreenColumn,
   type UserScreenInput,
   type UserScreenRow,
@@ -41,13 +51,20 @@ export function UserScreensWorkspace() {
   const data = useUserScreens();
   const [tab, setTab] = useScreenOption("screensTab");
   const [builder, setBuilder] = useState<BuilderState | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const lists = data.lists;
   const active =
-    tab === "overview" || tab === "new" || tab === "settings" || lists.some((list) => list.id === tab)
+    tab === "overview" || tab === "settings" || lists.some((list) => list.id === tab)
       ? tab
       : "overview";
+
+  useEffect(() => {
+    if (tab !== "new") return;
+    setShowTemplates(lists.length < 4);
+    setTab("overview");
+  }, [lists.length, setTab, tab]);
   const list = lists.find((item) => item.id === active);
 
   async function saveBuilder(input: UserScreenInput) {
@@ -91,12 +108,7 @@ export function UserScreensWorkspace() {
           rows={data.rows}
           readonly={data.readonly}
           onOpen={setTab}
-          onNew={() => setTab("new")}
-        />
-      ) : active === "new" ? (
-        <TemplatePicker
-          disabled={data.readonly}
-          onPick={(draft) => setBuilder({ mode: "new", draft })}
+          onNew={() => setShowTemplates(true)}
         />
       ) : active === "settings" ? (
         <ScreensSettings
@@ -111,12 +123,13 @@ export function UserScreensWorkspace() {
                 name: item.name,
                 columns: item.columns.map((column) => ({ ...column })),
                 summaries: item.summaries.map((summary) => ({ ...summary })),
+                icon: item.icon || suggestedScreenIcon(item.name),
               },
             })
           }
           onImportScreen={async (backup) => {
             const saved = await data.createList(
-              { name: backup.name, columns: backup.columns, summaries: backup.summaries },
+              { name: backup.name, columns: backup.columns, summaries: backup.summaries, icon: backup.icon },
               backup.rows,
             );
             setTab(saved.id);
@@ -128,6 +141,7 @@ export function UserScreensWorkspace() {
                 name: target.name,
                 columns: [...target.columns, ...added],
                 summaries: target.summaries,
+                icon: target.icon,
               });
             }
             await data.addRows(target.id, imported);
@@ -145,6 +159,11 @@ export function UserScreensWorkspace() {
             await data.deleteRows(id);
             setNotice(target ? `Rows removed from ${target.name}.` : "Rows removed.");
           }}
+          onMove={async (id, direction) => {
+            await data.moveList(id, direction);
+            setNotice("Screen order updated.");
+          }}
+          onNew={() => setShowTemplates(true)}
         />
       ) : list ? (
         <ScreenRows
@@ -159,6 +178,7 @@ export function UserScreensWorkspace() {
                 name: list.name,
                 columns: list.columns.map((column) => ({ ...column })),
                 summaries: list.summaries.map((summary) => ({ ...summary })),
+                icon: list.icon || suggestedScreenIcon(list.name),
               },
             })
           }
@@ -167,6 +187,18 @@ export function UserScreensWorkspace() {
           onDelete={(rowId) => data.deleteRow(list.id, rowId)}
         />
       ) : null}
+      {showTemplates && (
+        <SettingsDetailScreen title="New screen" eyebrow="User Screens" onClose={() => setShowTemplates(false)}>
+          <p className="-mt-3 mb-4 text-[13px] text-otto-text-dim">Choose a starting point. Every detail can be changed.</p>
+          <TemplatePicker
+            disabled={data.readonly || lists.length >= 4}
+            onPick={(draft) => {
+              setShowTemplates(false);
+              setBuilder({ mode: "new", draft });
+            }}
+          />
+        </SettingsDetailScreen>
+      )}
       <UserScreensBottomNav lists={lists} active={active} onTab={setTab} />
     </div>
   );
@@ -201,56 +233,42 @@ function ScreensOverview({
         <Metric label="Rows" value={String(totalRows)} />
         <Metric label="Not counted" value={String(invalid)} warning={invalid > 0} />
       </div>
-      <div className="overflow-hidden rounded-2xl bg-otto-surface">
+      <div className="space-y-3">
         {lists.map((list) => {
           const analytics = userScreenAnalytics(list, rows[list.id] ?? []);
           return (
-            <button
-              key={list.id}
-              type="button"
-              onClick={() => onOpen(list.id)}
-              className="block w-full border-b border-otto-divider px-4 py-4 text-left last:border-b-0"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="truncate text-[17px] font-extrabold">{list.name}</h2>
+            <section key={list.id} className="rounded-2xl bg-otto-surface p-3">
+              <button
+                type="button"
+                onClick={() => onOpen(list.id)}
+                className="flex w-full items-center justify-between gap-3 px-1 py-1 text-left"
+              >
+                <h2 className="min-w-0 flex-1 truncate text-[17px] font-extrabold">{list.name}</h2>
                 <span className="shrink-0 text-[12px] text-otto-text-dim">
                   {analytics.rows} {analytics.rows === 1 ? "row" : "rows"}
                 </span>
-              </div>
-              {analytics.summaries.map((summary) => {
-                const max = Math.max(1, ...summary.totals.map((item) => item.value));
-                return (
-                  <div key={`${summary.by}:${summary.sum}`} className="mt-2">
-                    {analytics.summaries.length > 1 && (
-                      <p className="text-[11px] font-semibold text-otto-text-faint">
-                        {summary.sumLabel} by {summary.byLabel}
-                      </p>
-                    )}
-                    {summary.totals.slice(0, 4).map((item) => (
-                      <div key={item.label} className="mt-2 grid grid-cols-[80px_1fr_54px] items-center gap-2 text-[12px]">
-                        <span className="truncate text-otto-text-dim">{item.label}</span>
-                        <span className="h-1.5 overflow-hidden rounded-full bg-otto-divider">
-                          <span
-                            className="block h-full rounded-full bg-otto-green"
-                            style={{ width: `${(item.value / max) * 100}%` }}
-                          />
-                        </span>
-                        <strong className="text-right">{formatNumber(item.value)}</strong>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
+                <ChevronRight size={16} className="shrink-0 text-otto-text-faint" />
+              </button>
+              {analytics.summaries.length > 0 && (
+                <div className="mt-3 grid gap-2 desk:grid-cols-2">
+                  {analytics.summaries.map((summary) => (
+                    <OverviewSummary
+                      key={`${summary.by}:${summary.sum}`}
+                      summary={summary}
+                    />
+                  ))}
+                </div>
+              )}
               {analytics.skipped > 0 && (
                 <span className="mt-3 inline-flex rounded-full bg-otto-red-soft px-2.5 py-1 text-[11px] font-semibold text-otto-red">
                   {analytics.skipped} not counted
                 </span>
               )}
-            </button>
+            </section>
           );
         })}
         {!lists.length && (
-          <div className="px-5 py-12 text-center">
+          <div className="rounded-2xl bg-otto-surface px-5 py-12 text-center">
             <Grid2X2 className="mx-auto text-otto-text-faint" />
             <h2 className="mt-3 font-extrabold">Build your first screen</h2>
             <p className="mt-1 text-sm text-otto-text-dim">
@@ -273,6 +291,103 @@ function ScreensOverview({
   );
 }
 
+const SUMMARY_COLORS = ["#2bcf83", "#60a5fa", "#f59e0b", "#a78bfa", "#f472b6", "#22d3ee"];
+
+function OverviewSummary({ summary }: { summary: ScreenSummaryView }) {
+  const items = summary.totals
+    .slice()
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+    .slice(0, 6);
+  const title = `${summary.sumLabel} by ${summary.byLabel}`;
+
+  return (
+    <div className="rounded-xl bg-otto-bg/70 p-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="truncate text-[12px] font-extrabold">{title}</h3>
+        <strong className="shrink-0 text-[13px]">{formatNumber(summary.total)}</strong>
+      </div>
+      {!items.length ? (
+        <p className="mt-3 text-[12px] text-otto-text-dim">No totals yet.</p>
+      ) : summary.view === "donut" ? (
+        <SummaryDonut items={items} />
+      ) : summary.view === "totals" ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {items.map((item) => (
+            <div key={item.label} className="rounded-lg bg-otto-surface px-2.5 py-2">
+              <span className="block truncate text-[10px] text-otto-text-faint">{item.label}</span>
+              <strong className="mt-0.5 block text-[15px]">{formatNumber(item.value)}</strong>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <SummaryBars items={items} />
+      )}
+      {summary.totals.length > items.length && (
+        <p className="mt-2 text-[10px] text-otto-text-faint">
+          Showing {items.length} of {summary.totals.length} groups
+        </p>
+      )}
+      {summary.skipped > 0 && (
+        <p className="mt-2 text-[10px] font-semibold text-otto-red">
+          {summary.skipped} not counted
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SummaryBars({ items }: { items: { label: string; value: number }[] }) {
+  const max = Math.max(1, ...items.map((item) => Math.abs(item.value)));
+  return (
+    <div className="mt-2">
+      {items.map((item) => (
+        <div key={item.label} className="mt-2 grid grid-cols-[72px_1fr_50px] items-center gap-2 text-[11px]">
+          <span className="truncate text-otto-text-dim">{item.label}</span>
+          <span className="h-1.5 overflow-hidden rounded-full bg-otto-divider">
+            <span
+              className="block h-full rounded-full bg-otto-green"
+              style={{ width: `${(Math.abs(item.value) / max) * 100}%` }}
+            />
+          </span>
+          <strong className="text-right">{formatNumber(item.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SummaryDonut({ items }: { items: { label: string; value: number }[] }) {
+  const total = items.reduce((sum, item) => sum + Math.abs(item.value), 0);
+  let at = 0;
+  const stops = items.map((item, index) => {
+    const start = at;
+    at += total ? (Math.abs(item.value) / total) * 360 : 0;
+    return `${SUMMARY_COLORS[index]} ${start}deg ${at}deg`;
+  });
+  return (
+    <div className="mt-3 flex items-center gap-4">
+      <div
+        aria-label="Donut chart"
+        className="h-20 w-20 shrink-0 rounded-full"
+        style={{
+          background: total
+            ? `radial-gradient(circle, rgb(var(--otto-bg)) 0 48%, transparent 50%), conic-gradient(${stops.join(",")})`
+            : "rgb(var(--otto-divider))",
+        }}
+      />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        {items.map((item, index) => (
+          <div key={item.label} className="flex items-center gap-1.5 text-[10.5px]">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: SUMMARY_COLORS[index] }} />
+            <span className="min-w-0 flex-1 truncate text-otto-text-dim">{item.label}</span>
+            <strong>{formatNumber(item.value)}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TemplatePicker({
   disabled,
   onPick,
@@ -281,13 +396,10 @@ function TemplatePicker({
   onPick: (input: UserScreenInput) => void;
 }) {
   return (
-    <>
-      <div className="mb-5">
-        <h1 className="text-[26px] font-extrabold">New screen</h1>
-        <p className="text-[13px] text-otto-text-dim">Choose a starting point. Every detail can be changed.</p>
-      </div>
-      <div className="overflow-hidden rounded-2xl bg-otto-surface">
-        {USER_SCREEN_TEMPLATES.map((template) => (
+    <div className="overflow-hidden rounded-2xl bg-otto-surface">
+      {USER_SCREEN_TEMPLATES.map((template) => {
+        const Icon = screenIcon(template.icon);
+        return (
           <button
             key={template.id}
             type="button"
@@ -296,16 +408,16 @@ function TemplatePicker({
             className="flex min-h-16 w-full items-center gap-3 border-b border-otto-divider px-4 py-3 text-left last:border-b-0 disabled:opacity-40"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-otto-green-soft text-otto-green">
-              <Grid2X2 size={19} />
+              <Icon size={19} />
             </span>
             <span>
               <strong className="block text-[15px]">{template.label}</strong>
               <span className="text-[12px] text-otto-text-dim">{template.detail}</span>
             </span>
           </button>
-        ))}
-      </div>
-    </>
+        );
+      })}
+    </div>
   );
 }
 
@@ -850,7 +962,10 @@ function ScreenBuilder({
     for (const by of textColumns) {
       for (const sum of totalColumns) {
         if (used.has(`${by.id}:${sum.id}`)) continue;
-        setDraft({ ...draft, summaries: [...draft.summaries, { by: by.id, sum: sum.id }] });
+        setDraft({
+          ...draft,
+          summaries: [...draft.summaries, { by: by.id, sum: sum.id, view: "bar" }],
+        });
         return;
       }
     }
@@ -881,6 +996,29 @@ function ScreenBuilder({
           className="min-h-11 rounded-xl border border-otto-divider bg-otto-surface px-3 text-[15px] text-otto-text"
         />
       </label>
+      <div className="mb-4">
+        <p className="mb-2 text-[12px] font-semibold text-otto-text-dim">Bottom bar icon</p>
+        <div className="grid grid-cols-6 gap-2">
+          {USER_SCREEN_ICON_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const selected = (draft.icon || "grid") === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-label={option.label}
+                aria-pressed={selected}
+                onClick={() => setDraft({ ...draft, icon: option.id as UserScreenIcon })}
+                className={`flex h-11 items-center justify-center rounded-xl border ${
+                  selected ? "border-otto-green bg-otto-green-soft text-otto-green" : "border-otto-divider bg-otto-surface text-otto-text-dim"
+                }`}
+              >
+                <Icon size={18} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <h2 className="mb-2 text-[13px] font-extrabold">Columns</h2>
       <div className="space-y-2">
         {draft.columns.map((column) => (
@@ -963,53 +1101,80 @@ function ScreenBuilder({
         </div>
         <div className="mt-3 space-y-3">
           {draft.summaries.map((summary, index) => (
-            <div key={`${index}:${summary.by}:${summary.sum}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] items-end gap-2">
-              <label className="grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
-                Group by
-                <select
-                  value={summary.by}
-                  aria-label={`Summary ${index + 1} group`}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      summaries: draft.summaries.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, by: event.target.value } : item,
-                      ),
-                    })
+            <div key={`${index}:${summary.by}:${summary.sum}`} className="rounded-xl bg-otto-bg p-2.5">
+              <div className="mb-2 flex items-center justify-between">
+                <strong className="text-[11px]">Summary {index + 1}</strong>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft({ ...draft, summaries: draft.summaries.filter((_, itemIndex) => itemIndex !== index) })
                   }
-                  className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-bg px-2 text-otto-text"
+                  className="flex h-8 w-8 items-center justify-center text-otto-text-faint"
+                  aria-label={`Remove summary ${index + 1}`}
                 >
-                  {textColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
-                </select>
-              </label>
-              <label className="grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
-                Add up
-                <select
-                  value={summary.sum}
-                  aria-label={`Summary ${index + 1} total`}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      summaries: draft.summaries.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, sum: event.target.value } : item,
-                      ),
-                    })
-                  }
-                  className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-bg px-2 text-otto-text"
-                >
-                  {totalColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft({ ...draft, summaries: draft.summaries.filter((_, itemIndex) => itemIndex !== index) })
-                }
-                className="flex h-10 w-10 items-center justify-center text-otto-text-faint"
-                aria-label={`Remove summary ${index + 1}`}
-              >
-                <Trash2 size={16} />
-              </button>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
+                  Group by
+                  <select
+                    value={summary.by}
+                    aria-label={`Summary ${index + 1} group`}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        summaries: draft.summaries.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, by: event.target.value } : item,
+                        ),
+                      })
+                    }
+                    className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-surface px-2 text-otto-text"
+                  >
+                    {textColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
+                  </select>
+                </label>
+                <label className="grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
+                  Add up
+                  <select
+                    value={summary.sum}
+                    aria-label={`Summary ${index + 1} total`}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        summaries: draft.summaries.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, sum: event.target.value } : item,
+                        ),
+                      })
+                    }
+                    className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-surface px-2 text-otto-text"
+                  >
+                    {totalColumns.map((column) => <option key={column.id} value={column.id}>{column.label || "Unnamed"}</option>)}
+                  </select>
+                </label>
+                <label className="col-span-2 grid min-w-0 gap-1 text-[11px] text-otto-text-dim">
+                  Overview style
+                  <select
+                    value={summary.view ?? "bar"}
+                    aria-label={`Summary ${index + 1} overview style`}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        summaries: draft.summaries.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? { ...item, view: event.target.value as "bar" | "donut" | "totals" }
+                            : item,
+                        ),
+                      })
+                    }
+                    className="min-h-10 w-full rounded-xl border border-otto-divider bg-otto-surface px-2 text-otto-text"
+                  >
+                    <option value="bar">Bar chart</option>
+                    <option value="donut">Donut chart</option>
+                    <option value="totals">Total cards</option>
+                  </select>
+                </label>
+              </div>
             </div>
           ))}
           {!draft.summaries.length && (
@@ -1105,6 +1270,8 @@ function ScreensSettings({
   onImportRows,
   onDelete,
   onDeleteRows,
+  onMove,
+  onNew,
 }: {
   lists: UserScreen[];
   rows: Record<string, UserScreenRow[]>;
@@ -1118,6 +1285,8 @@ function ScreensSettings({
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onDeleteRows: (id: string) => Promise<void>;
+  onMove: (id: string, direction: -1 | 1) => Promise<void>;
+  onNew: () => void;
 }) {
   const [transferOpen, setTransferOpen] = useState(false);
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -1125,6 +1294,8 @@ function ScreensSettings({
   const [clearProof, setClearProof] = useState("");
   const [clearing, setClearing] = useState(false);
   const [clearError, setClearError] = useState("");
+  const [movingId, setMovingId] = useState("");
+  const [moveError, setMoveError] = useState("");
   const clearTarget = lists.find((list) => list.id === clearId) ?? null;
   const clearCount = clearTarget ? (rows[clearTarget.id]?.length ?? 0) : 0;
   const clearReady = Boolean(clearTarget && clearCount > 0 && clearProof.trim() === clearTarget.name);
@@ -1141,14 +1312,65 @@ function ScreensSettings({
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
         <DataTransferRow detail="Workbook, CSV, or screen backup" onClick={() => setTransferOpen(true)} />
       </div>
-      <div className="mt-4 overflow-hidden rounded-2xl bg-otto-surface">
-        {lists.map((list) => (
+      {lists.length < 4 && (
+        <button
+          type="button"
+          disabled={readonly}
+          onClick={onNew}
+          className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-dashed border-otto-green font-bold text-otto-green disabled:opacity-40"
+        >
+          <Plus size={18} /> New screen
+        </button>
+      )}
+      <h2 className="mb-2 mt-4 text-[13px] font-extrabold">Screen order & layouts</h2>
+      <div className="overflow-hidden rounded-2xl bg-otto-surface">
+        {lists.map((list, index) => (
           <div key={list.id} className="flex items-center justify-between gap-3 border-b border-otto-divider px-4 py-3 last:border-b-0">
-            <div className="min-w-0">
-              <strong className="block truncate">{list.name}</strong>
-              <span className="text-[12px] text-otto-text-dim">{rows[list.id]?.length ?? 0} rows</span>
+            <div className="flex min-w-0 items-center gap-3">
+              {(() => {
+                const Icon = screenIcon(list.icon, list.name);
+                return <Icon size={18} className="shrink-0 text-otto-text-dim" />;
+              })()}
+              <div className="min-w-0">
+                <strong className="block truncate">{list.name}</strong>
+                <span className="text-[12px] text-otto-text-dim">{rows[list.id]?.length ?? 0} rows</span>
+              </div>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-label={`Move ${list.name} up`}
+                disabled={readonly || movingId !== "" || index === 0}
+                onClick={() => {
+                  setMovingId(list.id);
+                  setMoveError("");
+                  void onMove(list.id, -1)
+                    .catch((cause: unknown) => {
+                      setMoveError(cause instanceof Error ? cause.message : "The screen could not be moved.");
+                    })
+                    .finally(() => setMovingId(""));
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-otto-text-dim disabled:opacity-25"
+              >
+                <ArrowUp size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label={`Move ${list.name} down`}
+                disabled={readonly || movingId !== "" || index === lists.length - 1}
+                onClick={() => {
+                  setMovingId(list.id);
+                  setMoveError("");
+                  void onMove(list.id, 1)
+                    .catch((cause: unknown) => {
+                      setMoveError(cause instanceof Error ? cause.message : "The screen could not be moved.");
+                    })
+                    .finally(() => setMovingId(""));
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-otto-text-dim disabled:opacity-25"
+              >
+                <ArrowDown size={15} />
+              </button>
               <button type="button" onClick={() => onEdit(list)} className="rounded-full border border-otto-divider px-3 py-2 text-[12px] font-bold">
                 Edit
               </button>
@@ -1173,6 +1395,7 @@ function ScreensSettings({
         ))}
         {!lists.length && <p className="px-4 py-8 text-center text-sm text-otto-text-dim">No screens to manage.</p>}
       </div>
+      {moveError && <p className="mt-2 text-[12px] font-semibold text-otto-red">{moveError}</p>}
       <div className="mt-4">
         <DataTransferCard
           icon={Trash2}

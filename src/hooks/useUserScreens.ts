@@ -83,6 +83,21 @@ export function useUserScreens() {
     }
   }
 
+  async function moveList(id: string, direction: -1 | 1) {
+    if (!repository) throw new Error("Sign in to reorder User Screens.");
+    const index = lists.findIndex((list) => list.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= lists.length) return;
+    const next = [...lists];
+    [next[index], next[target]] = [next[target], next[index]];
+    try {
+      await repository.reorderLists(next.map((list) => list.id));
+      setLists(next.map((list, position) => ({ ...list, position })));
+    } catch (cause) {
+      throw friendlyUserScreensError(cause);
+    }
+  }
+
   async function deleteList(id: string) {
     if (!repository) throw new Error("Sign in to delete User Screens.");
     await repository.deleteList(id);
@@ -157,6 +172,7 @@ export function useUserScreens() {
     refresh,
     createList,
     updateList,
+    moveList,
     deleteList,
     addRows,
     setRowLocal,

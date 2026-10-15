@@ -1,6 +1,6 @@
 import { parseCsv } from "@/lib/booksTransfer";
 import { evalRow } from "@/lib/userScreensEngine";
-import { writeStoredSummaries } from "@/lib/userScreensSummaries";
+import { isUserScreenIcon, writeStoredSummaries } from "@/lib/userScreensSummaries";
 import { validateUserScreen } from "@/lib/userScreensTemplates";
 import {
   USER_SCREEN_COLUMN_LIMIT,
@@ -11,6 +11,7 @@ import {
   type UserScreenInput,
   type UserScreenRow,
   type UserScreenRowData,
+  type UserScreenSummary,
 } from "@/types/userScreens";
 
 export type UserScreenBackup = UserScreenInput & { rows: UserScreenRowData[] };
@@ -27,7 +28,8 @@ export function userScreenJson(list: UserScreen, rows: UserScreenRow[]) {
         ottoList: 1,
         name: list.name,
         columns: list.columns,
-        summary: writeStoredSummaries(list.summaries),
+        icon: list.icon || undefined,
+        summary: writeStoredSummaries(list.summaries, list.icon),
         rows: rows.map((row) => row.data),
       },
       null,
@@ -61,7 +63,7 @@ export function userScreenCsv(list: UserScreen, rows: UserScreenRow[]) {
   return { fileName: `${safeName(list.name)}.csv`, text: `\uFEFF${lines.join("\r\n")}` };
 }
 
-function parseBackupSummaries(value: unknown) {
+function parseBackupSummaries(value: unknown): UserScreenSummary[] {
   if (value == null) return [];
   if (!isObject(value)) throw new Error("The summary definition is invalid.");
   if (Array.isArray(value.items)) {
@@ -69,11 +71,19 @@ function parseBackupSummaries(value: unknown) {
       if (!isObject(item) || typeof item.by !== "string" || typeof item.sum !== "string") {
         throw new Error("The summary definition is invalid.");
       }
-      return { by: item.by, sum: item.sum };
+      return {
+        by: item.by,
+        sum: item.sum,
+        ...(item.view === "donut" || item.view === "totals" ? { view: item.view } : {}),
+      };
     });
   }
   if (typeof value.by === "string" && typeof value.sum === "string") {
-    return [{ by: value.by, sum: value.sum }];
+    return [{
+      by: value.by,
+      sum: value.sum,
+      ...(value.view === "donut" || value.view === "totals" ? { view: value.view } : {}),
+    }];
   }
   throw new Error("The summary definition is invalid.");
 }
@@ -118,7 +128,9 @@ export function parseUserScreenJson(text: string): UserScreenBackup {
     };
   });
   const summaries = parseBackupSummaries(raw.summary);
-  const input: UserScreenInput = { name: String(raw.name ?? ""), columns, summaries };
+  const summaryIcon = isObject(raw.summary) ? raw.summary.icon : undefined;
+  const icon = isUserScreenIcon(raw.icon) ? raw.icon : isUserScreenIcon(summaryIcon) ? summaryIcon : "";
+  const input: UserScreenInput = { name: String(raw.name ?? ""), columns, summaries, icon };
   const validation = validateUserScreen(input);
   if (validation) throw new Error(validation);
   if (!Array.isArray(raw.rows) || raw.rows.length > USER_SCREEN_ROW_LIMIT) {

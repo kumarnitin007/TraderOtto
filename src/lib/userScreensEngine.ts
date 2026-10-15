@@ -127,6 +127,7 @@ export function groupTotals(
 export type ScreenSummaryView = {
   by: string;
   sum: string;
+  view: "bar" | "donut" | "totals";
   byLabel: string;
   sumLabel: string;
   totals: { label: string; value: number }[];
@@ -146,6 +147,7 @@ export function userScreenAnalytics(
     return {
       by: summary.by,
       sum: summary.sum,
+      view: summary.view ?? "bar",
       byLabel: column(list, summary.by)?.label ?? "Group",
       sumLabel: column(list, summary.sum)?.label ?? "Total",
       totals: values,

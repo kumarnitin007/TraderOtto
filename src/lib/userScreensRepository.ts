@@ -18,6 +18,7 @@ export interface UserScreensRepository {
   getLists(): Promise<UserScreen[]>;
   createList(input: UserScreenInput): Promise<UserScreen>;
   updateList(id: string, input: UserScreenInput): Promise<UserScreen>;
+  reorderLists(ids: string[]): Promise<void>;
   deleteList(id: string): Promise<void>;
   getRows(listId: string): Promise<UserScreenRow[]>;
   addRows(listId: string, rows: UserScreenRowData[]): Promise<UserScreenRow[]>;

@@ -16,7 +16,24 @@ export interface UserScreenColumn {
 export interface UserScreenSummary {
   by: string;
   sum: string;
+  view?: "bar" | "donut" | "totals";
 }
+
+export const USER_SCREEN_ICONS = [
+  "grid",
+  "plane",
+  "wallet",
+  "calendar",
+  "car",
+  "utensils",
+  "book",
+  "users",
+  "briefcase",
+  "heart",
+  "star",
+  "list",
+] as const;
+export type UserScreenIcon = (typeof USER_SCREEN_ICONS)[number];
 
 export interface UserScreen {
   id: string;
@@ -24,6 +41,7 @@ export interface UserScreen {
   position: number;
   columns: UserScreenColumn[];
   summaries: UserScreenSummary[];
+  icon: UserScreenIcon | "";
   createdAt: string;
   updatedAt: string;
 }
@@ -38,7 +56,7 @@ export interface UserScreenRow {
   updatedAt: string;
 }
 
-export type UserScreenInput = Pick<UserScreen, "name" | "columns" | "summaries">;
+export type UserScreenInput = Pick<UserScreen, "name" | "columns" | "summaries" | "icon">;
 
 export const USER_SCREEN_LIMIT = 4;
 export const USER_SCREEN_ROW_LIMIT = 5000;

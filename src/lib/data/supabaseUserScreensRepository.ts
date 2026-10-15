@@ -8,7 +8,7 @@ import type {
 } from "@/types/userScreens";
 import type { UserScreensRepository } from "@/lib/userScreensRepository";
 import { friendlyUserScreensError } from "@/lib/userScreensRepository";
-import { readStoredSummaries, writeStoredSummaries } from "@/lib/userScreensSummaries";
+import { readStoredIcon, readStoredSummaries, writeStoredSummaries } from "@/lib/userScreensSummaries";
 
 type ListRow = {
   id: string;
@@ -35,6 +35,7 @@ function listFromRow(row: ListRow): UserScreen {
     position: row.position,
     columns: row.columns,
     summaries: readStoredSummaries(row.summary),
+    icon: readStoredIcon(row.summary),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -79,7 +80,7 @@ export function createSupabaseUserScreensRepository(
           name: input.name.trim(),
           position: current.length,
           columns: input.columns,
-          summary: writeStoredSummaries(input.summaries),
+          summary: writeStoredSummaries(input.summaries, input.icon),
         })
         .select("id,name,position,columns,summary,created_at,updated_at")
         .single();
@@ -93,7 +94,7 @@ export function createSupabaseUserScreensRepository(
         .update({
           name: input.name.trim(),
           columns: input.columns,
-          summary: writeStoredSummaries(input.summaries),
+          summary: writeStoredSummaries(input.summaries, input.icon),
         })
         .eq("id", id)
         .eq("user_id", userId)
@@ -101,6 +102,17 @@ export function createSupabaseUserScreensRepository(
         .single();
       fail(error);
       return listFromRow(data as ListRow);
+    },
+
+    async reorderLists(ids) {
+      for (const [position, id] of ids.entries()) {
+        const { error } = await client
+          .from("us_custom_lists")
+          .update({ position })
+          .eq("id", id)
+          .eq("user_id", userId);
+        fail(error);
+      }
     },
 
     async deleteList(id) {
