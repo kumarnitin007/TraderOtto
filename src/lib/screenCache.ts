@@ -39,6 +39,7 @@ export type ScreenOptions = {
   journalTab: "entries" | "notes" | "add" | "day" | "settings";
   banksTab: "overview" | "holdings" | "activity" | "performance" | "settings";
   screensTab: string;
+  screensTitle: string;
 };
 
 export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
@@ -66,6 +67,7 @@ export const SCREEN_OPTION_DEFAULTS: ScreenOptions = {
   journalTab: "entries",
   banksTab: "overview",
   screensTab: "overview",
+  screensTitle: "User Screens",
 };
 
 function isFilter(value: unknown): value is ScreenOptions["positionsFilter"] {
@@ -106,6 +108,12 @@ function isPnlRange(value: unknown): value is PnlRange {
     value === "5y" ||
     value === "all"
   );
+}
+
+export function screenHomeTitle(value: unknown) {
+  if (typeof value !== "string") return SCREEN_OPTION_DEFAULTS.screensTitle;
+  const title = value.replace(/\s+/g, " ").trim().slice(0, 40);
+  return title || SCREEN_OPTION_DEFAULTS.screensTitle;
 }
 
 function readBanksTab(value: unknown): ScreenOptions["banksTab"] {
@@ -199,6 +207,7 @@ export function readScreenOptions(): ScreenOptions {
         typeof parsed.screensTab === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(parsed.screensTab)
           ? parsed.screensTab
           : "overview",
+      screensTitle: screenHomeTitle(parsed.screensTitle),
     };
     if (!options.enabledSections.includes(options.appWorkspace)) {
       options.appWorkspace = options.defaultSection;

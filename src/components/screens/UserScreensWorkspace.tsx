@@ -49,6 +49,7 @@ type BuilderState = { mode: "new"; draft: UserScreenInput } | { mode: "edit"; li
 
 export function UserScreensWorkspace() {
   const data = useUserScreens();
+  const [screensTitle] = useScreenOption("screensTitle");
   const [tab, setTab] = useScreenOption("screensTab");
   const [builder, setBuilder] = useState<BuilderState | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -106,6 +107,7 @@ export function UserScreensWorkspace() {
         <ScreensOverview
           lists={lists}
           rows={data.rows}
+          title={screensTitle}
           readonly={data.readonly}
           onOpen={setTab}
           onNew={() => setShowTemplates(true)}
@@ -207,12 +209,14 @@ export function UserScreensWorkspace() {
 function ScreensOverview({
   lists,
   rows,
+  title,
   readonly,
   onOpen,
   onNew,
 }: {
   lists: UserScreen[];
   rows: Record<string, UserScreenRow[]>;
+  title: string;
   readonly: boolean;
   onOpen: (id: string) => void;
   onNew: () => void;
@@ -225,7 +229,7 @@ function ScreensOverview({
   return (
     <>
       <div className="mb-5">
-        <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">User Screens</h1>
+        <h1 className="text-[26px] font-extrabold tracking-[-0.4px]">{title}</h1>
         <p className="text-[13px] text-otto-text-dim">Your own trackers, formulas, and summaries</p>
       </div>
       <div className="mb-5 grid grid-cols-3 gap-2">
@@ -770,7 +774,7 @@ function ScreenRows({
         <Plus size={17} /> Add row
       </button>
       {analytics.summaries.length > 0 && (
-        <div className="sticky bottom-[76px] z-10 mt-4 space-y-3 rounded-2xl border border-otto-divider bg-otto-bg/95 p-3 shadow-lg backdrop-blur desk:bottom-2">
+        <div className="mt-4 space-y-3 rounded-2xl bg-otto-surface p-3">
           {analytics.summaries.map((summary) => (
             <div key={`${summary.by}:${summary.sum}`}>
               <p className="text-[11px] font-semibold text-otto-text-faint">
@@ -1306,7 +1310,8 @@ function ScreensSettings({
         title="Settings"
         description="Manage layouts, backups, and account preferences."
       />
-      <div className="mt-5">
+      <HomeTitleSetting />
+      <div className="mt-3">
         <OttoPreferencesEntry />
       </div>
       <div className="mt-3 overflow-hidden rounded-2xl bg-otto-surface">
@@ -1481,6 +1486,51 @@ function ScreensSettings({
         />
       )}
     </>
+  );
+}
+
+function HomeTitleSetting() {
+  const [saved, setSaved] = useScreenOption("screensTitle");
+  const [draft, setDraft] = useState(saved);
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setDraft(saved);
+  }, [saved]);
+
+  function commit(raw: string) {
+    const next = raw.replace(/\s+/g, " ").trim().slice(0, 40) || "User Screens";
+    setDraft(next);
+    if (next !== saved) setSaved(next);
+  }
+
+  return (
+    <label className="mt-5 grid gap-1 rounded-2xl bg-otto-surface px-4 py-3 text-[12px] font-semibold text-otto-text-dim">
+      Home title
+      <input
+        value={draft}
+        maxLength={40}
+        aria-label="Home title"
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onChange={(event) => {
+          const raw = event.target.value;
+          setDraft(raw);
+          const next = raw.replace(/\s+/g, " ").trim().slice(0, 40);
+          if (next && next !== saved) setSaved(next);
+        }}
+        onBlur={(event) => {
+          focused.current = false;
+          commit(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+        className="h-11 rounded-xl border border-otto-divider bg-otto-bg px-3 text-[15px] font-semibold text-otto-text"
+      />
+      <span className="font-normal text-otto-text-faint">Shown at the top of Home. Up to 40 characters.</span>
+    </label>
   );
 }
 

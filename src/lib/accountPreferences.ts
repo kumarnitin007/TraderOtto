@@ -11,7 +11,7 @@ import {
   writeJournalPreferences,
   type JournalPrefs,
 } from "@/lib/journalPreferences";
-import { readScreenOptions, updateScreenOptions } from "@/lib/screenCache";
+import { readScreenOptions, screenHomeTitle, updateScreenOptions } from "@/lib/screenCache";
 import {
   readTradeImportHistory,
   writeTradeImportHistory,
@@ -40,6 +40,7 @@ export type WorkspacePreferences = {
   books: BooksPreferences;
   journal: JournalPrefs;
   banks: BanksPreferences;
+  screensTitle: string;
 };
 
 const THEME_COOKIE = "trader-otto-theme";
@@ -66,6 +67,7 @@ export function readWorkspacePreferences(): WorkspacePreferences {
     books: readBooksPreferences(),
     journal: readJournalPreferences(),
     banks: readBanksPreferences(),
+    screensTitle: screen.screensTitle,
   };
 }
 
@@ -76,6 +78,7 @@ export function applyWorkspacePreferences(prefs: WorkspacePreferences) {
     defaultSection: prefs.defaultSection,
     booksOpenLibraryEnabled: prefs.booksOpenLibraryEnabled,
     lifeMilestoneWindow: prefs.lifeMilestoneWindow,
+    screensTitle: prefs.screensTitle,
   });
   writeBooksPreferences(prefs.books);
   writeJournalPreferences(prefs.journal);
@@ -100,6 +103,9 @@ export function parseWorkspacePreferences(value: unknown): WorkspacePreferences 
     books,
     journal,
     banks,
+    screensTitle: Object.prototype.hasOwnProperty.call(raw, "screensTitle")
+      ? screenHomeTitle(raw.screensTitle)
+      : readScreenOptions().screensTitle,
   };
 }
 
