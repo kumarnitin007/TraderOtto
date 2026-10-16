@@ -10,6 +10,7 @@ export type VaultKind =
   | "note"
   | "contact"
   | "card"
+  | "gift_card"
   | "bank"
   | "license"
   | "passport"

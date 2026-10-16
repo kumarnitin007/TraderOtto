@@ -5,6 +5,7 @@ import {
   FileText,
   Fingerprint,
   Globe,
+  Gift,
   HeartPulse,
   Landmark,
   Laptop,
@@ -78,6 +79,15 @@ export const kindGroups: VaultKindGroup[] = [
         detailLabel: "Card number",
         detailPlaceholder: "•••• •••• •••• 1234",
         secretLabel: "Security code",
+      },
+      {
+        value: "gift_card",
+        title: "Gift card",
+        icon: Gift,
+        color: "#b45772",
+        detailLabel: "Card number",
+        detailPlaceholder: "Gift card number",
+        secretLabel: "PIN or reference number",
       },
       {
         value: "bank",

@@ -227,6 +227,9 @@ export function VaultScreen({
         <FilterChip active={filter === "card"} onClick={() => selectFilter("card")}>
           Cards
         </FilterChip>
+        <FilterChip active={filter === "gift_card"} onClick={() => selectFilter("gift_card")}>
+          Gift cards
+        </FilterChip>
         <FilterChip active={filter === "note"} onClick={() => selectFilter("note")}>
           Notes
         </FilterChip>
@@ -469,6 +472,7 @@ function itemCountLabel(filter: VaultFilter, count: number) {
   if (filter === "recent") return one ? "recent item" : "recent items";
   if (filter === "login") return one ? "password" : "passwords";
   if (filter === "card") return one ? "card" : "cards";
+  if (filter === "gift_card") return one ? "gift card" : "gift cards";
   if (filter === "note") return one ? "note" : "notes";
   return one ? "item" : "items";
 }

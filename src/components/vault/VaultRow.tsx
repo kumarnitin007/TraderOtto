@@ -37,7 +37,11 @@ export function VaultRow({
       <div className="min-w-0 flex-1">
         <b className="block truncate text-[15px] font-semibold">{item.name}</b>
         <span className="block truncate text-[12.5px] text-otto-text-dim">
-          {item.username || item.note || "—"}
+          {item.kind === "gift_card"
+            ? [item.customFields?.Balance, item.customFields?.["Gift card category"]]
+                .filter(Boolean)
+                .join(" · ") || item.username || "—"
+            : item.username || item.note || "—"}
         </span>
       </div>
       {item.favorite && (
@@ -49,8 +53,12 @@ export function VaultRow({
         onClick={(event) => {
           event.stopPropagation();
           onCopy(
-            item.password || item.username || item.note || "",
-            item.password ? "Password copied" : "Copied",
+            (item.kind === "gift_card" ? item.username : item.password || item.username || item.note) || "",
+            item.kind === "gift_card"
+              ? "Card number copied"
+              : item.password
+                ? "Password copied"
+                : "Copied",
             item.id
           );
         }}

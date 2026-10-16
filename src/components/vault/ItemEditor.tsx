@@ -1,16 +1,23 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
 import {
   ArrowLeft,
+  Camera,
   ChevronDown,
   ChevronRight,
   Eye,
   EyeOff,
+  ImageUp,
   ShieldCheck,
   X,
 } from "lucide-react";
 import { barcodeChoices } from "@/components/vault/BarcodePanel";
+import {
+  GIFT_CARD_CATEGORIES,
+  parseGiftCardText,
+  type GiftCardCategory,
+} from "@/lib/giftCardScan";
 import { kindGroups, kindMeta } from "@/lib/vaultItemTypes";
 import {
   vaultBarcodeFormat,
@@ -46,6 +53,14 @@ export function ItemEditor({
   const [barcodeFormat, setBarcodeFormat] = useState<VaultBarcodeFormat>(
     vaultBarcodeFormat(item?.barcodeFormat)
   );
+  const [giftBalance, setGiftBalance] = useState(item?.customFields?.Balance ?? "");
+  const [giftCategory, setGiftCategory] = useState<GiftCardCategory>(
+    (GIFT_CARD_CATEGORIES.includes(item?.customFields?.["Gift card category"] as GiftCardCategory)
+      ? item?.customFields?.["Gift card category"]
+      : "Other") as GiftCardCategory
+  );
+  const [scanProgress, setScanProgress] = useState<number | null>(null);
+  const [scanError, setScanError] = useState("");
 
   const meta = kindMeta(kind);
   const KindIcon = meta.icon;
@@ -57,6 +72,15 @@ export function ItemEditor({
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
+    const customFields = { ...(item?.customFields ?? {}) };
+    if (kind === "gift_card") {
+      customFields.Balance = giftBalance.trim();
+      customFields["Gift card category"] = giftCategory;
+    } else {
+      delete customFields.Balance;
+      delete customFields["Gift card category"];
+    }
+    const savedCustomFields = Object.keys(customFields).length ? customFields : undefined;
     onSave({
       ...(item ?? {}),
       id: item?.id ?? crypto.randomUUID(),
@@ -66,6 +90,7 @@ export function ItemEditor({
       password: password.trim() || undefined,
       website: website.trim() || undefined,
       note: note.trim() || undefined,
+      customFields: savedCustomFields,
       barcodeEnabled: barcodeEnabled && Boolean(username.trim()),
       barcodeFormat: barcodeEnabled ? barcodeFormat : undefined,
       tags: selectedTags,
@@ -74,6 +99,53 @@ export function ItemEditor({
       createdAt: item?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
+  }
+
+  function chooseKind(next: VaultKind) {
+    setKind(next);
+    if (next === "gift_card" && !item) {
+      setBarcodeEnabled(true);
+      setBarcodeFormat("CODE128");
+    }
+  }
+
+  async function scanGiftCard(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setScanError("");
+    setScanProgress(0);
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("eng", undefined, {
+        logger: (message) => {
+          if (message.status === "recognizing text") {
+            setScanProgress(Math.round(message.progress * 100));
+          }
+        },
+      });
+      try {
+        const result = parseGiftCardText((await worker.recognize(file)).data.text);
+        if (!result.cardNumber && !result.name) {
+          setScanError("The card details could not be recognized. Try a straight, well-lit photo.");
+          return;
+        }
+        if (result.name) setName(result.name);
+        if (result.cardNumber) setUsername(result.cardNumber);
+        if (result.pin) setPassword(result.pin);
+        if (result.balance) setGiftBalance(result.balance);
+        if (result.website) setWebsite(result.website);
+        setGiftCategory(result.category);
+        setBarcodeEnabled(Boolean(result.cardNumber));
+        setBarcodeFormat("CODE128");
+      } finally {
+        await worker.terminate();
+      }
+    } catch (cause) {
+      setScanError(cause instanceof Error ? cause.message : "The card image could not be read.");
+    } finally {
+      setScanProgress(null);
+    }
   }
 
   function toggleTag(id: string) {
@@ -121,7 +193,7 @@ export function ItemEditor({
                       key={option.value}
                       type="button"
                       onClick={() => {
-                        setKind(option.value);
+                        chooseKind(option.value);
                         setStep("form");
                       }}
                       className="flex w-full items-center gap-3 rounded-xl bg-otto-surface px-3 py-3 text-left"
@@ -157,7 +229,7 @@ export function ItemEditor({
               </span>
               <select
                 value={kind}
-                onChange={(event) => setKind(event.target.value as VaultKind)}
+                onChange={(event) => chooseKind(event.target.value as VaultKind)}
                 className="w-full rounded-[10px] border border-otto-divider bg-otto-surface px-3 py-2.5 text-[15px]"
               >
                 {kindGroups.flatMap((group) =>
@@ -169,6 +241,69 @@ export function ItemEditor({
                 )}
               </select>
             </label>
+
+            {kind === "gift_card" && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-otto-green px-3 py-3 text-center text-[13px] font-bold text-otto-green">
+                    <ImageUp size={18} className="shrink-0" />
+                    {scanProgress == null ? "Choose screenshot" : `Reading… ${scanProgress}%`}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={scanProgress != null}
+                      onChange={(event) => void scanGiftCard(event)}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-otto-green px-3 py-3 text-center text-[13px] font-bold text-otto-green">
+                    <Camera size={18} className="shrink-0" />
+                    Take photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      disabled={scanProgress != null}
+                      onChange={(event) => void scanGiftCard(event)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                {scanError && (
+                  <p className="rounded-xl bg-otto-red-soft px-3 py-2 text-[12px] text-otto-red">
+                    {scanError}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-semibold text-otto-text-dim">
+                      Balance
+                    </span>
+                    <input
+                      value={giftBalance}
+                      onChange={(event) => setGiftBalance(event.target.value)}
+                      placeholder="$0.00"
+                      inputMode="decimal"
+                      className="rounded-[10px] border border-otto-divider bg-otto-surface px-3 py-2.5 !text-[15px]"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-semibold text-otto-text-dim">
+                      Gift card category
+                    </span>
+                    <select
+                      value={giftCategory}
+                      onChange={(event) => setGiftCategory(event.target.value as GiftCardCategory)}
+                      className="rounded-[10px] border border-otto-divider bg-otto-surface px-3 py-2.5 text-[15px]"
+                    >
+                      {GIFT_CARD_CATEGORIES.map((category) => (
+                        <option key={category}>{category}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </>
+            )}
 
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-otto-text-dim">
@@ -229,7 +364,9 @@ export function ItemEditor({
                   <span className="mt-0.5 block text-[11.5px] leading-relaxed text-otto-text-dim">
                     {kind === "wifi"
                       ? "Adds a code for the network name. The Wi-Fi QR still includes the password."
-                      : "Adds one code generated on this device from the username."}
+                      : kind === "gift_card"
+                        ? "Shows the card number as a scannable code at checkout."
+                        : "Adds one code generated on this device from the username."}
                   </span>
                 </span>
               </label>

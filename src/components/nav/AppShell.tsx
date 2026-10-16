@@ -15,6 +15,7 @@ import { AlpacaStatus } from "@/components/ui/AlpacaStatus";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { WorkspaceSwitcher } from "@/components/nav/WorkspaceSwitcher";
 import { WorkspacePlaceholder } from "@/components/nav/WorkspacePlaceholder";
+import { MODULE_NAV_SLOT_ID } from "@/components/nav/ModuleNav";
 import { VaultWorkspace } from "@/components/vault/VaultWorkspace";
 import { BooksWorkspace } from "@/components/books/BooksWorkspace";
 import { LifeWorkspace } from "@/components/life/LifeWorkspace";
@@ -64,6 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mb-[30px] mt-[3px] text-[12.5px] text-otto-text-faint">
             {product.tagline}
           </div>
+          <div id={MODULE_NAV_SLOT_ID} />
           {trading && NAV.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
@@ -99,8 +101,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           )}
           {trading && <AlpacaStatus />}
-          <div className="mt-2 flex flex-wrap gap-2">
-            <WorkspaceSwitcher />
+          <div className="mt-4 flex flex-wrap gap-2">
             <ThemeToggle />
           </div>
           <button
@@ -139,6 +140,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             {trading && <PnlOverview compact />}
           </header>
+          <div className="hidden justify-end px-[18px] desk:flex">
+            <WorkspaceSwitcher />
+          </div>
           <div className="px-[18px] pt-3.5">
             <div className={workspace === "vault" ? undefined : "hidden"}>
               <VaultWorkspace />

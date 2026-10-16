@@ -283,6 +283,8 @@ const KIND_ALIASES: Map<string, VaultKind> = new Map([
   ["insurance", "insurance"],
   ["membership card", "membership"],
   ["membership", "membership"],
+  ["gift card", "gift_card"],
+  ["giftcard", "gift_card"],
   ["wi fi", "wifi"],
   ["wifi", "wifi"],
   ["wireless", "wifi"],

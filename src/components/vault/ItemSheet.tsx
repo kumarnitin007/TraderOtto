@@ -134,7 +134,9 @@ export function ItemSheet({
           <div className="min-w-0">
             <h2 className="truncate text-xl font-extrabold">{item.name}</h2>
             <span className="text-[13px] text-otto-text-dim">
-              {item.website || meta.title}
+              {[item.website || meta.title, item.kind === "gift_card" ? item.customFields?.Balance : ""]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </div>
         </div>
@@ -162,7 +164,7 @@ export function ItemSheet({
             {item.barcodeEnabled && item.username && (
               <SheetAction
                 icon={ScanBarcode}
-                label="Show barcodes"
+                label={item.kind === "gift_card" ? "Show gift card barcode" : "Show barcodes"}
                 onClick={() => setView("barcodes")}
               />
             )}

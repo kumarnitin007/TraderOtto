@@ -133,7 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           applyDefaultSection();
         }
         setBypassCookie(false);
-        setUser(mapUser(session.user));
+        const next = mapUser(session.user);
+        setUser((current) =>
+          current &&
+          current.id === next.id &&
+          current.email === next.email &&
+          current.method === next.method
+            ? current
+            : next
+        );
         return;
       }
       const stillBypass = hasBypassCookie();
