@@ -134,7 +134,7 @@ export function ItemEditor({
         if (result.cardNumber) setUsername(result.cardNumber);
         if (result.pin) setPassword(result.pin);
         if (result.balance) setGiftBalance(result.balance);
-        if (result.website) setWebsite(result.website);
+        setWebsite(result.website);
         setGiftCategory(result.category);
         setBarcodeEnabled(Boolean(result.cardNumber));
         setBarcodeFormat("CODE128");
